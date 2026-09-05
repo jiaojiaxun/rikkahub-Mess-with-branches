@@ -19,6 +19,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Inject AppControl gateway into LocalTools.kt
+        run: python3 scripts/patch_app_control.py
+
       - name: Gradle cache
         uses: actions/cache@v4
         with:
