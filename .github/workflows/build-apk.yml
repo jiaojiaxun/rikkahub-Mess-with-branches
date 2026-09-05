@@ -1,0 +1,68 @@
+name: Build APK (app-control v2)
+
+on:
+  push:
+    branches: [feat/app-control-v2]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Restore keystore
+        id: kscache
+        uses: actions/cache@v4
+        with:
+          path: lzx.kshsia
+          key: rikkahub-lzx-kshsia-v1
+
+      - name: Generate keystore if missing
+        if: steps.kscache.outputs.cache-hit != 'true'
+        run: |
+          if [ ! -f lzx.kshsia ]; then
+            keytool -genkeypair -v \
+              -keystore lzx.kshsia \
+              -alias lzx -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass lzx123456 -keypass lzx123456 \
+              -dname "CN=lzx, OU=Dev, O=RikkaHub, L=City, ST=State, C=CN"
+          fi
+
+      - name: Build release APK (R8)
+        env:
+          RIKKAHUB_KEYSTORE_PATH: ${{ github.workspace }}/lzx.kshsia
+          RIKKAHUB_KEYSTORE_PASSWORD: lzx123456
+          RIKKAHUB_KEY_ALIAS: lzx
+          RIKKAHUB_KEY_PASSWORD: lzx123456
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rikkahub-app-control-v2
+          path: app/build/outputs/apk/release/*.apk
+
+      - name: Upload keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: lzx-keystore
+          path: lzx.kshsia
