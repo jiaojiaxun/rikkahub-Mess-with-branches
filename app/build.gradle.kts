@@ -45,10 +45,30 @@ android {
         }
     }
 
+    // Independent release signing. Configured via CI env vars (see
+    // .github/workflows/build-apk.yml); falls back to debug signing when
+    // the vars are absent so a plain local ./gradlew assembleRelease still works.
+    signingConfigs {
+        create("lzxRelease") {
+            val storePath = providers.environmentVariable("RIKKAHUB_KEYSTORE_PATH").orNull
+            if (storePath != null) {
+                storeFile = file(storePath)
+                storePassword = providers.environmentVariable("RIKKAHUB_KEYSTORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("RIKKAHUB_KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("RIKKAHUB_KEY_PASSWORD").orNull
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Temporary local artifact signing only; the APK is not an official distribution key.
-            signingConfig = signingConfigs.getByName("debug")
+            // Prefer the independent lzx.kshsia keystore when CI provides it;
+            // otherwise fall back to the debug keystore for local artifact builds.
+            signingConfig = if (providers.environmentVariable("RIKKAHUB_KEYSTORE_PATH").orNull != null) {
+                signingConfigs.getByName("lzxRelease")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
