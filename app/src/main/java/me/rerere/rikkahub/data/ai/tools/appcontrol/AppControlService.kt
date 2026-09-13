@@ -206,7 +206,7 @@ class AppControlService(
         settingsStore.update { old ->
             old.copy(
                 providers = old.providers.map { p ->
-                    if (p.id == id) p.copy(enabled = enabled) else p
+                    if (p.id == id) p.copyProvider(enabled = enabled) else p
                 }
             )
         }
@@ -223,7 +223,7 @@ class AppControlService(
         settingsStore.update { old ->
             old.copy(
                 providers = old.providers.map { p ->
-                    if (p.id == id) p.copy(name = name) else p
+                    if (p.id == id) p.copyProvider(name = name) else p
                 }
             )
         }
@@ -240,7 +240,7 @@ class AppControlService(
         settingsStore.update { old ->
             old.copy(
                 mcpServers = old.mcpServers.map { m ->
-                    if (m.id == id) m.copy(commonOptions = m.commonOptions.copy(enable = enable)) else m
+                    if (m.id == id) m.clone(commonOptions = m.commonOptions.copy(enable = enable)) else m
                 }
             )
         }
@@ -248,6 +248,7 @@ class AppControlService(
     }
 
     private suspend fun setWebServer(args: JsonObject): JsonObject {
+        const val ACTION_SERVER = "server"
         val enabled = args["enabled"]?.toString()?.toBooleanStrictOrNull()
         val port = args["port"]?.toString()?.toIntOrNull()
         val jwt = args["jwt_enabled"]?.toString()?.toBooleanStrictOrNull()
