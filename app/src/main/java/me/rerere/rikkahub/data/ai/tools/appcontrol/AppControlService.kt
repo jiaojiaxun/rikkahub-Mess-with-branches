@@ -17,6 +17,10 @@ import kotlin.uuid.Uuid
  * Read side returns a redacted snapshot of the app settings: never exposes apiKey,
  * tokens, passwords, or headers. Write side is a whitelist; every write tool is
  * marked needsApproval = true by the tool factory in AppControlTools.kt.
+ *
+ * Writes go through [SettingsStore.update]; that class exposes both a
+ * `update(settings: Settings)` and an `update(fn: (Settings) -> Settings)` overload,
+ * so the transform form below is the intended usage.
  */
 class AppControlService(
     private val settingsStore: SettingsStore,
@@ -42,9 +46,13 @@ class AppControlService(
                 "services",
                 kotlinx.serialization.json.buildJsonArray {
                     settings.searchServices.forEach { svc ->
-                        add(kotlinx.serialization.json.buildJsonObject {
-                            put("name", svc.name)
-                        })
+                        add(
+                            buildJsonObject {
+                                // SearchServiceOptions carries no stable public display
+                                // name; the concrete subclass name is the reliable id.
+                                put("type", svc::class.simpleName ?: "unknown")
+                            }
+                        )
                     }
                 }
             )
@@ -74,12 +82,14 @@ class AppControlService(
         put("built_in", p.builtIn)
         put("models", kotlinx.serialization.json.buildJsonArray {
             p.models.forEach { m ->
-                add(kotlinx.serialization.json.buildJsonObject {
-                    put("id", m.id.toString())
-                    put("model_id", m.modelId)
-                    put("display_name", m.displayName)
-                    put("context_length", m.contextLength ?: 0)
-                })
+                add(
+                    buildJsonObject {
+                        put("id", m.id.toString())
+                        put("model_id", m.modelId)
+                        put("display_name", m.displayName)
+                        put("context_length", m.contextLength ?: 0)
+                    }
+                )
             }
         })
     }
@@ -248,7 +258,6 @@ class AppControlService(
     }
 
     private suspend fun setWebServer(args: JsonObject): JsonObject {
-        const val ACTION_SERVER = "server"
         val enabled = args["enabled"]?.toString()?.toBooleanStrictOrNull()
         val port = args["port"]?.toString()?.toIntOrNull()
         val jwt = args["jwt_enabled"]?.toString()?.toBooleanStrictOrNull()
@@ -256,7 +265,7 @@ class AppControlService(
         if (enabled == null && port == null && jwt == null && localhostOnly == null) {
             return errorJson("at least one of enabled/port/jwt_enabled/localhost_only required")
         }
-        val current = settings
+        val wasEnabled = settings.webServerEnabled
         settingsStore.update { old ->
             old.copy(
                 webServerEnabled = enabled ?: old.webServerEnabled,
@@ -265,7 +274,7 @@ class AppControlService(
                 webServerLocalhostOnly = localhostOnly ?: old.webServerLocalhostOnly,
             )
         }
-        return successJson("web server updated (was enabled=${current.webServerEnabled})")
+        return successJson("web server updated (was enabled=$wasEnabled)")
     }
 
     @OptIn(ExperimentalUuidApi::class)
