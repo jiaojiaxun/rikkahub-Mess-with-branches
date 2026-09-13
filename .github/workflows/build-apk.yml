@@ -11,7 +11,13 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The repo has two git submodules (material3/material-color-utilities and
+      # llama-cpp/native/llama.cpp). checkout does NOT fetch them by default, which
+      # left those directories empty and made every previous CI run fail inside Gradle
+      # with no Kotlin error at all. recursive keeps nested submodules working too.
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-java@v5
         with:
