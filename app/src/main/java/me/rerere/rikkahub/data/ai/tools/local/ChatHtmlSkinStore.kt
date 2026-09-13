@@ -5,10 +5,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import me.rerere.rikkahub.AppScope
-import me.rerere.rikkahub.utils.toMutableStateFlow
 import java.io.File
 
 /**
@@ -20,7 +19,7 @@ import java.io.File
  * the surface small and the settings migration path untouched.
  *
  * Exposed API:
- *  - [stateFlow]      : reactive state for Compose
+ *  - [stateFlow]      : reactive state for Compose (MutableStateFlow, mirrors DataStore)
  *  - [setActive]      : set active skin + enable html mode (write tool)
  *  - [setMode]        : toggle html mode without changing the chosen skin
  *  - [activeSkinFile] : resolve the current skin file (or null)
@@ -47,9 +46,8 @@ class ChatHtmlSkinStore(
     val stateFlow: MutableStateFlow<ChatHtmlSkinState> = _stateFlow
 
     init {
-        // Replay current persisted state into the in-memory snapshot, then keep them in
-        // sync: every edit() writes DataStore first and mirrors into _stateFlow, so Compose
-        // sees one consistent source. DataStore stays authoritative across process death.
+        // DataStore stays authoritative across process death; _stateFlow gives Compose a
+        // synchronous snapshot. collect never cancels — singleton lifetime, by design.
         scope.launch {
             appContext.chatHtmlSkinDataStore.data.collect { prefs ->
                 _stateFlow.value = ChatHtmlSkinState(
