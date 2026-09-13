@@ -8,18 +8,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinStore
 
 /**
@@ -55,20 +55,20 @@ class ChatHtmlBridge {
  */
 internal fun parseBridgeEvent(json: String): Pair<String, JsonObject>? {
     val obj = runCatching { Json.parseToJsonElement(json) as? JsonObject }.getOrNull() ?: return null
-    val type = (obj["type"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() } ?: return null
+    val type = (obj["type"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
     return type to obj
 }
 
 /**
  * Full-bleed HTML layer for the chat page (dual-mode UI, HTML side).
  *
- * Rendered when html mode is on. The native message list and input bar keep working
- * — this layer sits behind them; the skin can style the visible chrome through its
- * own DOM (background, bubbles, floating widgets) while native features (send text,
- * attach files) are untouched.
+ * Rendered only when html mode is on ([ChatHtmlSkinStore.stateFlow]); the native
+ * message list and input bar keep working on top of it, so the skin styles the visible
+ * chrome through its own DOM while native features (send text, attach files) are
+ * untouched.
  *
  * Rendering: the skin file is loaded with `loadDataWithBaseURL` using a synthetic
- * https base (no real origin), so relative URLs cannot escape to the filesystem.
+ * https base (no real origin), so relative URLs cannot reach the filesystem.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -77,12 +77,10 @@ fun ChatHtmlLayer(
     onBridgeEvent: (type: String, payload: JsonObject) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val state by skinStore.stateFlow.collectAsState()
     if (!state.htmlModeEnabled) return
-    val skinFile = remember(state.activeSkinId) {
-        skinStore.activeSkinFile(context)
-    }
+    // activeSkinId is the remember key: switching skins re-reads the file from disk.
+    val skinFile = remember(state.activeSkinId) { skinStore.activeSkinFile() }
     if (skinFile == null) return
     val html = remember(skinFile) { runCatching { skinFile.readText() }.getOrNull() }
     if (html == null) return
@@ -91,7 +89,8 @@ fun ChatHtmlLayer(
     var webview by remember { mutableStateOf<WebView?>(null) }
 
     // Drain bridge events on the main thread (poll loop; see [ChatHtmlBridge] for the
-    // thread-safety contract). 50ms cadence keeps taps feel instant without busy-waiting.
+    // thread-safety contract). 50ms cadence keeps taps feeling instant without
+    // busy-waiting on an empty queue.
     LaunchedEffect(webview) {
         while (true) {
             bridge.poll()?.let { raw ->
