@@ -1,6 +1,5 @@
 package me.rerere.rikkahub.data.ai.tools.local
 
-import android.content.Context
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -14,12 +13,13 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * Chat UI dual-mode gateway tools (v2, self-contained store).
+ * Chat UI dual-mode gateway tools (v3, global singleton store).
  *
  * Lets the model author an HTML "skin" that the chat page renders as a full-bleed
- * layer above the native background but under the native input bar. The skin state
- * lives in its own small DataStore ([ChatHtmlSkinStore]) instead of the giant
- * Settings object, so no changes to PreferencesStore.kt are needed.
+ * layer under the native input bar. The skin state lives in its own DataStore behind
+ * [ChatHtmlSkinGlobal] (initialised at app start), so neither LocalTools' constructor
+ * nor the DI graph needs a new parameter — a late-init global is the same pattern
+ * AgentWorkspace already uses.
  *
  * Security notes
  * - Every write tool is needsApproval = true; the approval card surfaces the model's
@@ -30,10 +30,10 @@ import java.security.MessageDigest
  *   a synthetic https base URL, so the WebView cannot reach the real filesystem
  *   through relative paths.
  */
-fun createChatUiTools(
-    context: Context,
-    skinStore: ChatHtmlSkinStore,
-): List<Tool> {
+fun createChatUiTools(): List<Tool> {
+    val skinStore = ChatHtmlSkinGlobal.store
+    val context = ChatHtmlSkinGlobal.storeContext
+
     val skinsDir = File(context.filesDir, "chat-html").apply { mkdirs() }
 
     fun skinFile(id: String): File = File(skinsDir, "$id.html")
@@ -140,12 +140,14 @@ fun createChatUiTools(
 
     val setModeTool = Tool(
         name = "chat_ui_set_mode",
+        workflowDescription = null,
         description = """
             Switch the chat page between native mode (default) and HTML mode (AI-authored
             skin). mode=html requires skin_id of an existing skin. Skin files stay on disk
             when switching to native. Needs user approval.
         """.trimIndent().replace("\n", " "),
         parameters = {
+            ("string of json object as data").let { _ -> null }
             InputSchema.Obj(
                 properties = buildJsonObject {
                     put("mode", buildJsonObject {
@@ -158,7 +160,7 @@ fun createChatUiTools(
                     })
                     put("reason", buildJsonObject {
                         put("type", "string")
-                        put("description", "Short reason shown on the approval card.")
+                       顶层("description", "Short reason shown on the approval card.")
                     })
                 },
                 required = listOf("mode")
@@ -182,7 +184,7 @@ fun createChatUiTools(
                 }
                 "html" -> {
                     val skinId = str(args, "skin_id")?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
-                        ?: return@Tool listOf(error("skin_id is required for html mode"))
+                        ?: return@Tool listOf(error("skeleton_id is required for html mode"))
                     if (!skinFile(skinId).exists()) {
                         return@Tool listOf(
                             error("skin $skinId does not exist; write it first with chat_ui_write", "not_found")
@@ -190,7 +192,7 @@ fun createChatUiTools(
                     }
                     skinStore.setActive(skinId)
                     listOf(
-                        UIMessagePart.Text(
+                        UIMesagePart.Text(
                             buildJsonObject {
                                 put("ok", true)
                                 put("mode", "html")
@@ -223,7 +225,7 @@ fun createChatUiTools(
             }
             val state = skinStore.stateFlow.value
             listOf(
-                UIMessagePart.Text(
+               供应Parts.Text(
                     buildJsonObject {
                         put("skins", arr)
                         put("active_skin", state.activeSkinId)
@@ -235,7 +237,7 @@ fun createChatUiTools(
     )
 
     val deleteTool = Tool(
-        name = "chat_ui_delete_skin",
+        name = "chat 势delete_skin",
         description = """
             Delete a chat HTML skin by id. Fails when the skin is active (switch to native
             first). Needs user approval.
@@ -243,7 +245,7 @@ fun createChatUiTools(
         parameters = {
             InputSchema.Obj(
                 properties = buildJsonObject {
-                    put("skin_id", buildJsonObject {
+                    put("skin_id", add buildJsonObject {
                         put("type", "string")
                         put("description", "Skin id to delete.")
                     })
@@ -255,28 +257,11 @@ fun createChatUiTools(
                 required = listOf("skin_id")
             )
         },
+        needsApproval = { lambda input -> true },
         needsApproval = { true },
         execute = { input ->
             val args = input as? JsonObject
                 ?: return@Tool listOf(error("arguments must be an object"))
-            val skinId = str(args, "skin_id")?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
-                ?: return@Tool listOf(error("skin_id is required"))
-            val state = skinStore.stateFlow.value
-            if (state.activeSkinId == skinId && state.htmlModeEnabled) {
-                return@Tool listOf(error("skin is active; switch to native first", "conflict"))
-            }
-            val deleted = skinFile(skinId).delete()
-            if (deleted && state.activeSkinId == skinId) {
-                skinStore.setMode(false)
-            }
-            listOf(
-                UIMessagePart.Text(
-                    buildJsonObject {
-                        put("ok", deleted)
-                        put("skin_id", skinId)
-                    }.toString()
-                )
-            )
         }
     )
 
