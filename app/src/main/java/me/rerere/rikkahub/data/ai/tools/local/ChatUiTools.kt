@@ -6,7 +6,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.InputSchema
 import me.rerere.ai.core.Tool
@@ -19,7 +18,7 @@ import java.security.MessageDigest
  *
  * Lets the model author an HTML "skin" that the chat page renders as a full-bleed
  * layer above the native background but under the native input bar. The skin state
- * lives in its own small DataStore (`ChatHtmlSkinStore`) instead of the giant
+ * lives in its own small DataStore ([ChatHtmlSkinStore]) instead of the giant
  * Settings object, so no changes to PreferencesStore.kt are needed.
  *
  * Security notes
@@ -28,8 +27,8 @@ import java.security.MessageDigest
  * - The HTML must be self-contained: <script src>, external stylesheets, @import and
  *   file:// references are rejected by [policyViolations] before the file is written.
  * - Files live under filesDir/chat-html and are rendered via loadDataWithBaseURL with
- *   a synthetic https base URL, so the WebView cannot reach the real filesystem or
- *   network through relative paths.
+ *   a synthetic https base URL, so the WebView cannot reach the real filesystem
+ *   through relative paths.
  */
 fun createChatUiTools(
     context: Context,
@@ -50,16 +49,17 @@ fun createChatUiTools(
         (input[key] as? JsonPrimitive)?.contentOrNull
 
     fun error(detail: String, code: String = "invalid_argument") =
-        UIMessagePart.Text(buildJsonObject {
-            put("error", code)
-            put("detail", detail)
-        }.toString())
+        UIMessagePart.Text(
+            buildJsonObject {
+                put("error", code)
+                put("detail", detail)
+            }.toString()
+        )
 
     /**
-     * Reject skins that reference external resources. This keeps the skin an inert
-     * artifact reviewable in one file and blocks loading third-party payloads at
-     * render time. Inline <script> (no src), inline <style> and https:// images
-     * remain allowed.
+     * Reject skins that reference external resources. Keeps the skin an inert
+     * artifact reviewable in one file and blocks third-party payloads at render
+     * time. Inline <script> (no src), inline <style> and https:// images allowed.
      */
     fun policyViolations(html: String): List<String> = buildList {
         if (Regex("""<script[^>]*\bsrc\s*=""").containsMatchIn(html)) add("script-src")
@@ -67,17 +67,6 @@ fun createChatUiTools(
         if (Regex("""@import""").containsMatchIn(html)) add("css-import")
         if (Regex("""\bfile://""").containsMatchIn(html)) add("file-url")
     }
-
-    fun okJson(vararg pairs: Pair<String, Any?>) = UIMessagePart.Text(buildJsonObject {
-        pairs.forEach { (k, v) ->
-            when (v) {
-                is String -> put(k, v)
-                is Boolean -> put(k, v)
-                is Number -> put(k, v)
-                null -> put(k, kotlinx.serialization.json.JsonNull)
-            }
-        }
-    }.toString())
 
     val writeTool = Tool(
         name = "chat_ui_write",
@@ -108,7 +97,7 @@ fun createChatUiTools(
                     })
                     put("reason", buildJsonObject {
                         put("type", "string")
-                        put("description", "Short user-facing reason shown on the approval card, e.g. '做一个赛博朋克风格聊天背景'.")
+                        put("description", "Short user-facing reason shown on the approval card.")
                     })
                 },
                 required = listOf("html")
@@ -116,7 +105,8 @@ fun createChatUiTools(
         },
         needsApproval = { true },
         execute = { input ->
-            val args = input as? JsonObject ?: return@Tool listOf(error("arguments must be an object"))
+            val args = input as? JsonObject
+                ?: return@Tool listOf(error("arguments must be an object"))
             val html = str(args, "html")?.takeIf { it.isNotBlank() }
                 ?: return@Tool listOf(error("html is required"))
             if (html.length > 512_000) {
@@ -134,13 +124,17 @@ fun createChatUiTools(
             val f = skinFile(id)
             f.writeText(html)
             skinStore.setActive(id)
-            listOf(okJson(
-                "ok" to true,
-                "skin_id" to id,
-                "mode" to "html",
-                "bytes" to f.length(),
-                "path" to f.absolutePath,
-            ))
+            listOf(
+                UIMessagePart.Text(
+                    buildJsonObject {
+                        put("ok", true)
+                        put("skin_id", id)
+                        put("mode", "html")
+                        put("bytes", f.length())
+                        put("path", f.absolutePath)
+                    }.toString()
+                )
+            )
         }
     )
 
@@ -172,20 +166,38 @@ fun createChatUiTools(
         },
         needsApproval = { true },
         execute = { input ->
-            val args = input as? JsonObject ?: return@Tool listOf(error("arguments must be an object"))
+            val args = input as? JsonObject
+                ?: return@Tool listOf(error("arguments must be an object"))
             when (val mode = str(args, "mode")) {
                 "native" -> {
                     skinStore.setMode(false)
-                    listOf(okJson("ok" to true, "mode" to "native"))
+                    listOf(
+                        UIMessagePart.Text(
+                            buildJsonObject {
+                                put("ok", true)
+                                put("mode", "native")
+                            }.toString()
+                        )
+                    )
                 }
                 "html" -> {
                     val skinId = str(args, "skin_id")?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
                         ?: return@Tool listOf(error("skin_id is required for html mode"))
                     if (!skinFile(skinId).exists()) {
-                        return@Tool listOf(error("skin $skinId does not exist; write it first with chat_ui_write", "not_found"))
+                        return@Tool listOf(
+                            error("skin $skinId does not exist; write it first with chat_ui_write", "not_found")
+                        )
                     }
                     skinStore.setActive(skinId)
-                    listOf(okJson("ok" to true, "mode" to "html", "skin_id" to skinId))
+                    listOf(
+                        UIMessagePart.Text(
+                            buildJsonObject {
+                                put("ok", true)
+                                put("mode", "html")
+                                put("skin_id", skinId)
+                            }.toString()
+                        )
+                    )
                 }
                 else -> listOf(error("mode must be native or html (got: $mode)"))
             }
@@ -200,24 +212,30 @@ fun createChatUiTools(
             val skins = listSkins()
             val arr = buildJsonArray {
                 skins.forEach { id ->
-                    add(buildJsonObject {
-                        put("skin_id", id)
-                        put("bytes", skinFile(id).length())
-                        put("last_modified", skinFile(id).lastModified())
-                    })
+                    add(
+                        buildJsonObject {
+                            put("skin_id", id)
+                            put("bytes", skinFile(id).length())
+                            put("last_modified", skinFile(id).lastModified())
+                        }
+                    )
                 }
             }
-            listOf(UIMessagePart.Text(buildJsonObject {
-                put("skins", arr)
-                put("active_skin", skinStore.stateFlow.value.activeSkinId)
-                put("html_mode_enabled", skinStore.stateFlow.value.htmlModeEnabled)
-            }.toString()))
+            val state = skinStore.stateFlow.value
+            listOf(
+                UIMessagePart.Text(
+                    buildJsonObject {
+                        put("skins", arr)
+                        put("active_skin", state.activeSkinId)
+                        put("html_mode_enabled", state.htmlModeEnabled)
+                    }.toString()
+                )
+            )
         }
     )
 
     val deleteTool = Tool(
         name = "chat_ui_delete_skin",
-        deletDescription = null,
         description = """
             Delete a chat HTML skin by id. Fails when the skin is active (switch to native
             first). Needs user approval.
@@ -230,8 +248,8 @@ fun createChatUiTools(
                         put("description", "Skin id to delete.")
                     })
                     put("reason", buildJsonObject {
-                        "Short reason shown on the approval card."
-                            .let { d -> put("type", "string").let { put("description", d) } }
+                        put("type", "string")
+                        put("description", "Short reason shown on the approval card.")
                     })
                 },
                 required = listOf("skin_id")
@@ -239,19 +257,28 @@ fun createChatUiTools(
         },
         needsApproval = { true },
         execute = { input ->
-            val args = input as? JsonObject ?: return@Tool listOf(error("arguments must be an object"))
+            val args = input as? JsonObject
+                ?: return@Tool listOf(error("arguments must be an object"))
             val skinId = str(args, "skin_id")?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
                 ?: return@Tool listOf(error("skin_id is required"))
-            if (skinStore.stateFlow.value.activeSkinId == skinId && skinStore.stateFlow.value.htmlModeEnabled) {
+            val state = skinStore.stateFlow.value
+            if (state.activeSkinId == skinId && state.htmlModeEnabled) {
                 return@Tool listOf(error("skin is active; switch to native first", "conflict"))
             }
             val deleted = skinFile(skinId).delete()
-            if (deleted) {
-                if (skinStore.stateFlow.value.activeSkinId == skinId) skinStore.setMode(false)
+            if (deleted && state.activeSkinId == skinId) {
+                skinStore.setMode(false)
             }
-            listOf(okJson("ok" to deleted, "skin_id" to skinId))
+            listOf(
+                UIMessagePart.Text(
+                    buildJsonObject {
+                        put("ok", deleted)
+                        put("skin_id", skinId)
+                    }.toString()
+                )
+            )
         }
     )
 
-    return listOf(writeTool, setModeListTool, listTool, deleteTool)
+    return listOf(writeTool, setModeTool, listTool, deleteTool)
 }
