@@ -1,7 +1,9 @@
 package me.rerere.rikkahub.data.ai.tools.appcontrol
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.InputSchema
 import me.rerere.ai.core.Tool
@@ -9,7 +11,7 @@ import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.datastore.SettingsStore
 
 /**
- * AppControl gateway tools, ported from feat/app-control-v2 (verified there).
+ * AppControl gateway tools, ported from feat/app-control-v2.
  *
  * - rikkahub_capabilities: read-only; describes what the gateway can do.
  * - rikkahub_query: read-only; redacted app settings snapshot (no secrets).
@@ -26,8 +28,8 @@ fun createAppControlTools(
     val capabilitiesTool = Tool(
         name = "rikkahub_capabilities",
         description = """
-            List the capabilities of the RikkaHub app-control gateway. Always available.
-            Read side (rikkahub_query) exposes a redacted snapshot of app settings; write side
+            List the capabilities of the RikkaHub app-control gateway. Read side
+            (rikkahub_query) exposes a redacted snapshot of app settings; write side
             (rikkahub_apply_change) supports a whitelist of actions and every write requires
             user approval. Prefer this tool when the app-control surface is unknown.
         """.trimIndent().replace("\n", " "),
@@ -42,26 +44,27 @@ fun createAppControlTools(
                 UIMessagePart.Text(
                     buildJsonObject {
                         put("gateway", "rikkahub_app_control")
-                        put("version", 2)
+                        put("version", 3)
                         put("read_tools", kotlinx.serialization.json.buildJsonArray {
-                            add(kotlinx.serialization.json.JsonPrimitive("rikkahub_capabilities"))
-                            add(kotlinx.serialization.json.JsonPrimitive("rikkahub_query"))
+                            add(JsonPrimitive("rikkahub_capabilities"))
+                            add(JsonPrimitive("rikkahub_query"))
                         })
                         put("write_tool", "rikkahub_apply_change (whitelist; needsApproval=true)")
                         put("query_domains", kotlinx.serialization.json.buildJsonArray {
-                            add(kotlinx.serialization.json.JsonPrimitive("app_state"))
-                            add(kotlinx.serialization.json.JsonPrimitive("providers"))
-                            add(kotlinx.serialization.json.JsonPrimitive("assistants"))
-                            add(kotlinx.serialization.json.JsonPrimitive("mcp_servers"))
+                            add(JsonPrimitive("app_state"))
+                            add(JsonPrimitive("providers"))
+                            add(JsonPrimitive("assistants"))
+                            add(JsonPrimitive("mcp_servers"))
                         })
                         put("write_actions", kotlinx.serialization.json.buildJsonArray {
-                            add(kotlinx.serialization.json.JsonPrimitive("switch_assistant"))
-                            add(kotlinx.serialization.json.JsonPrimitive("set_chat_model"))
-                            add(kotlinx.serialization.json.JsonPrimitive("set_fast_model"))
-                            add(kotlinx.serialization.json.JsonPrimitive("update_assistant"))
-                            add(kotlinx.serialization.json.JsonPrimitive("toggle_provider_enabled"))
-                            add(kotlinx.serialization.json.JsonPrimitive("toggle_mcp_server"))
-                            add(kotlinx.serialization.json.JsonPrimitive("set_web_server"))
+                            add(JsonPrimitive("switch_assistant"))
+                            add(JsonPrimitive("set_chat_model"))
+                            add(JsonPrimitive("set_fast_model"))
+                            add(JsonPrimitive("update_assistant"))
+                            add(JsonPrimitive("toggle_provider_enabled"))
+                            add(JsonPrimitive("rename_provider"))
+                            add(JsonPrimitive("toggle_mcp_server"))
+                            add(JsonPrimitive("set_web_server"))
                         })
                     }.toString()
                 )
@@ -72,10 +75,10 @@ fun createAppControlTools(
     val queryTool = Tool(
         name = "rikkahub_query",
         description = """
-            Query the Rikkaahub app state. Returns a redacted snapshot: assistant id,
-            chat/fast model ids, web server settings, search services, providers (with
-            their models, no secrets), assistants, and MCP servers. Never returns API
-            keys, tokens, passwords, or custom headers. Read-only.
+            Query the RikkaHub app state. Returns a redacted snapshot: assistant id,
+            chat/fast model ids, web server settings, search service selection, providers
+            (with their models, no secrets), assistants, and MCP servers. Never returns API
+            keys, tokens, passwords or custom headers. Read-only.
         """.trimIndent().replace("\n", " "),
         parameters = {
             InputSchema.Obj(
@@ -104,6 +107,7 @@ fun createAppControlTools(
               enable_memory?, use_global_memory?, enable_recent_chats_reference?,
               stream_output?, temperature?, top_p?, context_message_limit?, max_tokens?}
             - toggle_provider_enabled {provider_id, enabled}
+            - rename_provider {provider_id, name}
             - toggle_mcp_server {server_id, enable}
             - set_web_server {enabled?, port?, jwt_enabled?, localhost_only?}
             All ids are UUIDs. Query first with rikkahub_query to get valid ids.
@@ -134,7 +138,7 @@ fun createAppControlTools(
                         }.toString()
                     )
                 )
-            val action = (args["action"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
+            val action = (args["action"] as? JsonPrimitive)?.contentOrNull
                 ?: return@Tool listOf(
                     UIMessagePart.Text(
                         buildJsonObject {
