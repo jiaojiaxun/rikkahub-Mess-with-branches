@@ -1,70 +1,86 @@
 #!/usr/bin/env python3
-"""Surface Kotlin/Gradle build errors as GitHub check-run annotations.
+"""Surface Gradle/Kotlin build failures as GitHub check-run annotations.
 
-Why: this branch's CI logs cannot be downloaded without auth, while check-run
-annotations are readable through the public REST API. Emitting
-`::error file=...,line=...::message` workflow commands turns compiler errors into
-annotations readable via /repos/{owner}/{repo}/commits/{ref}/check-runs plus
-/check-runs/{id}/annotations.
+CI logs cannot be downloaded without auth on this setup, but check-run annotations are
+world-readable, so this script converts the interesting parts of a Gradle log into
+`::error` workflow commands:
 
-Usage: python3 scripts/report_build_errors.py [build.log]
-Always exits 0 -- reporting must never mask the real build failure.
+  * Kotlin compiler errors (`e: file:line:col message`) -> file/line anchored annotations
+  * failing Gradle tasks, the "What went wrong" block, "Execution failed for task" lines
+  * the `Caused by:` chain, plus a raw window around the first FAILURE line
+
+Usage: python3 scripts/report_build_errors.py [logfile]
+Always exits 0 -- reporting must never mask the real build result.
 """
 import re
 import sys
 from pathlib import Path
 
-ERR_RE = re.compile(r"^e: (?:file://)?(\S+?):(\d+):(\d+)[:\s]*(.*)$", re.MULTILINE)
-MAX_ANNOTATIONS = 25
-MAX_MSG = 380
+KOTLIN_ERR = re.compile(r"^e: (?:file://)?(\S+?):(\d+):(\d+)[:\s]*(.*)$", re.MULTILINE)
+TASK_FAILED = re.compile(r"^> Task (\S+) FAILED$", re.MULTILINE)
+CAUSE = re.compile(r"^Caused by: (.*)$", re.MULTILINE)
+WHAT_WENT_WRONG = re.compile(
+    r"\* What went wrong:\s*\n(.*?)(?:\n\* Try:|\n\* Get more help|\Z)", re.DOTALL
+)
+EXEC_FAILED = re.compile(r"^Execution failed for task '([^']+)'\.?\s*(.*)$", re.MULTILINE)
+MAX_KOTLIN = 25
 
 
-def relativise(path: str) -> str:
-    marker = "/repo/"
-    if marker in path:
-        return path.split(marker, 1)[1]
-    return path
-
-
-def sanitize(text: str) -> str:
-    return (
+def sanitize(text: str, limit: int = 900) -> str:
+    cleaned = (
         text.replace("%", "%25")
         .replace("\r", " ")
-        .replace("\n", " ")
+        .replace("\n", " | ")
         .replace("::", ": ")
-        .strip()
     )
+    return cleaned.strip()[:limit]
+
+
+def emit(message: str) -> None:
+    print(f"::error::{sanitize(message)}")
 
 
 def main() -> int:
-    log_path = Path(sys.argv[1] if len(sys.argv) > 1 else "build.log")
-    if not log_path.exists():
-        print("::error::build.log missing; build failed before producing output")
+    path = Path(sys.argv[1] if len(sys.argv) > 1 else "build.log")
+    if not path.exists():
+        emit("log file missing: the step failed before Gradle produced output")
         return 0
 
-    log = log_path.read_text(encoding="utf-8", errors="replace")
-    hits = ERR_RE.findall(log)
+    log = path.read_text(encoding="utf-8", errors="replace")
 
-    emitted = 0
-    for path, line, col, msg in hits:
-        if emitted >= MAX_ANNOTATIONS:
+    # 1) Kotlin compiler errors -- the only ones with useful file/line anchors.
+    kotlin_count = 0
+    for file_path, line, col, message in KOTLIN_ERR.findall(log):
+        if kotlin_count >= MAX_KOTLIN:
             break
-        clean = sanitize(msg)[:MAX_MSG]
-        if not clean:
-            continue
-        print(f"::error file={relativise(path)},line={line},col={col}::{clean}")
-        emitted += 1
+        rel = file_path.split("/repo/", 1)[1] if "/repo/" in file_path else file_path
+        print(f"::error file={rel},line={line},col={col}::{sanitize(message, 380)}")
+        kotlin_count += 1
 
-    if emitted == 0:
-        noisy = [
-            line.strip()
-            for line in log.splitlines()
-            if line.strip() and not line.strip().startswith("Download")
-        ][-15:]
-        summary = sanitize(" | ".join(noisy))[:900]
-        print(f"::error::no Kotlin errors parsed; tail: {summary}")
+    # 2) Which tasks blew up.
+    failed_tasks = TASK_FAILED.findall(log)
+    if failed_tasks:
+        emit("FAILED tasks: " + ", ".join(failed_tasks[:12]))
 
-    print(f"reported {emitted} annotation(s)", flush=True)
+    # 3) The canonical "What went wrong" block.
+    match = WHAT_WENT_WRONG.search(log)
+    if match:
+        emit("WHAT WENT WRONG: " + match.group(1)[:1200])
+
+    # 4) Explicit task failures with their reason.
+    for task, extra in EXEC_FAILED.findall(log)[:4]:
+        emit(f"EXEC FAILED: {task} :: {extra}")
+
+    # 5) Root-cause chain.
+    for cause in CAUSE.findall(log)[:6]:
+        emit("CAUSED BY: " + cause[:600])
+
+    # 6) Raw context around the first FAILURE banner, in case all else misses.
+    idx = log.find("FAILURE: Build failed")
+    if idx >= 0:
+        emit("AROUND FAILURE: " + log[idx : idx + 1400])
+
+    print(f"reported {kotlin_count} kotlin error annotation(s)", flush=True)
     return 0
 
 

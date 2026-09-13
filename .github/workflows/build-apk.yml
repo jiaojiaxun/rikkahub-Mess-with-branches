@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -35,38 +35,52 @@ jobs:
       - name: Patch ChatPage.kt (embed html layer)
         run: python3 scripts/patch_chat_page_html.py
 
-      # release is already signed with the debug signingConfig inside
-      # app/build.gradle.kts, so no keystore step is required.
-      - name: Build release APK (R8)
-        id: build
+      # Split compile from packaging so a failure's stage is unambiguous.
+      # release is already debug-signed inside app/build.gradle.kts (no keystore step).
+      - name: Compile Kotlin (release)
+        id: compile
         continue-on-error: true
         run: |
           chmod +x gradlew
           set +e
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace > build.log 2>&1
-          echo "gradle_exit=$?" >> "$GITHUB_OUTPUT"
-          tail -n 40 build.log
+          ./gradlew :app:compileReleaseKotlin --no-daemon --stacktrace > compile.log 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          tail -n 20 compile.log
 
-      # CI logs need auth to download; check-run annotations do not. Turning compiler
-      # errors into ::error annotations makes them readable through the public
-      # check-runs REST API, which is how this branch gets its build diagnostics.
-      - name: Report build errors as annotations
-        if: steps.build.outputs.gradle_exit != '0'
+      - name: Report Kotlin compile errors
+        if: steps.compile.outcome == 'failure'
+        run: python3 scripts/report_build_errors.py compile.log
+
+      - name: Build release APK (R8)
+        id: build
+        if: steps.compile.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set +e
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace > build.log 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          tail -n 20 build.log
+
+      - name: Report packaging / lint errors
+        if: steps.build.outcome == 'failure'
         run: python3 scripts/report_build_errors.py build.log
 
-      - name: Upload build log
+      - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
-          path: build.log
+          name: build-logs
+          path: |
+            compile.log
+            build.log
           if-no-files-found: ignore
 
-      - name: Fail when the build failed
-        if: steps.build.outputs.gradle_exit != '0'
+      - name: Fail when a build step failed
+        if: steps.compile.outcome == 'failure' || steps.build.outcome == 'failure'
         run: exit 1
 
       - name: Upload APK
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: rikkahub-dual-mode-chat
