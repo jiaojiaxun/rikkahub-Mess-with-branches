@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: write
     steps:
       - uses: actions/checkout@v4
 
@@ -36,42 +35,40 @@ jobs:
       - name: Patch ChatPage.kt (embed html layer)
         run: python3 scripts/patch_chat_page_html.py
 
-      - name: Restore keystore
-        id: kscache
-        uses: actions/cache@v4
-        with:
-          path: lzx.kshsia
-          key: rikkahub-lzx-kshsia-v1
-
-      - name: Generate keystore if missing
-        if: steps.kscache.outputs.cache-hit != 'true'
-        run: |
-          if [ ! -f lzx.kshsia ]; then
-            keytool -genkeypair -v \
-              -keystore lzx.kshsia \
-              -alias lzx -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass lzx123456 -keypass lzx123456 \
-              -dname "CN=lzx, OU=Dev, O=RikkaHub, L=City, ST=State, C=CN"
-          fi
-
+      # release is already signed with the debug signingConfig inside
+      # app/build.gradle.kts, so no keystore step is required.
       - name: Build release APK (R8)
-        env:
-          RIKKAHUB_KEYSTORE_PATH: ${{ github.workspace }}/lzx.kshsia
-          RIKKAHUB_KEYSTORE_PASSWORD: lzx123456
-          RIKKAHUB_KEY_ALIAS: lzx
-          RIKKAHUB_KEY_PASSWORD: lzx123456
+        id: build
+        continue-on-error: true
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+          set +e
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace > build.log 2>&1
+          echo "gradle_exit=$?" >> "$GITHUB_OUTPUT"
+          tail -n 40 build.log
+
+      # CI logs need auth to download; check-run annotations do not. Turning compiler
+      # errors into ::error annotations makes them readable through the public
+      # check-runs REST API, which is how this branch gets its build diagnostics.
+      - name: Report build errors as annotations
+        if: steps.build.outputs.gradle_exit != '0'
+        run: python3 scripts/report_build_errors.py build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: Fail when the build failed
+        if: steps.build.outputs.gradle_exit != '0'
+        run: exit 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: rikkahub-dual-mode-chat
           path: app/build/outputs/apk/release/*.apk
-
-      - name: Upload keystore
-        uses: actions/upload-artifact@v4
-        with:
-          name: lzx-keystore
-          path: lzx.kshsia
+          if-no-files-found: error
