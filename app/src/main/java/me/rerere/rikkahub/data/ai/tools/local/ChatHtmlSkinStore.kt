@@ -18,11 +18,10 @@ import java.io.File
  * must not take the whole Settings object hostage. A dedicated tiny DataStore keeps
  * the surface small and the settings migration path untouched.
  *
- * Exposed API:
- *  - [stateFlow]      : reactive state for Compose (MutableStateFlow, mirrors DataStore)
- *  - [setActive]      : set active skin + enable html mode (write tool)
- *  - [setMode]        : toggle html mode without changing the chosen skin
- *  - [activeSkinFile] : resolve the current skin file (or null)
+ * Access: the store is created once at app start via [init] (same pattern as
+ * AgentWorkspace.init) and read from [store] everywhere else. UI and tool code never
+ * construct their own instance — two DataStore instances over one file would corrupt
+ * the state file (DataStore's "multiple instances on the same file" guarantee).
  */
 private val Context.chatHtmlSkinDataStore by preferencesDataStore(name = "chat_html_skin")
 
@@ -30,6 +29,29 @@ data class ChatHtmlSkinState(
     val activeSkinId: String? = null,
     val htmlModeEnabled: Boolean = false,
 )
+
+object ChatHtmlSkinGlobal {
+    @Volatile
+    private var instance: ChatHtmlSkinStore? = null
+
+    /** Must be called once from Application.onCreate, before any UI or tool reads it. */
+    fun init(context: Context, scope: AppScope) {
+        if (instance == null) {
+            synchronized(this) {
+                if (instance == null) {
+                    instance = ChatHtmlSkinStore(context, scope)
+                }
+            }
+        }
+    }
+
+    /** The single store instance; throws when accessed before [init]. */
+    val store: ChatHtmlSkinStore
+        get() = instance ?: error("ChatHtmlSkinGlobal not initialised; call init(context, scope) first")
+
+    /** True when [init] has run — lets UI degrade gracefully instead of crashing. */
+    val isReady: Boolean get() = instance != null
+}
 
 class ChatHtmlSkinStore(
     context: Context,
