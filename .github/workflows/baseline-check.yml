@@ -1,0 +1,47 @@
+name: Baseline check (base branch, unpatched)
+
+on:
+  push:
+    branches: [ci/baseline-check]
+  workflow_dispatch:
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: baseline-gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: |
+            baseline-gradle-${{ runner.os }}-
+
+      # No patch scripts: this compiles the base branch exactly as committed, so a
+      # failure here means the baseline itself does not build (not the feature work).
+      - name: Build release APK (baseline, unpatched)
+        id: build
+        continue-on-error: true
+        run: |
+          chmod +x gradlew
+          set +e
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace > build.log 2>&1
+          echo "gradle_exit=$?" >> "$GITHUB_OUTPUT"
+          tail -n 40 build.log
+
+      - name: Report build errors as annotations
+        if: steps.build.outputs.gradle_exit != '0'
+        run: python3 scripts/baseline_report_errors.py build.log
+
+      - name: Fail when the build failed
+        if: steps.build.outputs.gradle_exit != '0'
+        run: exit 1
