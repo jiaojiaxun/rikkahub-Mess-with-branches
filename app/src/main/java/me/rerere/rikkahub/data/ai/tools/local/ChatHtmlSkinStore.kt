@@ -18,10 +18,10 @@ import java.io.File
  * must not take the whole Settings object hostage. A dedicated tiny DataStore keeps
  * the surface small and the settings migration path untouched.
  *
- * Access: the store is created once at app start via [init] (same pattern as
- * AgentWorkspace.init) and read from [store] everywhere else. UI and tool code never
- * construct their own instance — two DataStore instances over one file would corrupt
- * the state file (DataStore's "multiple instances on the same file" guarantee).
+ * Access: created once at app start via [ChatHtmlSkinGlobal.init] (same pattern as
+ * AgentWorkspace.init) and read from [ChatHtmlSkinGlobal.store] everywhere else. UI
+ * and tool code never construct their own instance — two DataStore instances over one
+ * file would corrupt the state file.
  */
 private val Context.chatHtmlSkinDataStore by preferencesDataStore(name = "chat_html_skin")
 
@@ -80,6 +80,19 @@ class ChatHtmlSkinStore(
         }
     }
 
+    /** Directory holding skin files; created on demand. */
+    fun skinsDir(): File = File(appContext.filesDir, "chat-html").apply { mkdirs() }
+
+    /** Resolve a skin id to its file (no existence check). */
+    fun skinFile(id: String): File = File(skinsDir(), "$id.html")
+
+    /** List available skin ids (sorted). */
+    fun listSkinIds(): List<String> =
+        skinsDir().listFiles { f -> f.isFile && f.name.endsWith(".html") }
+            ?.map { it.name.removeSuffix(".html") }
+            ?.sorted()
+            ?: emptyList()
+
     /** Activate [skinId] and enable html mode. */
     fun setActive(skinId: String) {
         scope.launch {
@@ -100,9 +113,9 @@ class ChatHtmlSkinStore(
     }
 
     /** Current skin file, or null when none is set or the file was deleted externally. */
-    fun activeSkinFile(context: Context): File? {
+    fun activeSkinFile(): File? {
         val id = stateFlow.value.activeSkinId ?: return null
-        val f = File(File(context.filesDir, "chat-html"), "$id.html")
+        val f = skinFile(id)
         return if (f.isFile) f else null
     }
 }
