@@ -24,12 +24,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # :web:installWebUiDeps shells out to `bun` to install the web-ui package deps.
-      # The runner image has no bun, which is what killed the build right after the
-      # submodule fix (task ':web:installWebUiDeps' FAILED / Cannot run program "bun").
+      # The :web module needs two JS toolchains, both missing from the runner image:
+      #   installWebUiDeps -> `bun install --frozen-lockfile`   (in web-ui/)
+      #   buildWebUi       -> `pnpm run build`                  (Linux branch of the when{})
+      # Missing bun is what failed run #14 right after the submodule fix.
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Install pnpm (used by :web:buildWebUi on Linux)
+        run: npm install -g pnpm
 
       - name: Gradle cache
         uses: actions/cache@v4
