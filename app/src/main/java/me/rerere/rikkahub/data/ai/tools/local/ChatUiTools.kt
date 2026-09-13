@@ -9,11 +9,10 @@ import kotlinx.serialization.json.put
 import me.rerere.ai.core.InputSchema
 import me.rerere.ai.core.Tool
 import me.rerere.ai.ui.UIMessagePart
-import java.io.File
 import java.security.MessageDigest
 
 /**
- * Chat UI dual-mode gateway tools (v3, global singleton store).
+ * Chat UI dual-mode gateway tools (v4, global singleton store).
  *
  * Lets the model author an HTML "skin" that the chat page renders as a full-bleed
  * layer under the native input bar. The skin state lives in its own DataStore behind
@@ -31,18 +30,7 @@ import java.security.MessageDigest
  *   through relative paths.
  */
 fun createChatUiTools(): List<Tool> {
-    val skinStore = ChatHtmlSkinGlobal.store
-    val context = ChatHtmlSkinGlobal.storeContext
-
-    val skinsDir = File(context.filesDir, "chat-html").apply { mkdirs() }
-
-    fun skinFile(id: String): File = File(skinsDir, "$id.html")
-
-    fun listSkins(): List<String> =
-        skinsDir.listFiles { f -> f.isFile && f.name.endsWith(".html") }
-            ?.map { it.name.removeSuffix(".html") }
-            ?.sorted()
-            ?: emptyList()
+    val store = ChatHtmlSkinGlobal.store
 
     /** Strict content-or-null that never throws on non-string primitives. */
     fun str(input: JsonObject, key: String): String? =
@@ -121,9 +109,9 @@ fun createChatUiTools(): List<Tool> {
             if (violations.isNotEmpty()) {
                 return@Tool listOf(error("html must be self-contained: $violations", "policy_violation"))
             }
-            val f = skinFile(id)
+            val f = store.skinFile(id)
             f.writeText(html)
-            skinStore.setActive(id)
+            store.setActive(id)
             listOf(
                 UIMessagePart.Text(
                     buildJsonObject {
@@ -140,14 +128,12 @@ fun createChatUiTools(): List<Tool> {
 
     val setModeTool = Tool(
         name = "chat_ui_set_mode",
-        workflowDescription = null,
         description = """
             Switch the chat page between native mode (default) and HTML mode (AI-authored
             skin). mode=html requires skin_id of an existing skin. Skin files stay on disk
             when switching to native. Needs user approval.
         """.trimIndent().replace("\n", " "),
         parameters = {
-            ("string of json object as data").let { _ -> null }
             InputSchema.Obj(
                 properties = buildJsonObject {
                     put("mode", buildJsonObject {
@@ -160,7 +146,7 @@ fun createChatUiTools(): List<Tool> {
                     })
                     put("reason", buildJsonObject {
                         put("type", "string")
-                       顶层("description", "Short reason shown on the approval card.")
+                        put("description", "Short reason shown on the approval card.")
                     })
                 },
                 required = listOf("mode")
@@ -172,7 +158,7 @@ fun createChatUiTools(): List<Tool> {
                 ?: return@Tool listOf(error("arguments must be an object"))
             when (val mode = str(args, "mode")) {
                 "native" -> {
-                    skinStore.setMode(false)
+                    store.setMode(false)
                     listOf(
                         UIMessagePart.Text(
                             buildJsonObject {
@@ -184,15 +170,15 @@ fun createChatUiTools(): List<Tool> {
                 }
                 "html" -> {
                     val skinId = str(args, "skin_id")?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
-                        ?: return@Tool listOf(error("skeleton_id is required for html mode"))
-                    if (!skinFile(skinId).exists()) {
+                        ?: return@Tool listOf(error("skin_id is required for html mode"))
+                    if (!store.skinFile(skinId).exists()) {
                         return@Tool listOf(
                             error("skin $skinId does not exist; write it first with chat_ui_write", "not_found")
                         )
                     }
-                    skinStore.setActive(skinId)
+                    store.setActive(skinId)
                     listOf(
-                        UIMesagePart.Text(
+                        UIMessagePart.Text(
                             buildJsonObject {
                                 put("ok", true)
                                 put("mode", "html")
@@ -211,21 +197,20 @@ fun createChatUiTools(): List<Tool> {
         description = "List available chat HTML skins (ids, sizes, active state). Read-only.",
         parameters = { null },
         execute = {
-            val skins = listSkins()
             val arr = buildJsonArray {
-                skins.forEach { id ->
+                store.listSkinIds().forEach { id ->
                     add(
                         buildJsonObject {
                             put("skin_id", id)
-                            put("bytes", skinFile(id).length())
-                            put("last_modified", skinFile(id).lastModified())
+                            put("bytes", store.skinFile(id).length())
+                            put("last_modified", store.skinFile(id).lastModified())
                         }
                     )
                 }
             }
-            val state = skinStore.stateFlow.value
+            val state = store.stateFlow.value
             listOf(
-               供应Parts.Text(
+                UIMessagePart.Text(
                     buildJsonObject {
                         put("skins", arr)
                         put("active_skin", state.activeSkinId)
@@ -237,7 +222,7 @@ fun createChatUiTools(): List<Tool> {
     )
 
     val deleteTool = Tool(
-        name = "chat 势delete_skin",
+        name = "chat_ui_delete_skin",
         description = """
             Delete a chat HTML skin by id. Fails when the skin is active (switch to native
             first). Needs user approval.
@@ -245,7 +230,7 @@ fun createChatUiTools(): List<Tool> {
         parameters = {
             InputSchema.Obj(
                 properties = buildJsonObject {
-                    put("skin_id", add buildJsonObject {
+                    put("skin_id", buildJsonObject {
                         put("type", "string")
                         put("description", "Skin id to delete.")
                     })
@@ -257,11 +242,28 @@ fun createChatUiTools(): List<Tool> {
                 required = listOf("skin_id")
             )
         },
-        needsApproval = { lambda input -> true },
         needsApproval = { true },
         execute = { input ->
             val args = input as? JsonObject
                 ?: return@Tool listOf(error("arguments must be an object"))
+            val skinId = str(args, "skin_id")?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
+                ?: return@Tool listOf(error("skin_id is required"))
+            val state = store.stateFlow.value
+            if (state.activeSkinId == skinId && state.htmlModeEnabled) {
+                return@Tool listOf(error("skin is active; switch to native first", "conflict"))
+            }
+            val deleted = store.skinFile(skinId).delete()
+            if (deleted && state.activeSkinId == skinId) {
+                store.setMode(false)
+            }
+            listOf(
+                UIMessagePart.Text(
+                    buildJsonObject {
+                        put("ok", deleted)
+                        put("skin_id", skinId)
+                    }.toString()
+                )
+            )
         }
     )
 
