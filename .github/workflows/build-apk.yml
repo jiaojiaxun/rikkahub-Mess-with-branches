@@ -1,0 +1,95 @@
+name: Build APK (2.4.15)
+
+on:
+  push:
+    branches: [agent-2.4.15-final-public]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # The repo has two git submodules (material3/material-color-utilities and
+      # llama-cpp/native/llama.cpp). checkout does NOT fetch them by default, which
+      # left those directories empty and made every previous CI run fail inside Gradle
+      # with no Kotlin error at all. recursive keeps nested submodules working too.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # :web needs two JS toolchains, both missing from the runner image:
+      #   installWebUiDeps -> `bun install --frozen-lockfile`   (in web-ui/)
+      #   buildWebUi       -> `pnpm run build`                  (Linux branch of the when{})
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install pnpm (used by :web:buildWebUi on Linux)
+        run: npm install -g pnpm
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # Split compile from packaging so a failure's stage is unambiguous.
+      # release is already debug-signed inside app/build.gradle.kts (no keystore step).
+      - name: Compile Kotlin (release)
+        id: compile
+        continue-on-error: true
+        run: |
+          chmod +x gradlew
+          set +e
+          ./gradlew :app:compileReleaseKotlin --no-daemon --stacktrace > compile.log 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          tail -n 30 compile.log
+
+      - name: Report Kotlin compile errors
+        if: steps.compile.outcome == 'failure'
+        run: python3 scripts/report_build_errors.py compile.log
+
+      - name: Build release APK (R8)
+        id: build
+        if: steps.compile.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set +e
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace > build.log 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          tail -n 30 build.log
+
+      - name: Report packaging / lint errors
+        if: steps.build.outcome == 'failure'
+        run: python3 scripts/report_build_errors.py build.log
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            compile.log
+            build.log
+          if-no-files-found: ignore
+
+      - name: Fail when a build step failed
+        if: steps.compile.outcome == 'failure' || steps.build.outcome == 'failure'
+        run: exit 1
+
+      - name: Upload APK
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rikkahub-agent-2.4.15
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
