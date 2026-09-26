@@ -7,7 +7,10 @@ name: Build APK (app-control v2, R8)
 #   2. bun + pnpm                            -> :web:installWebUiDeps runs
 #      `bun install --frozen-lockfile` and :web:buildWebUi runs `pnpm run build` on
 #      Linux; :web:preBuild dependsOn buildWebUi, so every :app task waits on it.
-#   3. publish the APK as a release asset     -> workflow artifacts need an
+#   3. compile and package as separate steps, each piping into
+#      scripts/report_build_errors.py, so a failure is readable from the public
+#      check-run annotations API instead of the auth-only log download.
+#   4. publish the APK as a release asset     -> workflow artifacts need an
 #      authenticated API call to download, release assets are plain public URLs.
 on:
   push:
@@ -85,6 +88,18 @@ jobs:
               -dname "CN=lzx, OU=Dev, O=RikkaHub, L=City, ST=State, C=CN"
           fi
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Compile Kotlin (release)
+        run: |
+          set -o pipefail
+          ./gradlew :app:compileReleaseKotlin --no-daemon --stacktrace 2>&1 | tee compile.log
+
+      - name: Report Kotlin compile errors
+        if: always()
+        run: python3 scripts/report_build_errors.py compile.log
+
       - name: Build release APK (R8, no obfuscation, independent signing)
         env:
           RIKKAHUB_KEYSTORE_PATH: ${{ github.workspace }}/lzx.kshsia
@@ -92,8 +107,12 @@ jobs:
           RIKKAHUB_KEY_ALIAS: lzx
           RIKKAHUB_KEY_PASSWORD: lzx123456
         run: |
-          chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+          set -o pipefail
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: Report packaging errors
+        if: always()
+        run: python3 scripts/report_build_errors.py build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

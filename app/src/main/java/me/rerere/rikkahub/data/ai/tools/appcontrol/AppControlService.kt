@@ -42,8 +42,12 @@ class AppControlService(
                 "services",
                 kotlinx.serialization.json.buildJsonArray {
                     settings.searchServices.forEach { svc ->
+                        // SearchServiceOptions is a sealed class; the display label is
+                        // `displayName`. Never serialise the options object itself: those
+                        // carry apiKey / url / script fields.
                         add(kotlinx.serialization.json.buildJsonObject {
-                            put("name", svc.name)
+                            put("id", svc.id.toString())
+                            put("name", svc.displayName)
                         })
                     }
                 }

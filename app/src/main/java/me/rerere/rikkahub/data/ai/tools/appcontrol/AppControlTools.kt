@@ -1,6 +1,10 @@
 package me.rerere.rikkahub.data.ai.tools.appcontrol
 
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -76,7 +80,8 @@ fun createAppControlTools(
                                 add("set_web_server")
                             }
                         )
-                    }.toString()
+                    }
+                    .toString()
                 )
             )
         }
@@ -146,8 +151,18 @@ fun createAppControlTools(
             )
         },
         needsApproval = { true },
-        execute = { input ->
-            val action = input["action"]?.jsonPrimitive?.contentOrNull
+        execute = { input: JsonElement ->
+            // Tool.execute receives a JsonElement; the wire format is a JSON object.
+            val payload = input as? JsonObject
+                ?: return@Tool listOf(
+                    UIMessagePart.Text(
+                        buildJsonObject {
+                            put("error", "invalid_argument")
+                            put("detail", "arguments must be a JSON object")
+                        }.toString()
+                    )
+                )
+            val action = payload["action"]?.jsonPrimitive?.contentOrNull
                 ?: return@Tool listOf(
                     UIMessagePart.Text(
                         buildJsonObject {
@@ -156,7 +171,7 @@ fun createAppControlTools(
                         }.toString()
                     )
                 )
-            val args = input["args"]?.jsonObject ?: buildJsonObject { }
+            val args = payload["args"]?.jsonObject ?: buildJsonObject { }
             listOf(
                 UIMessagePart.Text(
                     service.applyChange(action, args).toString()
