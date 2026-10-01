@@ -20,7 +20,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.Tool
 import me.rerere.ai.provider.Model
@@ -46,13 +45,25 @@ import java.io.IOException
 import me.rerere.rikkahub.data.ai.transformers.onGenerationFinish
 import me.rerere.rikkahub.data.ai.transformers.transforms
 import me.rerere.rikkahub.data.ai.transformers.visualTransforms
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
 import me.rerere.rikkahub.data.ai.limits.ToolRuntimeLimits
 import me.rerere.rikkahub.data.ai.tools.buildMemoryTools
+=======
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.AssistantMemory
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
 import me.rerere.rikkahub.data.repository.MemoryRepository
+=======
+import java.io.File
+import java.io.IOException
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -290,6 +301,7 @@ sealed interface GenerationChunk {
     ) : GenerationChunk
 }
 
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
 private const val TAG_GH_LOOP = "GenHandlerLoop"
 
 /**
@@ -427,6 +439,12 @@ class GenerationHandler(
     private val conversationRepo: ConversationRepository,
     private val aiLoggingManager: AILoggingManager,
     private val systemPromptBuilder: SystemPromptBuilder,
+=======
+class GenerationLoop(
+    private val context: Context,
+    private val providerManager: ProviderManager,
+    private val json: Json,
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
 ) {
     fun generateText(
         settings: Settings,
@@ -514,6 +532,7 @@ class GenerationHandler(
 
             Log.i(TAG, "streamText: start step #$stepIndex (${model.id})")
 
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
             val toolsInternal = buildList {
                 Log.i(TAG, "generateInternal: build tools($assistant)")
                 if (assistant.enableMemory) {
@@ -538,6 +557,8 @@ class GenerationHandler(
                 addAll(tools)
             }
 
+=======
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
             // Check if we have tool calls ready to continue after user interaction.
             val pendingTools = messages.lastOrNull()?.getTools()?.filter {
                 it.canResumeExecution
@@ -589,6 +610,7 @@ class GenerationHandler(
                                     )
                                 )
                             )
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
                         },
                         transformers = inputTransformers,
                         model = model,
@@ -631,6 +653,24 @@ class GenerationHandler(
                     }
                     throw t
                 }
+=======
+                        )
+                    },
+                    transformers = inputTransformers,
+                    model = model,
+                    providerImpl = providerImpl,
+                    provider = provider,
+                    tools = tools,
+                    memories = memories ?: emptyList(),
+                    stream = assistant.streamOutput,
+                    processingStatus = processingStatus,
+                    conversationSystemPrompt = conversationSystemPrompt,
+                    conversationId = conversationId,
+                    conversationModeInjectionIds = conversationModeInjectionIds,
+                    conversationLorebookIds = conversationLorebookIds,
+                    workspaceCwd = workspaceCwd,
+                )
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
                 messages = messages.visualTransforms(
                     transformers = outputTransformers,
                     context = context,
@@ -651,8 +691,8 @@ class GenerationHandler(
                 )
                 emit(GenerationChunk.Messages(messages))
 
-                val tools = messages.last().getTools().filter { !it.isExecuted }
-                if (tools.isEmpty()) {
+                val toolCalls = messages.last().getTools().filter { !it.isExecuted }
+                if (toolCalls.isEmpty()) {
                     // no tool calls, break
                     break
                 }
@@ -665,6 +705,7 @@ class GenerationHandler(
                 // now persisted-approved.
                 processingStatus.value = "正在执行工具"
                 var hasPendingApproval = false
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
                 val updatedTools = ArrayList<UIMessagePart.Tool>(tools.size)
                 for (tool in tools) {
                     val toolDef = toolsInternal.find { it.name == tool.toolName }
@@ -688,6 +729,12 @@ class GenerationHandler(
                             ))
                         }
                         // Tool needs approval and state is Auto:
+=======
+                val updatedTools = toolCalls.map { tool ->
+                    val toolDef = tools.find { it.name == tool.toolName }
+                    when {
+                        // Tool needs approval and state is Auto -> set to Pending
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
                         toolDef?.needsApproval(tool.inputAsJson()) == true &&
                             tool.approvalState is ToolApprovalState.Auto -> {
                             // Fresh per-tool auto-approval check (was a frozen pre-
@@ -713,7 +760,7 @@ class GenerationHandler(
                 }
 
                 // If any tools were updated to Pending, update the message and break
-                if (updatedTools != tools) {
+                if (updatedTools != toolCalls) {
                     val lastMessage = messages.last()
                     val updatedParts = lastMessage.parts.map { part ->
                         if (part is UIMessagePart.Tool) {
@@ -777,6 +824,7 @@ class GenerationHandler(
                     }
 
                     else -> {
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
                         // Auto or Approved - execute the tool.
                         //
                         // Defence-in-depth HARDLINE re-check: the primary check at line ~442
@@ -790,6 +838,20 @@ class GenerationHandler(
                             .HardlineCommandGuard.checkTool(tool.toolName, tool.input)
                         if (resumeHardlineReason != null) {
                             Log.w(TAG, "generateText: resume-path hardline re-check blocked ${tool.toolName}: $resumeHardlineReason")
+=======
+                        // Auto or Approved - execute the tool
+                        runCatching {
+                            val toolDef = tools.find { toolDef -> toolDef.name == tool.toolName }
+                                ?: error("Tool ${tool.toolName} not found")
+                            val args = runCatching {
+                                json.parseToJsonElement(tool.input.ifBlank { "{}" })
+                            }.getOrElse {
+                                error("Invalid tool arguments JSON for ${tool.toolName}: ${it.message}")
+                            }
+                            Log.i(TAG, "generateText: executing tool ${toolDef.name} with args: $args")
+                            val result = toolDef.execute(args)
+                            val hasShellAccess = tools.any { it.name == "workspace_shell" }
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
                             executedTools += tool.copy(
                                 output = listOf(
                                     UIMessagePart.Text(
@@ -1127,6 +1189,7 @@ class GenerationHandler(
             customBody = buildList {
                 addAll(assistant.customBodies)
                 addAll(model.customBodies)
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
             }
         )
         if (stream) {
@@ -1161,6 +1224,73 @@ class GenerationHandler(
                         TAG,
                         "streamText: stream closed after chunks arrived but none contained " +
                             "parseable parts; ending without retry",
+=======
+            },
+            sessionId = (conversationId ?: Uuid.random()).toString(),
+        )
+        try {
+            if (stream) {
+                // 每次重试都从本次模型调用开始前的消息快照重新合并，避免将重试响应
+                // 追加到已经展示的半截回复后面。预先创建助手消息可让所有尝试复用同一 ID，
+                // ChatService 因而会覆盖当前分支，而不是创建新的候选消息。
+                val responseBaseMessages =
+                    if (messages.lastOrNull()?.role == MessageRole.ASSISTANT) {
+                        messages
+                    } else {
+                        messages + UIMessage(
+                            role = MessageRole.ASSISTANT,
+                            parts = emptyList(),
+                            modelId = model.id,
+                        )
+                    }
+                var retryCount = 0
+
+                while (true) {
+                    val streamChunkHandler = StreamChunkHandler(model)
+                    var attemptMessages = responseBaseMessages
+                    try {
+                        providerImpl.streamText(
+                            providerSetting = provider,
+                            messages = internalMessages,
+                            params = params
+                        ).collect { chunk ->
+                            try {
+                                if (retryCount > 0) {
+                                    processingStatus.value = null
+                                }
+                                attemptMessages = streamChunkHandler.handle(attemptMessages, chunk)
+                                onUpdateMessages(attemptMessages)
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Throwable) {
+                                // 下游消息转换或 UI 更新失败不属于网络故障，不能重放模型请求。
+                                throw StreamChunkHandlingException(error)
+                            }
+                        }
+                        messages = attemptMessages
+                        break
+                    } catch (error: Throwable) {
+                        if (error is StreamChunkHandlingException) {
+                            throw error.cause ?: error
+                        }
+                        retryCount = awaitNetworkRetryOrThrow(
+                            error = error,
+                            retryCount = retryCount,
+                            processingStatus = processingStatus,
+                            enabled = settings.networkSetting.enableAutoRetry,
+                        )
+                    }
+                }
+            } else {
+                val result = executeProviderRequestWithRetry(
+                    processingStatus = processingStatus,
+                    enabled = settings.networkSetting.enableAutoRetry,
+                ) {
+                    providerImpl.generateText(
+                        providerSetting = provider,
+                        messages = internalMessages,
+                        params = params,
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
                     )
                 }
             }.retryWhen { cause, retryAttempt ->
@@ -1202,6 +1332,7 @@ class GenerationHandler(
                 messages = streamChunkHandler.handle(messages, it)
                 onUpdateMessages(messages)
             }
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
         } else {
             aiLoggingManager.addLog(
                 AILogging.Generation(
@@ -1227,6 +1358,28 @@ class GenerationHandler(
                     providerSetting = provider,
                     messages = internalMessages,
                     params = params,
+=======
+        } finally {
+            processingStatus.value = null
+        }
+    }
+
+    private suspend fun <T> executeProviderRequestWithRetry(
+        processingStatus: MutableStateFlow<String?>,
+        enabled: Boolean,
+        block: suspend () -> T,
+    ): T {
+        var retryCount = 0
+        while (true) {
+            try {
+                return block()
+            } catch (error: Throwable) {
+                retryCount = awaitNetworkRetryOrThrow(
+                    error = error,
+                    retryCount = retryCount,
+                    processingStatus = processingStatus,
+                    enabled = enabled,
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
                 )
             }
             messages = messages.handleTextGenerationResult(result = result, model = model)
@@ -1234,6 +1387,50 @@ class GenerationHandler(
         }
     }
 
+<<<<<<< HEAD:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt
+=======
+    private suspend fun awaitNetworkRetryOrThrow(
+        error: Throwable,
+        retryCount: Int,
+        processingStatus: MutableStateFlow<String?>,
+        enabled: Boolean,
+    ): Int {
+        // 用户主动停止生成时，底层连接也可能以 IOException("canceled") 收尾；
+        // 先检查协程状态，确保取消不会被当作网络波动重新拉起。
+        currentCoroutineContext().ensureActive()
+        if (!enabled || error !is IOException || retryCount >= MAX_PROVIDER_NETWORK_RETRIES) {
+            throw error
+        }
+
+        val nextRetryCount = retryCount + 1
+        val retryDelay = INITIAL_PROVIDER_RETRY_DELAY_MS shl retryCount
+        processingStatus.value = context.getString(
+            R.string.chat_generation_network_retrying,
+            getNetworkErrorMessage(error),
+            nextRetryCount,
+            MAX_PROVIDER_NETWORK_RETRIES,
+        )
+        Log.w(
+            TAG,
+            "Provider connection failed, retrying in ${retryDelay}ms " +
+                    "($nextRetryCount/$MAX_PROVIDER_NETWORK_RETRIES)",
+            error,
+        )
+        delay(retryDelay)
+        return nextRetryCount
+    }
+
+    private fun getNetworkErrorMessage(error: IOException): String {
+        val messageRes = when (error) {
+            is UnknownHostException -> R.string.chat_generation_network_unknown_host
+            is SocketTimeoutException -> R.string.chat_generation_network_timeout
+            is ConnectException, is NoRouteToHostException -> R.string.chat_generation_network_unreachable
+            else -> R.string.chat_generation_network_disconnected
+        }
+        return context.getString(messageRes)
+    }
+
+>>>>>>> up-2.5.5:app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
     private fun maybeTruncateToolOutput(
         toolCallId: String,
         output: List<UIMessagePart>,

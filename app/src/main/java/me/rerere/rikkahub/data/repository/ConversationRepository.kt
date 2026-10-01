@@ -46,6 +46,9 @@ class ConversationRepository(
         private const val INITIAL_LOAD_SIZE = 40
     }
 
+    suspend fun hasFileReference(fileUrl: String): Boolean =
+        messageNodeDAO.hasFileReference(JsonInstant.encodeToString(fileUrl))
+
     suspend fun getRecentConversations(assistantId: Uuid, limit: Int = 10): List<Conversation> {
         return conversationDAO.getRecentConversationsOfAssistant(
             assistantId = assistantId.toString(),
@@ -290,6 +293,7 @@ class ConversationRepository(
         return conversationDAO.countAll()
     }
 
+<<<<<<< HEAD
     suspend fun getCompaction(conversationId: Uuid): ConversationCompaction? =
         conversationCompactionDAO.getByConversationId(conversationId.toString())?.let { entity ->
             ConversationCompaction(
@@ -327,6 +331,15 @@ class ConversationRepository(
         conversation: Conversation,
         updateSearchIndex: Boolean = true,
     ) {
+=======
+    suspend fun countConversationsByAssistant(): Map<Uuid, Int> {
+        return conversationDAO.countByAssistant().mapNotNull { row ->
+            runCatching { Uuid.parse(row.assistantId) }.getOrNull()?.let { it to row.count }
+        }.toMap()
+    }
+
+    suspend fun insertConversation(conversation: Conversation) {
+>>>>>>> up-2.5.5
         database.withTransaction {
             conversationDAO.insert(
                 conversationToConversationEntity(conversation)
@@ -379,7 +392,8 @@ class ConversationRepository(
     suspend fun searchMessages(
         keyword: String,
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
-    ) = messageFtsManager.search(keyword, sort)
+        assistantId: Uuid? = null,
+    ) = messageFtsManager.search(keyword, sort, assistantId?.toString())
 
     suspend fun rebuildAllIndexes(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }) {
         messageFtsManager.deleteAll()
@@ -472,10 +486,22 @@ class ConversationRepository(
             }
     }
 
+<<<<<<< HEAD
     suspend fun togglePinStatus(conversationId: Uuid) {
         // Single atomic UPDATE: avoids the read->write TOCTOU that existed when
         // we read isPinned with getConversationById() and then flipped it.
         conversationDAO.togglePinStatus(conversationId.toString())
+=======
+    suspend fun updatePinStatus(conversationId: Uuid, isPinned: Boolean) {
+        conversationDAO.updatePinStatus(
+            id = conversationId.toString(),
+            isPinned = isPinned,
+        )
+>>>>>>> up-2.5.5
+    }
+
+    suspend fun updateConversationAssistant(conversationId: Uuid, assistantId: Uuid) {
+        conversationDAO.updateAssistantId(conversationId.toString(), assistantId.toString())
     }
 
     /**

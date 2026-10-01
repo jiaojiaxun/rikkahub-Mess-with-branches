@@ -76,6 +76,10 @@ class WorkspaceRepository(
         return dao.getAll().any { it.id != excludeId && it.name.trim() == target }
     }
 
+    suspend fun setShellCompatibilityMode(id: String, enabled: Boolean) {
+        dao.setShellCompatibilityMode(id, enabled, System.currentTimeMillis())
+    }
+
     suspend fun setToolApproval(id: String, toolName: String, needsApproval: Boolean): Boolean {
         val workspace = dao.getById(id) ?: return false
         val overrides = workspace.toolApprovalOverrides() + (toolName to needsApproval)
@@ -151,6 +155,16 @@ class WorkspaceRepository(
             manager.fileSize(workspace.root, path)
         }
 
+    suspend fun resolveFile(
+        id: String,
+        area: WorkspaceStorageArea,
+        path: String,
+    ) = withContext(Dispatchers.IO) {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        manager.ensureWorkspace(workspace.root)
+        manager.resolveFile(workspace.root, path, area)
+    }
+
     suspend fun exportFile(
         id: String,
         area: WorkspaceStorageArea,
@@ -195,6 +209,27 @@ class WorkspaceRepository(
         manager.moveFile(workspace.root, source, target, overwrite)
     }
 
+<<<<<<< HEAD
+=======
+    suspend fun executeCommand(
+        id: String,
+        command: String,
+        cwd: String = "",
+        timeoutMillis: Long = WorkspaceManager.DEFAULT_COMMAND_TIMEOUT_MS,
+        stdin: ByteArray? = null,
+    ): WorkspaceCommandResult {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        // runInterruptible 让协程取消转化为线程中断，从而打断阻塞的 Process.waitFor 并杀掉进程
+        return runInterruptible(Dispatchers.IO) {
+            manager.ensureWorkspace(workspace.root)
+            manager.executeCommand(
+                workspace.root, command, cwd, timeoutMillis, stdin,
+                shellCompatibilityMode = workspace.shellCompatibilityMode,
+            )
+        }
+    }
+
+>>>>>>> up-2.5.5
     suspend fun delete(id: String): Boolean {
         val workspace = dao.getById(id) ?: return false
         dao.deleteById(id)

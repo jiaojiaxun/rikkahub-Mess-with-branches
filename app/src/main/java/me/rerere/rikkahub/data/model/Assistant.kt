@@ -50,6 +50,7 @@ data class Assistant(
     val lorebookIds: Set<Uuid> = emptySet(),            // 关联的 Lorebook ID
     val enabledSkills: Set<String> = emptySet(),        // 启用的 skill 名称列表
     val enableTimeReminder: Boolean = false,            // 时间间隔提醒注入
+<<<<<<< HEAD
     // Phase 15 — Per-task token budget. Both null = no budget enforcement. The LLM
     // checks via `check_token_usage`; auto-stop integration into GenerationHandler is
     // Phase 15.5 follow-up.
@@ -61,6 +62,9 @@ data class Assistant(
     // through to the LLM whenever in doubt. Per-tool HARDLINE / approval still apply at
     // the dispatch level; v1 only matches read-only tools so approval is a non-issue.
     val fastPathRouterEnabled: Boolean = false,
+=======
+    val timeReminderIntervalMinutes: Int = 60,          // 时间提醒间隔（分钟，至少 1 分钟）
+>>>>>>> up-2.5.5
     val allowConversationSystemPrompt: Boolean = false, // 允许对话单独重写 system prompt
     val allowConversationPromptInjection: Boolean = false, // 允许对话单独绑定提示词注入
 )

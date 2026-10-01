@@ -1,0 +1,90 @@
+CONFLICT (modify/delete): .agents/skills/claude-api/SKILL.md deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of .agents/skills/claude-api/SKILL.md left in tree.
+CONFLICT (modify/delete): .github/workflows/daily-build.yml deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of .github/workflows/daily-build.yml left in tree.
+CONFLICT (content): Merge conflict in README.md
+CONFLICT (modify/delete): README_ZH_CN.md deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of README_ZH_CN.md left in tree.
+CONFLICT (modify/delete): README_ZH_TW.md deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of README_ZH_TW.md left in tree.
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/Provider.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/ProviderSetting.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleProvider.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleStreamDecoder.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/providers/openai/ResponseAPI.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/registry/ModelRegistry.kt
+CONFLICT (content): Merge conflict in ai/src/test/java/me/rerere/ai/provider/providers/openai/ResponseApiStreamDecoderTest.kt
+CONFLICT (content): Merge conflict in ai/src/test/java/me/rerere/ai/registry/ModelRegistryTest.kt
+CONFLICT (add/add): Merge conflict in app/schemas/me.rerere.rikkahub.data.db.AppDatabase/25.json
+CONFLICT (content): Merge conflict in app/src/main/AndroidManifest.xml
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/RikkaHubApp.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/RouteActivity.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/ai/tools/SkillsTools.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/ai/tools/WorkspaceTools.kt
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/AskUserTool.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/AskUserTool.kt left in tree.
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/JavascriptTool.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/JavascriptTool.kt left in tree.
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/ai/transformers/WorkspaceReminderTransformer.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/datastore/DefaultProviders.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/db/dao/ConversationDAO.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/db/dao/MessageNodeDAO.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/db/dao/WorkspaceDAO.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/files/SkillManager.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/model/Assistant.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/repository/WorkspaceRepository.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/sync/S3Sync.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/di/AppModule.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/di/DataSourceModule.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/di/RepositoryModule.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/service/ChatService.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/service/ConversationSession.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/ai/ChatInput.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/ai/SearchPicker.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessageTools.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/ui/ChainOfThought.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/ui/ErrorCard.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/hooks/ChatInputState.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantBasicPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantPromptPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsVM.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailVM.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceFileEditorPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspacePage.kt
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalPage.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalPage.kt left in tree.
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSession.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSession.kt left in tree.
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSessionManager.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSessionManager.kt left in tree.
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/imggen/ImgGenPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/search/SearchVM.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingFilesPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingModelPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderDetailPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingSearchPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/web/routes/ConversationRoutes.kt
+CONFLICT (add/add): Merge conflict in app/src/main/res/values-ar/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-ja/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-ko-rKR/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-ru/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-zh-rTW/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-zh/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values/strings.xml
+CONFLICT (modify/delete): app/src/release/generated/baselineProfiles/baseline-prof.txt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/release/generated/baselineProfiles/baseline-prof.txt left in tree.
+CONFLICT (modify/delete): app/src/release/generated/baselineProfiles/startup-prof.txt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/release/generated/baselineProfiles/startup-prof.txt left in tree.
+CONFLICT (content): Merge conflict in app/src/test/java/me/rerere/rikkahub/data/ai/transformers/TimeReminderTransformerTest.kt
+CONFLICT (content): Merge conflict in app/src/test/java/me/rerere/rikkahub/service/ChatServiceTest.kt
+CONFLICT (content): Merge conflict in common/src/main/java/me/rerere/common/js/QuickJSFetch.kt
+CONFLICT (content): Merge conflict in gradle/libs.versions.toml
+CONFLICT (content): Merge conflict in gradle/wrapper/gradle-wrapper.properties
+CONFLICT (modify/delete): locale-tui/CLAUDE.md deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of locale-tui/CLAUDE.md left in tree.
+CONFLICT (content): Merge conflict in settings.gradle.kts
+CONFLICT (content): Merge conflict in speech/src/main/java/me/rerere/tts/controller/TtsController.kt
+CONFLICT (content): Merge conflict in speech/src/main/java/me/rerere/tts/provider/providers/GroqTTSProvider.kt
+CONFLICT (content): Merge conflict in speech/src/main/java/me/rerere/tts/provider/providers/QwenTTSProvider.kt
+CONFLICT (modify/delete): workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt left in tree.
+CONFLICT (content): Merge conflict in workspace/src/main/java/me/rerere/workspace/WorkspaceManager.kt
+CONFLICT (modify/delete): workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt left in tree.

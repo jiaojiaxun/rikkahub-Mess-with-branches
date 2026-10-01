@@ -2,11 +2,19 @@
   "formatVersion": 1,
   "database": {
     "version": 25,
+<<<<<<< HEAD
     "identityHash": "66c8d7e1bde105f739c5a1139766500e",
     "entities": [
       {
         "tableName": "ConversationEntity",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `assistant_id` TEXT NOT NULL DEFAULT '0950e2dc-9bd5-4801-afa3-aa887aa36b4e', `title` TEXT NOT NULL, `nodes` TEXT NOT NULL, `create_at` INTEGER NOT NULL, `update_at` INTEGER NOT NULL, `suggestions` TEXT NOT NULL DEFAULT '[]', `is_pinned` INTEGER NOT NULL DEFAULT 0, `custom_system_prompt` TEXT NOT NULL DEFAULT '', `mode_injection_ids` TEXT NOT NULL DEFAULT '[]', `lorebook_ids` TEXT NOT NULL DEFAULT '[]', PRIMARY KEY(`id`))",
+=======
+    "identityHash": "049f05fd92fc292b92c652743f056693",
+    "entities": [
+      {
+        "tableName": "ConversationEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `assistant_id` TEXT NOT NULL DEFAULT '0950e2dc-9bd5-4801-afa3-aa887aa36b4e', `title` TEXT NOT NULL, `nodes` TEXT NOT NULL, `create_at` INTEGER NOT NULL, `update_at` INTEGER NOT NULL, `suggestions` TEXT NOT NULL DEFAULT '[]', `is_pinned` INTEGER NOT NULL DEFAULT 0, `custom_system_prompt` TEXT NOT NULL DEFAULT '', `mode_injection_ids` TEXT NOT NULL DEFAULT '[]', `lorebook_ids` TEXT NOT NULL DEFAULT '[]', `workspace_cwd` TEXT NOT NULL DEFAULT '', `folder_id` TEXT NOT NULL DEFAULT '', PRIMARY KEY(`id`))",
+>>>>>>> up-2.5.5
         "fields": [
           {
             "fieldPath": "id",
@@ -79,6 +87,23 @@
             "affinity": "TEXT",
             "notNull": true,
             "defaultValue": "'[]'"
+<<<<<<< HEAD
+=======
+          },
+          {
+            "fieldPath": "workspaceCwd",
+            "columnName": "workspace_cwd",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "folderId",
+            "columnName": "folder_id",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+>>>>>>> up-2.5.5
           }
         ],
         "primaryKey": {
@@ -407,8 +432,13 @@
         ]
       },
       {
+<<<<<<< HEAD
         "tableName": "scheduled_jobs",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `prompt` TEXT, `assistantId` TEXT NOT NULL, `scheduleType` TEXT NOT NULL, `atUnixMs` INTEGER, `intervalSeconds` INTEGER, `enabled` INTEGER NOT NULL, `createdAtMs` INTEGER NOT NULL, `lastRunAtMs` INTEGER, `nextRunAtMs` INTEGER, `mode` TEXT NOT NULL DEFAULT 'llm', `actionsJson` TEXT, `cronExpression` TEXT, `timezone` TEXT, `startAtUnixMs` INTEGER, `endAtUnixMs` INTEGER, `maxRuns` INTEGER, `runsSoFar` INTEGER NOT NULL DEFAULT 0, `catchup` TEXT NOT NULL DEFAULT 'fire_once', `description` TEXT, `tags` TEXT, PRIMARY KEY(`id`))",
+=======
+        "tableName": "workspaces",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `root` TEXT NOT NULL, `shell_status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `last_access_at` INTEGER, `tool_approvals` TEXT NOT NULL DEFAULT '{}', `shell_compatibility_mode` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+>>>>>>> up-2.5.5
         "fields": [
           {
             "fieldPath": "id",
@@ -423,6 +453,7 @@
             "notNull": true
           },
           {
+<<<<<<< HEAD
             "fieldPath": "prompt",
             "columnName": "prompt",
             "affinity": "TEXT"
@@ -430,16 +461,26 @@
           {
             "fieldPath": "assistantId",
             "columnName": "assistantId",
+=======
+            "fieldPath": "root",
+            "columnName": "root",
+>>>>>>> up-2.5.5
             "affinity": "TEXT",
             "notNull": true
           },
           {
+<<<<<<< HEAD
             "fieldPath": "scheduleType",
             "columnName": "scheduleType",
+=======
+            "fieldPath": "shellStatus",
+            "columnName": "shell_status",
+>>>>>>> up-2.5.5
             "affinity": "TEXT",
             "notNull": true
           },
           {
+<<<<<<< HEAD
             "fieldPath": "atUnixMs",
             "columnName": "atUnixMs",
             "affinity": "INTEGER"
@@ -452,16 +493,26 @@
           {
             "fieldPath": "enabled",
             "columnName": "enabled",
+=======
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+>>>>>>> up-2.5.5
             "affinity": "INTEGER",
             "notNull": true
           },
           {
+<<<<<<< HEAD
             "fieldPath": "createdAtMs",
             "columnName": "createdAtMs",
+=======
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+>>>>>>> up-2.5.5
             "affinity": "INTEGER",
             "notNull": true
           },
           {
+<<<<<<< HEAD
             "fieldPath": "lastRunAtMs",
             "columnName": "lastRunAtMs",
             "affinity": "INTEGER"
@@ -531,6 +582,25 @@
             "fieldPath": "tags",
             "columnName": "tags",
             "affinity": "TEXT"
+=======
+            "fieldPath": "lastAccessAt",
+            "columnName": "last_access_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "toolApprovals",
+            "columnName": "tool_approvals",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'{}'"
+          },
+          {
+            "fieldPath": "shellCompatibilityMode",
+            "columnName": "shell_compatibility_mode",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+>>>>>>> up-2.5.5
           }
         ],
         "primaryKey": {
@@ -538,6 +608,7 @@
           "columnNames": [
             "id"
           ]
+<<<<<<< HEAD
         }
       },
       {
@@ -835,12 +906,38 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_workflow_runs_workflowId_firedAtMs` ON `${TABLE_NAME}` (`workflowId`, `firedAtMs`)"
+=======
+        },
+        "indices": [
+          {
+            "name": "index_workspaces_root",
+            "unique": true,
+            "columnNames": [
+              "root"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_workspaces_root` ON `${TABLE_NAME}` (`root`)"
+          },
+          {
+            "name": "index_workspaces_updated_at",
+            "unique": false,
+            "columnNames": [
+              "updated_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workspaces_updated_at` ON `${TABLE_NAME}` (`updated_at`)"
+>>>>>>> up-2.5.5
           }
         ]
       },
       {
+<<<<<<< HEAD
         "tableName": "agent_runs",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `domain_id` TEXT NOT NULL, `parent_run_id` TEXT, `status` TEXT NOT NULL, `created_at_ms` INTEGER NOT NULL, `updated_at_ms` INTEGER NOT NULL, `started_at_ms` INTEGER, `finished_at_ms` INTEGER, `last_error` TEXT, `metadata_json` TEXT, PRIMARY KEY(`id`))",
+=======
+        "tableName": "conversation_folder",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `assistant_id` TEXT NOT NULL, `name` TEXT NOT NULL, `sort_index` INTEGER NOT NULL DEFAULT 0, `create_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+>>>>>>> up-2.5.5
         "fields": [
           {
             "fieldPath": "id",
@@ -849,18 +946,29 @@
             "notNull": true
           },
           {
+<<<<<<< HEAD
             "fieldPath": "kind",
             "columnName": "kind",
+=======
+            "fieldPath": "assistantId",
+            "columnName": "assistant_id",
+>>>>>>> up-2.5.5
             "affinity": "TEXT",
             "notNull": true
           },
           {
+<<<<<<< HEAD
             "fieldPath": "domainId",
             "columnName": "domain_id",
+=======
+            "fieldPath": "name",
+            "columnName": "name",
+>>>>>>> up-2.5.5
             "affinity": "TEXT",
             "notNull": true
           },
           {
+<<<<<<< HEAD
             "fieldPath": "parentRunId",
             "columnName": "parent_run_id",
             "affinity": "TEXT"
@@ -902,6 +1010,19 @@
             "fieldPath": "metadataJson",
             "columnName": "metadata_json",
             "affinity": "TEXT"
+=======
+            "fieldPath": "sortIndex",
+            "columnName": "sort_index",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "createAt",
+            "columnName": "create_at",
+            "affinity": "INTEGER",
+            "notNull": true
+>>>>>>> up-2.5.5
           }
         ],
         "primaryKey": {
@@ -912,6 +1033,7 @@
         },
         "indices": [
           {
+<<<<<<< HEAD
             "name": "idx_runs_status",
             "unique": false,
             "columnNames": [
@@ -947,13 +1069,26 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `idx_runs_updated_at` ON `${TABLE_NAME}` (`updated_at_ms`)"
+=======
+            "name": "index_conversation_folder_assistant_id",
+            "unique": false,
+            "columnNames": [
+              "assistant_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conversation_folder_assistant_id` ON `${TABLE_NAME}` (`assistant_id`)"
+>>>>>>> up-2.5.5
           }
         ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+<<<<<<< HEAD
       "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '66c8d7e1bde105f739c5a1139766500e')"
+=======
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '049f05fd92fc292b92c652743f056693')"
+>>>>>>> up-2.5.5
     ]
   }
 }

@@ -124,7 +124,7 @@ fun ErrorCard(
     val clipboard = LocalClipboard.current
     val navController = LocalNavController.current
     val scope = rememberCoroutineScope()
-    val checkTitleModelSettings = stringResource(R.string.chat_page_check_title_model_settings)
+    val checkFastModelSettings = stringResource(R.string.chat_page_check_fast_model_settings)
     val linkColor = MaterialTheme.colorScheme.primary
     var showCustomMessage by remember(error.id) { mutableStateOf(false) }
     var customMessage by remember(error.id) { mutableStateOf("") }
@@ -201,6 +201,7 @@ fun ErrorCard(
                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                     overflow = TextOverflow.Ellipsis,
                 )
+<<<<<<< HEAD
                 if (error.solution == ChatErrorSolution.CheckTitleModelSettings) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(onClick = onRetryOverwrite) {
@@ -212,9 +213,14 @@ fun ErrorCard(
                 }
                 Text(
                     text = buildAnnotatedString {
+=======
+                if (error.solution == ChatErrorSolution.CheckFastModelSettings) {
+                    Text(
+                        text = buildAnnotatedString {
+>>>>>>> up-2.5.5
                             withLink(
                                 LinkAnnotation.Clickable(
-                                    tag = "check_title_model_settings",
+                                    tag = "check_fast_model_settings",
                                     styles = TextLinkStyles(
                                         style = SpanStyle(
                                             color = linkColor,
@@ -226,7 +232,7 @@ fun ErrorCard(
                                     },
                                 )
                             ) {
-                                append(checkTitleModelSettings)
+                                append(checkFastModelSettings)
                             }
                         },
                         style = MaterialTheme.typography.bodySmall,

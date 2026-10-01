@@ -87,6 +87,12 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
+    private val GPT_6 = defineModel {
+        tokens("gpt", "6")
+        visionInput()
+        toolReasoningAbility()
+    }
+
     private val GEMINI_20_FLASH = defineModel {
         tokens("gemini", "2", "0", "flash")
         visionInput()
@@ -286,14 +292,30 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
+<<<<<<< HEAD
     // 2026-09-10: DeepSeek retired V4-Flash / V4-Flash-Vision-Exp. On the official API,
     // deepseek-v4-flash and deepseek-v4-flash-vision-exp route to V4.1-Flash (native
     // vision); since 2026-09-14 deepseek-v4-pro does too. Third-party hosts may still
     // serve the old text-only weights; users can override modalities per model.
+=======
+    private val DEEPSEEK_FLASH = defineModel {
+        tokens("deepseek", "flash")
+        visionInput()
+        toolReasoningAbility()
+    }
+
+>>>>>>> up-2.5.5
     private val DEEPSEEK_V4_FLASH = defineModel {
         tokens("deepseek", "v", "4", "flash")
         visionInput()
         toolReasoningAbility()
+    }
+
+    private val DEEPSEEK_V4_1_FLASH = defineModel {
+        tokens("deepseek", "v", "4", "1", "flash")
+        visionInput()
+        toolReasoningAbility()
+        contextLength(1.m)
     }
 
     private val DEEPSEEK_V4_PRO = defineModel {
@@ -445,6 +467,12 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
+    private val STEP_5 = defineModel {
+        tokens("step", "5")
+        visionInput()
+        toolReasoningAbility()
+    }
+
     private val INTERN_S1 = defineModel {
         tokens("intern", "s", "1")
         visionInput()
@@ -523,6 +551,12 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
+    private val XIAOMI_MIMO_V2_6 = defineModel {
+        tokens("mimo", "v", "2", "6")
+        visionInput()
+        toolReasoningAbility()
+    }
+
     private val XIAOMI_MIMO_V3 = defineModel {
         tokens("mimo", "v", "3")
         visionInput()
@@ -540,6 +574,14 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
+<<<<<<< HEAD
+=======
+    private val HY4 = defineModel {
+        tokens("hy", "4")
+        toolReasoningAbility()
+    }
+
+>>>>>>> up-2.5.5
     private val LONGCAT_2 = defineModel {
         tokens("longcat", "2", "0")
         toolReasoningAbility()
@@ -575,6 +617,7 @@ object ModelRegistry {
         GPT_5_4_NANO,
         GPT_5_5,
         GPT_5_6,
+        GPT_6,
         GEMINI_20_FLASH,
         GEMINI_2_5_FLASH,
         GEMINI_2_5_PRO,
@@ -603,7 +646,13 @@ object ModelRegistry {
         DEEPSEEK_CHAT,
         DEEPSEEK_R1_MODEL,
         DEEPSEEK_REASONER,
+        DEEPSEEK_FLASH,
         DEEPSEEK_V4_FLASH,
+<<<<<<< HEAD
+=======
+        DEEPSEEK_V4_FLASH_VISION_EXP,
+        DEEPSEEK_V4_1_FLASH,
+>>>>>>> up-2.5.5
         DEEPSEEK_V4_PRO,
         DEEPSEEK_FLASH,
         DEEPSEEK_V4_1_FLASH,
@@ -629,6 +678,7 @@ object ModelRegistry {
         KIMI_K3_ALIAS,
         STEP_3,
         STEP_3_7_FLASH,
+        STEP_5,
         INTERN_S1,
         GLM_4_5,
         GLM_4_6,
@@ -644,6 +694,7 @@ object ModelRegistry {
         XIAOMI_MIMO_V2_PRO,
         XIAOMI_MIMO_V2_5,
         XIAOMI_MIMO_V2_5_PRO,
+        XIAOMI_MIMO_V2_6,
         XIAOMI_MIMO_V3,
         XIAOMI_MIMO_V3_PRO,
         HY3,

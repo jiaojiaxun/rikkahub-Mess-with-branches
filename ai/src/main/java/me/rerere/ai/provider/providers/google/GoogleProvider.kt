@@ -9,6 +9,7 @@ import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -48,7 +49,13 @@ import me.rerere.ai.provider.providers.groupPartsByToolBoundary
 import me.rerere.ai.provider.stream.SseEvent
 import me.rerere.ai.registry.ModelRegistry
 import me.rerere.ai.ui.GoogleThoughtMetadata
+<<<<<<< HEAD
 import me.rerere.ai.ui.MessageChunk
+=======
+import me.rerere.ai.ui.ServerToolMetadata
+import me.rerere.ai.ui.ServerToolProtocol
+import me.rerere.ai.ui.ServerToolStatus
+>>>>>>> up-2.5.5
 import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.UIMessageChoice
 import me.rerere.ai.ui.UIMessage
@@ -58,6 +65,7 @@ import me.rerere.ai.ui.metadataAs
 import me.rerere.ai.ui.toMetadata
 import me.rerere.ai.util.KeyRoulette
 import me.rerere.ai.util.configureReferHeaders
+import me.rerere.ai.util.configureSessionHeaders
 import me.rerere.ai.util.encodeBase64
 import me.rerere.ai.util.json
 import me.rerere.ai.util.mergeCustomBody
@@ -206,6 +214,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             request = Request.Builder()
                 .url(url)
                 .headers(params.customHeaders.toHeaders())
+                .configureSessionHeaders(url.toString(), params.sessionId)
                 .post(
                     json.encodeToString(requestBody).toRequestBody("application/json".toMediaType())
                 )
@@ -253,6 +262,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             request = Request.Builder()
                 .url(url)
                 .headers(params.customHeaders.toHeaders())
+                .configureSessionHeaders(url.toString(), params.sessionId)
                 .post(
                     json.encodeToString(requestBody).toRequestBody("application/json".toMediaType())
                 )
@@ -349,7 +359,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             eventSource.cancel()
         }
         // trySend 在缓冲满时会静默丢弃 delta，导致回复中间缺字 (#1295)，因此缓冲必须无界
-    }.buffer(Channel.UNLIMITED)
+    }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
     /**
      * Map one decoded `streamGenerateContent` payload onto a [MessageChunk], or null when it
@@ -465,6 +475,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             buildContents(messages)
         )
 
+<<<<<<< HEAD
         // Tools — function tools and model built-in tools both live under the same
         // "tools" key. Writing them via two separate put("tools", ...) calls made the
         // second overwrite the first outright (JsonObjectBuilder.put replaces an
@@ -477,10 +488,24 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                 if (hasFunctionTools) {
                     add(buildJsonObject {
                         put("functionDeclarations", buildJsonArray {
+=======
+        // Client function tools and model built-in tools share the same array.
+        val useFunctionTools =
+            params.tools.isNotEmpty() && params.model.abilities.contains(ModelAbility.TOOL)
+        val useBuiltInTools = params.model.tools.any {
+            it == BuiltInTools.Search || it == BuiltInTools.UrlContext
+        }
+        if (useFunctionTools || useBuiltInTools) {
+            putJsonArray("tools") {
+                if (useFunctionTools) {
+                    add(buildJsonObject {
+                        putJsonArray("functionDeclarations") {
+>>>>>>> up-2.5.5
                             params.tools.forEach { tool ->
                                 add(buildJsonObject {
                                     put("name", JsonPrimitive(tool.name))
                                     put("description", JsonPrimitive(tool.description))
+<<<<<<< HEAD
                                     val parameters = tool.parameters()
                                     if (parameters != null) {
                                         put(
@@ -502,6 +527,35 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                                     put("googleSearch", buildJsonObject {})
                                 })
                             }
+=======
+                                    put(
+                                        key = "parameters",
+                                        element = json.encodeToJsonElement(tool.parameters())
+                                            .removeElements(
+                                                listOf(
+                                                    "const",
+                                                    "exclusiveMaximum",
+                                                    "exclusiveMinimum",
+                                                    "format",
+                                                    "additionalProperties",
+                                                    "propertyNames",
+                                                    "enum",
+                                                )
+                                            )
+                                    )
+                                })
+                            }
+                        }
+                    })
+                }
+                params.model.tools.forEach { builtInTool ->
+                    when (builtInTool) {
+                        BuiltInTools.Search -> {
+                            add(buildJsonObject {
+                                put("googleSearch", buildJsonObject {})
+                            })
+                        }
+>>>>>>> up-2.5.5
 
                             BuiltInTools.UrlContext -> {
                                 add(buildJsonObject {
@@ -513,6 +567,11 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                         }
                     }
                 }
+            }
+        }
+        if (useFunctionTools && useBuiltInTools) {
+            put("toolConfig", buildJsonObject {
+                put("includeServerSideToolInvocations", true)
             })
         }
         if (hasFunctionTools && hasBuiltInTools) {
@@ -555,9 +614,13 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             message["role"]?.jsonPrimitive?.contentOrNull ?: "model"
         )
         val content = message["content"]?.jsonObject ?: error("No content")
+<<<<<<< HEAD
         val parts = content["parts"]?.jsonArray?.mapNotNull { part ->
             parseMessagePart(part.jsonObject)
         } ?: emptyList()
+=======
+        val parts = parseMessageParts(content["parts"]?.jsonArray)
+>>>>>>> up-2.5.5
 
         val groundingMetadata = message["groundingMetadata"]?.jsonObject
         Log.i(TAG, "parseMessage: $groundingMetadata")
@@ -586,7 +649,39 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
         return chunks
     }
 
+<<<<<<< HEAD
     private fun parseMessagePart(jsonObject: JsonObject): UIMessagePart? {
+=======
+    private fun parseMessageParts(parts: JsonArray?): List<UIMessagePart> = buildList {
+        parts.orEmpty().forEachIndexed { index, element ->
+            val part = parseMessagePart(element.jsonObject, index)
+            if (part !is UIMessagePart.ServerTool) {
+                add(part)
+                return@forEachIndexed
+            }
+
+            val existingIndex = indexOfFirst {
+                it is UIMessagePart.ServerTool && it.toolCallId == part.toolCallId
+            }
+            if (existingIndex < 0) {
+                add(part)
+            } else {
+                val existing = get(existingIndex) as UIMessagePart.ServerTool
+                set(
+                    existingIndex, existing.copy(
+                        toolName = part.toolName.ifBlank { existing.toolName },
+                        input = part.input ?: existing.input,
+                        output = part.output ?: existing.output,
+                        status = if (part.isFinished) part.status else existing.status,
+                        metadata = mergeGoogleMetadata(existing.metadata, part.metadata),
+                    )
+                )
+            }
+        }
+    }
+
+    private fun parseMessagePart(jsonObject: JsonObject, index: Int): UIMessagePart {
+>>>>>>> up-2.5.5
         return when {
             jsonObject.containsKey("text") -> {
                 val thought = jsonObject["thought"]?.jsonPrimitive?.booleanOrNull ?: false
@@ -596,21 +691,64 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                     reasoning = text,
                     createdAt = Clock.System.now(),
                     finishedAt = null,
+<<<<<<< HEAD
                     metadata = thoughtSignature?.let {
                         buildJsonObject { put("thoughtSignature", JsonPrimitive(it)) }
                     },
                 ) else UIMessagePart.Text(text)
+=======
+                    metadata = jsonObject.toGoogleThoughtMetadata(),
+                ) else UIMessagePart.Text(
+                    text = text,
+                    metadata = jsonObject.toGoogleThoughtMetadata(),
+                )
+>>>>>>> up-2.5.5
             }
 
             jsonObject.containsKey("functionCall") -> {
+                val functionCall = jsonObject["functionCall"]!!.jsonObject
+                val toolCallId = functionCall["id"]?.jsonPrimitive?.contentOrNull
+                    ?: Uuid.random().toString()
                 UIMessagePart.Tool(
-                    toolCallId = Uuid.random().toString(),
-                    toolName = jsonObject["functionCall"]!!.jsonObject["name"]!!.jsonPrimitive.content,
-                    input = json.encodeToString(jsonObject["functionCall"]!!.jsonObject["args"]),
+                    toolCallId = toolCallId,
+                    toolName = functionCall["name"]!!.jsonPrimitive.content,
+                    input = json.encodeToString(functionCall["args"]),
                     output = emptyList(),
                     metadata = GoogleThoughtMetadata(
-                        thoughtSignature = jsonObject["thoughtSignature"]?.jsonPrimitive?.contentOrNull
+                        thoughtSignature = jsonObject["thoughtSignature"]?.jsonPrimitive?.contentOrNull,
                     ).toMetadata()
+                )
+            }
+
+            jsonObject.containsKey("toolCall") -> {
+                val toolCall = jsonObject["toolCall"]!!.jsonObject
+                UIMessagePart.ServerTool(
+                    toolCallId = toolCall["id"]?.jsonPrimitive?.contentOrNull
+                        ?: Uuid.random().toString(),
+                    toolName = toolCall["toolType"]?.jsonPrimitive?.contentOrNull ?: "",
+                    input = toolCall["args"],
+                    status = ServerToolStatus.IN_PROGRESS,
+                    metadata = ServerToolMetadata(
+                        protocol = ServerToolProtocol.GOOGLE_GENERATE_CONTENT,
+                        call = jsonObject,
+                        callIndex = index,
+                    ).toMetadata(),
+                )
+            }
+
+            jsonObject.containsKey("toolResponse") -> {
+                val toolResponse = jsonObject["toolResponse"]!!.jsonObject
+                UIMessagePart.ServerTool(
+                    toolCallId = toolResponse["id"]?.jsonPrimitive?.contentOrNull
+                        ?: Uuid.random().toString(),
+                    toolName = toolResponse["toolType"]?.jsonPrimitive?.contentOrNull ?: "",
+                    output = toolResponse["response"],
+                    status = ServerToolStatus.COMPLETED,
+                    metadata = ServerToolMetadata(
+                        protocol = ServerToolProtocol.GOOGLE_GENERATE_CONTENT,
+                        result = jsonObject,
+                        resultIndex = index,
+                    ).toMetadata(),
                 )
             }
 
@@ -636,7 +774,9 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                     // FileEncoder.encodeBase64, etc.) expects a proper data URL, not a bare payload -
                     // see issue #37.
                     url = "data:$mime;base64,$data",
-                    metadata = GoogleThoughtMetadata(thoughtSignature = thoughtSignature).toMetadata()
+                    metadata = GoogleThoughtMetadata(thoughtSignature = thoughtSignature)
+                        .takeIf { thoughtSignature != null }
+                        ?.toMetadata()
                 )
             }
 
@@ -677,6 +817,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
         for (group in groups) {
             when (group) {
                 is PartGroup.Content -> {
+<<<<<<< HEAD
                     // Track most recent reasoning signature for the next tool group.
                     group.parts.forEach { part ->
                         if (part is UIMessagePart.Reasoning) {
@@ -687,6 +828,9 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                         }
                     }
                     group.parts.mapNotNull { it.toGooglePart() }.forEach { partsBuffer.add(it) }
+=======
+                    group.parts.flatMap { it.toGoogleParts() }.forEach { partsBuffer.add(it) }
+>>>>>>> up-2.5.5
                 }
 
                 is PartGroup.Tools -> {
@@ -741,13 +885,37 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
         if (parts.isEmpty()) return
         add(buildJsonObject {
             put("role", commonRoleToGoogleRole(message.role))
+<<<<<<< HEAD
             putJsonArray("parts") { parts.forEach { add(it) } }
+=======
+            putJsonArray("parts") {
+                message.parts.flatMap { it.toGoogleParts() }.forEach { add(it) }
+            }
+>>>>>>> up-2.5.5
         })
     }
 
+    private fun UIMessagePart.toGoogleParts(): List<JsonObject> = when (this) {
+        is UIMessagePart.ServerTool -> toGoogleServerToolParts()
+        else -> listOfNotNull(toGooglePart())
+    }
+
     private fun UIMessagePart.toGooglePart(): JsonObject? = when (this) {
-        is UIMessagePart.Text -> buildJsonObject {
-            put("text", text)
+        is UIMessagePart.Text -> {
+            val thoughtSignature = metadataAs<GoogleThoughtMetadata>()?.thoughtSignature
+            buildJsonObject {
+                put("text", text)
+                thoughtSignature?.let { put("thoughtSignature", it) }
+            }
+        }
+
+        is UIMessagePart.Reasoning -> {
+            val thoughtSignature = metadataAs<GoogleThoughtMetadata>()?.thoughtSignature
+            buildJsonObject {
+                put("text", reasoning)
+                put("thought", true)
+                thoughtSignature?.let { put("thoughtSignature", it) }
+            }
         }
 
         is UIMessagePart.Image -> {
@@ -815,6 +983,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             }
             put("name", toolName)
             put("args", inputAsJson())
+            put("id", toolCallId)
         })
         metadataAs<GoogleThoughtMetadata>()?.thoughtSignature?.let {
             put("thoughtSignature", it)
@@ -827,6 +996,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                     put("id", toolCallId)
                 }
                 put("name", toolName)
+                put("id", toolCallId)
 
                 // 1. 拆分出纯文本部分
                 val textParts = output.filterIsInstance<UIMessagePart.Text>()
@@ -886,6 +1056,30 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                 }
             })
         }
+
+    private fun UIMessagePart.ServerTool.toGoogleServerToolParts(): List<JsonObject> {
+        val metadata = metadataAs<ServerToolMetadata>()
+        val protocol = metadata?.protocol
+        if (protocol != null && protocol != ServerToolProtocol.GOOGLE_GENERATE_CONTENT) {
+            return emptyList()
+        }
+
+        return buildList {
+            metadata?.call?.let(::add)
+            metadata?.result?.let(::add)
+        }
+    }
+
+    private fun JsonObject.toGoogleThoughtMetadata() =
+        this["thoughtSignature"]?.jsonPrimitive?.contentOrNull?.let {
+            GoogleThoughtMetadata(thoughtSignature = it).toMetadata()
+        }
+
+    private fun mergeGoogleMetadata(first: JsonObject?, second: JsonObject?): JsonObject? = when {
+        first == null -> second
+        second == null -> first
+        else -> JsonObject(first + second)
+    }
 
     private fun parseUsageMeta(jsonObject: JsonObject?): TokenUsage? {
         if (jsonObject == null) {

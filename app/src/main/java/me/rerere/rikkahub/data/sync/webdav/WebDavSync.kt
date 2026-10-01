@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+<<<<<<< HEAD
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -19,23 +20,27 @@ import me.rerere.rikkahub.data.sync.BackupExportFormat
 import me.rerere.rikkahub.data.sync.BackupProgress
 import me.rerere.rikkahub.data.sync.BackupRestoreMode
 import me.rerere.rikkahub.data.sync.fileName
+=======
+import me.rerere.rikkahub.data.sync.BackupManager
+import me.rerere.rikkahub.data.datastore.WebDavConfig
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.utils.fileSizeToString
 import me.rerere.workspace.WorkspaceManager
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.time.Instant
+<<<<<<< HEAD
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+=======
+>>>>>>> up-2.5.5
 
 private const val TAG = "WebDavSync"
 private const val COPY_BUFFER_SIZE = 16 * 1024
 
 class WebDavSync(
-    private val settingsStore: SettingsStore,
-    private val json: Json,
+    private val backupManager: BackupManager,
     private val context: Context,
     private val httpClient: HttpClient,
     private val appDatabase: me.rerere.rikkahub.data.db.AppDatabase,
@@ -122,6 +127,7 @@ class WebDavSync(
             .sortedByDescending { it.lastModified }
     }
 
+<<<<<<< HEAD
     suspend fun restore(
         config: WebDavConfig,
         item: WebDavBackupItem,
@@ -130,6 +136,12 @@ class WebDavSync(
     ) = withContext(Dispatchers.IO) {
         val backupFile = resolveCacheFile(item.displayName)
             ?: throw IllegalArgumentException("不安全的备份文件名")
+=======
+    suspend fun restore(config: WebDavConfig, item: WebDavBackupItem) = withContext(Dispatchers.IO) {
+        val client = getClient(config)
+        val backupFile = File.createTempFile("restore-", ".zip", context.cacheDir)
+
+>>>>>>> up-2.5.5
         try {
             val client = getClient(config)
             onProgress(BackupProgress("下载备份", total = item.size, detail = item.displayName))
@@ -154,6 +166,7 @@ class WebDavSync(
         getClient(config).delete(item.displayName).getOrThrow()
     }
 
+<<<<<<< HEAD
     suspend fun restoreFromLocalFile(
         file: File,
         config: WebDavConfig,
@@ -630,6 +643,23 @@ class WebDavSync(
         val cache = context.cacheDir.canonicalFile
         return File(cache, name).canonicalFile.takeIf { it.parentFile == cache }
     }
+=======
+    suspend fun restoreFromLocalFile(file: File, config: WebDavConfig) {
+        restoreFromBackupFile(file, config)
+    }
+
+    suspend fun prepareBackupFile(config: WebDavConfig): File = backupManager.createBackup(
+        includeDatabase = WebDavConfig.BackupItem.DATABASE in config.items,
+        includeFiles = WebDavConfig.BackupItem.FILES in config.items,
+    )
+
+    private suspend fun restoreFromBackupFile(backupFile: File, config: WebDavConfig) = backupManager.stageRestore(
+        archive = backupFile,
+        includeDatabase = WebDavConfig.BackupItem.DATABASE in config.items,
+        includeFiles = WebDavConfig.BackupItem.FILES in config.items,
+    )
+
+>>>>>>> up-2.5.5
 }
 
 data class WebDavBackupItem(

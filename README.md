@@ -43,15 +43,34 @@ Each of those is a one-line setup.
 
 ---
 
+<<<<<<< HEAD
 ## Features
+=======
+|                                                                            Sponsor                                                                             | Description                                                                                                                                                                                                                                                                                                                                             |
+|:--------------------------------------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|                                    <img src="docs/sponsors/aihubmix.png" alt="Aihubmix" width="50" /><br /><b>Aihubmix</b>                                     | Thanks to <a href="https://aihubmix.com?aff=pG7r">aihubmix.com</a> for their financial support. We recommend using aihubmix as a one-stop shop for mainstream models worldwide. (OpenAI, Claude, Google Gemini, DeepSeek, Qwen, and hundreds more).                                                                                                     |
+| <img src="docs/img/api-mart.png" alt="APIMart" width="50" /><br /><b><a href="https://go.apimart.ai/gh-rikkahub">APIMart</a></b> | Thanks to APIMart for sponsoring this project! APIMart is a low-cost API platform for AI image & video generation — GPT-Image-2 from $0.006/image, 160+ images per dollar. One async API covers both image and video: submit a task, get an ID, fetch results via polling or callback. Batch tens of thousands of images without timeouts, switch models without changing code. Pay-as-you-go with no monthly fee — <a href="https://go.apimart.ai/gh-rikkahub">sign up here</a> to get started. |
+|                    <img src="docs/sponsors/suixiang.jpg" alt="随想AI中转" width="50" /><br /><b><a href="https://sui-xiang.com">随想AI中转</a></b>                     | 感谢<a href="https://sui-xiang.com">随想AI中转</a>对本项目的赞助！随想AI中转 是一家可靠高效的 API 中继服务提供商，提供 Claude、Codex、Gemini 等的中继服务。注重隐私的中转站·无数据倒卖·无模型掺水，隐私，透明，极速售后。新账户注册每日签到就送 0.5 元测试额度，充值额度 1:1，无需订阅，按量付费。多线路冗余、跨区域容灾、自动故障切换，长链路 SSE 不中断。99.9% 可用性，关键调用从不掉队。                                                                                                               |
+|                   <img src="docs/sponsors/ztest.png" alt="真测 ztest.ai" width="50" /><br /><b><a href="https://ztest.ai">真测 ztest.ai</a></b>                    | 感谢<a href="https://ztest.ai">真测 ztest.ai</a>对本项目的赞助！真测 ztest.ai 是一个 AI 中转站模型检测平台，检测结果数据全公开，23 项探针覆盖协议、身份、能力、内容完整性、安全性、性能六大维度，交叉印证识别伪造与降级。作为独立第三方验证平台，实时监测 AI 中转站的模型真实性、响应质量与服务可用性。                                                                                                                                                                      |
+| <img src="docs/sponsors/maru.png" alt="MaruCode" width="50" /><br /><b><a href="https://api.muteki.site/register?aff=Rikkahub&promo=Rikkahub">MaruCode</a></b> | <b><a href="https://api.muteki.site/register?aff=Rikkahub&promo=Rikkahub">MaruCode</a></b> 是一家偶尔做做慈善的小破站 API，自营号池，主要提供 Codex、Claude Code、GPT Image 等主流模型，支持 Websocket 协议，明码标价(Codex 0.25x, CC 1.5x)，透明汇率(1:1)，<a href="https://api.muteki.site/register?aff=Rikkahub&promo=Rikkahub">新用户注册送 2 刀</a>。<a href="https://images-2.muteki.site">生图工作台🖼️</a> |
+>>>>>>> up-2.5.5
 
 ### Device Control
 
 Tap, swipe, scroll, type, take screenshots, open apps, adjust brightness/volume, post notifications, check battery/WiFi/signal/location/sensors, read contacts & SMS, send SMS, set wallpaper, read/write NFC tags, sign and encrypt data with the Android Keystore, access external storage and SD cards, and manage ZIP archives. **80+ tools**, all built into Android. Each one stays off until you flip it on.
 
+<<<<<<< HEAD
 ### Chat
 
 When a reply ends in an error or comes back with no visible text, a continue chip appears among the suggestions so you can nudge it forward with one tap. Tap any tool call in a message to open its details and re-run it with the same arguments, without spending a new turn. Tap a composer attachment before sending to preview it: images open in a swipeable viewer, other files open through the system chooser.
+=======
+## ✨ Development
+
+> [!IMPORTANT]
+> This project does not accept pull requests (PRs).
+
+This project is developed using [Android Studio](https://developer.android.com/studio).
+>>>>>>> up-2.5.5
 
 ### Shizuku
 
@@ -59,9 +78,13 @@ Install [Shizuku](https://github.com/RikkaApps/Shizuku/releases/latest) and the 
 
 Off by default on every assistant, behind Local Tools, Privileged tools. Enabling it takes effect on new conversations, so start a fresh chat after switching it on. Commands still pass the HARDLINE floor below, so the genuinely destructive ones stay blocked no matter how they are invoked.
 
+<<<<<<< HEAD
 ### Workflows & Schedules
 
 **Workflows** — Describe a trigger and action in plain language: *"when I get home, turn the ringer off."* 19 triggers (WiFi, Bluetooth, headphones, geofence, app launch, notifications, time, charging, screen state, and more) and 14 conditions (battery thresholds, sunrise/sunset, day-of-week, foreground app, screen state) decide when each fires. Receivers register only when needed — battery drain stays minimal.
+=======
+## 💰 Donate
+>>>>>>> up-2.5.5
 
 **Schedules** — Run tasks on any cadence: *"every Monday at 8am"*, *"every two hours"*, *"next Friday at 3pm."* Survives reboots and battery saver. Let the AI think at runtime, or pre-bake fixed actions that don't burn tokens.
 

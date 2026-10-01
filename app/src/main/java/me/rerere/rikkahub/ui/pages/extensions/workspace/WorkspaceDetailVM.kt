@@ -1,11 +1,24 @@
 package me.rerere.rikkahub.ui.pages.extensions.workspace
 
+<<<<<<< HEAD
 import android.net.Uri
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+=======
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.DocumentsContract
+import android.webkit.MimeTypeMap
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+>>>>>>> up-2.5.5
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -26,8 +39,92 @@ class WorkspaceDetailVM(
     private val _state = MutableStateFlow(WorkspaceDetailState())
     val state = _state.asStateFlow()
 
+<<<<<<< HEAD
     private val _folderExportResult = MutableStateFlow<WorkspaceFolderExportResult?>(null)
     val folderExportResult = _folderExportResult.asStateFlow()
+=======
+    private var pendingExport: Pair<WorkspaceStorageArea, List<WorkspaceFileEntry>>? = null
+
+    fun prepareBatchExport(entries: List<WorkspaceFileEntry>): Boolean {
+        val files = entries.filterNot { it.isDirectory }
+        if (pendingExport != null || state.value.exporting || files.isEmpty()) return false
+        pendingExport = state.value.area to files
+        return true
+    }
+
+    fun dismissExportResult() {
+        _state.update { it.copy(exportResult = null) }
+    }
+
+    fun exportFilesToDirectory(treeUri: Uri?, resolver: ContentResolver) {
+        val (area, entries) = pendingExport.also { pendingExport = null } ?: return
+        if (treeUri == null) return
+        _state.update { it.copy(exporting = true, exportCompleted = 0, exportTotal = entries.size, exportResult = null) }
+        viewModelScope.launch {
+            var succeeded = 0
+            val failures = mutableListOf<String>()
+            try {
+                withContext(Dispatchers.IO) {
+                    val parent = DocumentsContract.buildDocumentUriUsingTree(
+                        treeUri, DocumentsContract.getTreeDocumentId(treeUri)
+                    )
+                    entries.forEachIndexed { index, entry ->
+                        ensureActive()
+                        var destination: Uri? = null
+                        try {
+                            val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(
+                                entry.name.substringAfterLast('.', "").lowercase()
+                            ) ?: "application/octet-stream"
+                            val document = DocumentsContract.createDocument(resolver, parent, mime, entry.name)
+                                ?: error("无法创建目标文件")
+                            destination = document
+                            val output = resolver.openOutputStream(document) ?: error("无法打开目标文件")
+                            output.use { repository.exportFile(id, area, entry.path, it) }
+                            succeeded++
+                            destination = null
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            failures += "${entry.name}：${error.message ?: "导出失败"}"
+                        } finally {
+                            // 只清理本次创建但未完整写入的文件。
+                            destination?.let { runCatching { DocumentsContract.deleteDocument(resolver, it) } }
+                        }
+                        _state.update { it.copy(exportCompleted = index + 1) }
+                    }
+                }
+                _state.update {
+                    it.copy(exportResult = buildString {
+                        append("已导出 $succeeded/${entries.size} 个文件")
+                        if (failures.isNotEmpty()) append("\n\n" + failures.joinToString("\n"))
+                    })
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _state.update { it.copy(exportResult = "导出失败：${error.message}") }
+            } finally {
+                _state.update { it.copy(exporting = false) }
+            }
+        }
+    }
+
+    private val _terminalState = MutableStateFlow(WorkspaceTerminalState())
+    val terminalState = _terminalState.asStateFlow()
+
+    private val _installProgress = MutableStateFlow<RootfsInstallProgress?>(null)
+    val installProgress = _installProgress.asStateFlow()
+
+    private val _installError = MutableStateFlow<String?>(null)
+    val installError = _installError.asStateFlow()
+>>>>>>> up-2.5.5
+
+    private val _settingsError = MutableStateFlow<String?>(null)
+    val settingsError = _settingsError.asStateFlow()
+
+    fun dismissSettingsError() {
+        _settingsError.value = null
+    }
 
     init {
         loadWorkspace()
@@ -165,6 +262,11 @@ class WorkspaceDetailVM(
         }
     }
 
+    suspend fun resolveImageFile(
+        entry: WorkspaceFileEntry,
+        area: WorkspaceStorageArea,
+    ): File = repository.resolveFile(id, area, entry.path)
+
     /**
      * 把当前区域下的文件导出到 cacheDir 的临时文件, 完成后回调 [onReady].
      * 供分享 / 图片预览 / 交给系统应用打开等复用 (它们都需要一个 FileProvider 可访问的真实 File).
@@ -189,6 +291,7 @@ class WorkspaceDetailVM(
         }
     }
 
+<<<<<<< HEAD
     /**
      * 通过 SAF 把一个目录递归导出到用户选择的目标树 [destinationTree] 下, 保留原有目录结构。
      * 单个文件导出失败时计入失败数并继续, 不中断整体导出; [openOutputStream] 由调用方提供
@@ -253,14 +356,29 @@ class WorkspaceDetailVM(
                 _folderExportResult.value = WorkspaceFolderExportResult(folderName = entry.name, failures = failures)
             }.onFailure { error ->
                 _state.update { it.copy(error = error.message ?: "导出文件夹失败") }
+=======
+    fun setShellCompatibilityMode(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                repository.setShellCompatibilityMode(id, enabled)
+                val workspace = repository.getById(id)
+                _state.update { it.copy(workspace = workspace) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _settingsError.value = error.message.orEmpty()
+>>>>>>> up-2.5.5
             }
         }
     }
 
+<<<<<<< HEAD
     fun dismissFolderExportResult() {
         _folderExportResult.value = null
     }
 
+=======
+>>>>>>> up-2.5.5
     fun setToolApproval(toolName: String, needsApproval: Boolean) {
         viewModelScope.launch {
             val workspace = state.value.workspace ?: return@launch
@@ -288,10 +406,17 @@ data class WorkspaceDetailState(
     val entries: List<WorkspaceFileEntry> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
+<<<<<<< HEAD
     // 树形视图: 已展开的目录路径集合 + 已加载子项缓存 (path -> 子项列表), 两者都以
     // area-relative 路径为 key, 折叠不清缓存, 只有 refresh() 会一并清空 (见 refresh())
     val expandedPaths: Set<String> = emptySet(),
     val childrenCache: Map<String, List<WorkspaceFileEntry>> = emptyMap(),
+=======
+    val exporting: Boolean = false,
+    val exportCompleted: Int = 0,
+    val exportTotal: Int = 0,
+    val exportResult: String? = null,
+>>>>>>> up-2.5.5
 )
 
 data class WorkspaceFolderExportResult(

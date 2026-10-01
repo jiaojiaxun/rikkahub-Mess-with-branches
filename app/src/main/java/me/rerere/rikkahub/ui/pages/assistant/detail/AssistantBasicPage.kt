@@ -376,6 +376,7 @@ internal fun AssistantBasicContent(
                     )
                 }
             ) {
+<<<<<<< HEAD
                 Slider(
                     value = assistant.contextMessageLimit.toFloat(),
                     onValueChange = { value ->
@@ -383,6 +384,63 @@ internal fun AssistantBasicContent(
                             assistant.copy(
                                 contextMessageLimit = snapContextMessageLimit(value)
                             )
+=======
+                var contextMessageLimitInput by remember(
+                    assistant.id,
+                    assistant.contextMessageLimit
+                ) {
+                    mutableStateOf(assistant.contextMessageLimit.toString())
+                }
+                var contextMessageLimitFocused by remember(assistant.id) {
+                    mutableStateOf(false)
+                }
+                val focusManager = LocalFocusManager.current
+
+                fun commitContextMessageLimit() {
+                    val value = contextMessageLimitInput.toIntOrNull()
+                    if (value == null) {
+                        contextMessageLimitInput = assistant.contextMessageLimit.toString()
+                        return
+                    }
+
+                    contextMessageLimitInput = value.toString()
+                    if (value != assistant.contextMessageLimit) {
+                        onUpdate(assistant.copy(contextMessageLimit = value))
+                    }
+                }
+
+                OutlinedTextField(
+                    value = contextMessageLimitInput,
+                    onValueChange = { input ->
+                        if (input.all(Char::isDigit) &&
+                            (input.isEmpty() || input.toIntOrNull() != null)
+                        ) {
+                            contextMessageLimitInput = input
+                            input.toIntOrNull()
+                                ?.takeIf { it != assistant.contextMessageLimit }
+                                ?.let { onUpdate(assistant.copy(contextMessageLimit = it)) }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { focusState ->
+                            if (contextMessageLimitFocused && !focusState.isFocused) {
+                                commitContextMessageLimit()
+                            }
+                            contextMessageLimitFocused = focusState.isFocused
+                        },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { focusManager.clearFocus() }
+                    ),
+                    singleLine = true,
+                    supportingText = {
+                        Text(
+                            stringResource(R.string.assistant_page_context_message_limit_hint)
+>>>>>>> up-2.5.5
                         )
                     },
                     valueRange = 0f..512f,
@@ -390,6 +448,7 @@ internal fun AssistantBasicContent(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+<<<<<<< HEAD
                 Text(
                     text = if (assistant.contextMessageLimit > 0) stringResource(
                         R.string.assistant_page_context_message_limit_count,
@@ -399,6 +458,8 @@ internal fun AssistantBasicContent(
                     color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.75f),
                 )
 
+=======
+>>>>>>> up-2.5.5
                 if (assistant.contextMessageLimit > 0) {
                     Text(
                         text = stringResource(R.string.assistant_page_context_message_limit_warning),
@@ -580,6 +641,7 @@ internal fun AssistantBasicContent(
         }
     }
 }
+<<<<<<< HEAD
 
 /**
  * 上下文限制的最小有效值
@@ -600,3 +662,5 @@ private fun snapContextMessageLimit(value: Float): Int {
         else -> raw
     }
 }
+=======
+>>>>>>> up-2.5.5

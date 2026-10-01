@@ -9,6 +9,7 @@ import me.rerere.tts.model.AudioChunk
 import me.rerere.tts.model.AudioFormat
 import me.rerere.tts.model.TTSRequest
 import me.rerere.tts.provider.TTSProvider
+import me.rerere.tts.provider.TTSProviderException
 import me.rerere.tts.provider.TTSProviderSetting
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -48,7 +49,22 @@ class QwenTTSProvider : TTSProvider<TTSProviderSetting.Qwen> {
             .post(requestBody.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
+<<<<<<< HEAD
         val response = httpClient.newCall(httpRequest).execute()
+=======
+        httpClient.newCall(httpRequest).execute().use { response ->
+            if (!response.isSuccessful) {
+                val errorBody = response.body.string()
+                Log.e(
+                    TAG,
+                    "Qwen TTS request failed: ${response.code} ${response.message}, body: $errorBody"
+                )
+                throw TTSProviderException(
+                    message = "Qwen TTS request failed: ${response.code} ${response.message}",
+                    statusCode = response.code
+                )
+            }
+>>>>>>> up-2.5.5
 
         if (!response.isSuccessful) {
             val errorBody = response.body.string()

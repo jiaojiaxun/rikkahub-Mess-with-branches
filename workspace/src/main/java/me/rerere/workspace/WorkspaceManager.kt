@@ -84,9 +84,32 @@ class WorkspaceManager(
     fun fileSize(root: String, path: String): Long =
         fileSystem.resolve(filesDir(root), path).also { it.requireFile(path) }.length()
 
+<<<<<<< HEAD
     fun exportFile(root: String, path: String, outputStream: OutputStream) {
         val file = fileSystem.resolve(filesDir(root), path)
         file.requireFile(path)
+=======
+    fun resolveFile(
+        root: String,
+        path: String,
+        area: WorkspaceStorageArea = WorkspaceStorageArea.FILES,
+    ): File {
+        val file = fileSystem.resolve(areaDir(root, area), path)
+        require(file.exists()) { "File does not exist: $path" }
+        require(file.isFile) { "Path is not a file: $path" }
+        return file
+    }
+
+    fun exportFile(
+        root: String,
+        path: String,
+        area: WorkspaceStorageArea = WorkspaceStorageArea.FILES,
+        outputStream: OutputStream,
+    ) {
+        val file = fileSystem.resolve(areaDir(root, area), path)
+        require(file.exists()) { "File does not exist: $path" }
+        require(file.isFile) { "Path is not a file: $path" }
+>>>>>>> up-2.5.5
         outputStream.use { out -> file.inputStream().use { it.copyTo(out) } }
     }
 
@@ -109,8 +132,51 @@ class WorkspaceManager(
     ): List<WorkspaceSearchMatch> =
         fileSystem.grep(filesDir(root), query, path, regex, ignoreCase, includeGlob)
 
+<<<<<<< HEAD
     fun tree(root: String, path: String = "", maxDepth: Int = 10): WorkspaceTreeResult =
         fileSystem.tree(filesDir(root), path, maxDepth)
+=======
+    fun executeCommand(
+        root: String,
+        command: String,
+        cwd: String = "",
+        timeoutMillis: Long = DEFAULT_COMMAND_TIMEOUT_MS,
+        stdin: ByteArray? = null,
+        shellCompatibilityMode: Boolean = false,
+    ): WorkspaceCommandResult {
+        require(command.isNotBlank()) { "Command is required" }
+        val workingDir = fileSystem.resolve(filesDir(root), cwd)
+        require(workingDir.exists()) { "Working directory does not exist: $cwd" }
+        require(workingDir.isDirectory) { "Working path is not a directory: $cwd" }
+
+        return shellRunner.execute(
+            WorkspaceShellContext(
+                root = root,
+                command = command,
+                cwd = cwd,
+                filesDir = filesDir(root),
+                linuxDir = linuxDir(root),
+                tempDir = tempDir(root),
+                workingDir = workingDir,
+                timeoutMillis = timeoutMillis,
+                stdin = stdin,
+                bindMounts = bindMounts,
+                shellCompatibilityMode = shellCompatibilityMode,
+            )
+        )
+    }
+
+    private fun requireValidRoot(root: String) {
+        require(root.matches(ROOT_NAME_REGEX)) {
+            "Invalid workspace root name: $root"
+        }
+    }
+
+    private fun areaDir(root: String, area: WorkspaceStorageArea): File = when (area) {
+        WorkspaceStorageArea.FILES -> filesDir(root)
+        WorkspaceStorageArea.LINUX -> linuxDir(root)
+    }
+>>>>>>> up-2.5.5
 
     fun cleanupAllTempDirs() {
         // 保留旧调用的幂等入口；纯文件工作区没有命令临时目录需要清理。

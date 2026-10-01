@@ -38,3 +38,9 @@ include(":document")
 include(":web")
 include(":material3")
 include(":workspace")
+<<<<<<< HEAD
+=======
+include(":app:baselineprofile")
+include(":videogen")
+include(":oauth")
+>>>>>>> up-2.5.5

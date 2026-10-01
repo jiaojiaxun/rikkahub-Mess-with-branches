@@ -5,9 +5,12 @@ import android.util.Log
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+<<<<<<< HEAD
 import kotlinx.serialization.json.Json
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.WebDavConfig
+=======
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.data.sync.s3.S3Client
 import me.rerere.rikkahub.data.sync.s3.S3Config
 import me.rerere.rikkahub.data.sync.webdav.BackupArchiveRestorer
@@ -20,8 +23,7 @@ import java.time.Instant
 private const val TAG = "S3Sync"
 
 class S3Sync(
-    private val settingsStore: SettingsStore,
-    private val json: Json,
+    private val backupManager: BackupManager,
     private val context: Context,
     private val httpClient: HttpClient,
     private val appDatabase: me.rerere.rikkahub.data.db.AppDatabase,
@@ -81,6 +83,7 @@ class S3Sync(
             .sortedByDescending { it.lastModified }
     }
 
+<<<<<<< HEAD
     suspend fun restoreFromS3(
         config: S3Config,
         item: S3BackupItem,
@@ -92,6 +95,12 @@ class S3Sync(
             "不安全的 S3 备份文件名"
         }
         val backupFile = File(context.cacheDir, displayName)
+=======
+    suspend fun restoreFromS3(config: S3Config, item: S3BackupItem) = withContext(Dispatchers.IO) {
+        val client = getS3Client(config)
+        val backupFile = File.createTempFile("restore-", ".zip", context.cacheDir)
+
+>>>>>>> up-2.5.5
         try {
             val client = getS3Client(config)
             onProgress(BackupProgress("下载备份", 0L, item.size, displayName))
@@ -123,6 +132,7 @@ class S3Sync(
         Log.i(TAG, "deleteS3BackupFile: Deleted ${item.key}")
     }
 
+<<<<<<< HEAD
     private fun S3Config.toWebDavConfig(): WebDavConfig = WebDavConfig(
         items = items.map {
             when (it) {
@@ -131,6 +141,19 @@ class S3Sync(
             }
         },
         )
+=======
+    suspend fun prepareBackupFile(config: S3Config): File = backupManager.createBackup(
+        includeDatabase = S3Config.BackupItem.DATABASE in config.items,
+        includeFiles = S3Config.BackupItem.FILES in config.items,
+    )
+
+    private suspend fun restoreFromBackupFile(backupFile: File, config: S3Config) = backupManager.stageRestore(
+        archive = backupFile,
+        includeDatabase = S3Config.BackupItem.DATABASE in config.items,
+        includeFiles = S3Config.BackupItem.FILES in config.items,
+    )
+
+>>>>>>> up-2.5.5
 }
 
 data class S3BackupItem(

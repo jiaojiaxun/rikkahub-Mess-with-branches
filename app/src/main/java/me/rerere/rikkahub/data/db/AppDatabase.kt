@@ -47,7 +47,11 @@ import me.rerere.rikkahub.utils.JsonInstant
         WorkspaceEntity::class,
         FolderEntity::class,
     ],
+<<<<<<< HEAD
     version = 34,
+=======
+    version = 25,
+>>>>>>> up-2.5.5
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -66,6 +70,7 @@ import me.rerere.rikkahub.utils.JsonInstant
         AutoMigration(from = 20, to = 21, spec = Migration_20_21::class),
         AutoMigration(from = 21, to = 22, spec = Migration_21_22::class),
         AutoMigration(from = 22, to = 23, spec = Migration_22_23::class),
+<<<<<<< HEAD
         // v25: upstream 2.2.6 added conversation-level custom_system_prompt / mode_injection_ids
         // / lorebook_ids columns (all carry defaultValue, so a plain auto-migration suffices).
         AutoMigration(from = 24, to = 25),
@@ -91,6 +96,10 @@ import me.rerere.rikkahub.utils.JsonInstant
         // from Room. Nullable-equivalent (empty string default, matching folder_id), so a plain
         // auto-migration suffices.
         AutoMigration(from = 29, to = 30, spec = Migration_29_30::class),
+=======
+        AutoMigration(from = 23, to = 24),
+        AutoMigration(from = 24, to = 25),
+>>>>>>> up-2.5.5
     ]
 )
 @TypeConverters(TokenUsageConverter::class)

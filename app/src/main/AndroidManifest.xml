@@ -153,6 +153,11 @@
         <data android:mimeType="text/plain" />
       </intent-filter>
 
+      <intent-filter>
+        <action android:name="me.rerere.rikkahub.action.TRANSLATE" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+
       <meta-data
         android:name="android.app.shortcuts"
         android:resource="@xml/shortcuts" />
@@ -172,6 +177,7 @@
       </intent-filter>
     </activity>
     <activity
+<<<<<<< HEAD
       android:name=".ui.activity.CodexOAuthRedirectActivity"
       android:exported="true"
       android:theme="@android:style/Theme.Translucent.NoTitleBar">
@@ -220,6 +226,8 @@
       </intent-filter>
     </activity>
     <activity
+=======
+>>>>>>> up-2.5.5
       android:name="com.yalantis.ucrop.UCropActivity"
       android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
     <activity

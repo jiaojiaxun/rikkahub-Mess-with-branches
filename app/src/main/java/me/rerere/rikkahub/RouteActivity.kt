@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 package me.rerere.rikkahub
 
 import android.annotation.SuppressLint
@@ -113,9 +114,121 @@ import me.rerere.rikkahub.ui.pages.setting.SettingAboutPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesThemePage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesNotificationPage
+=======
+package me.rerere.rikkahub
+
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.os.Build
+import android.os.Bundle
+import android.view.KeyEvent
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.gif.AnimatedImageDecoder
+import coil3.gif.GifDecoder
+import coil3.network.cachecontrol.CacheControlCacheStrategy
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.request.crossfade
+import coil3.svg.SvgDecoder
+import com.dokar.sonner.Toaster
+import com.dokar.sonner.rememberToasterState
+import kotlinx.serialization.Serializable
+import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.db.DatabaseMigrationTracker
+import me.rerere.rikkahub.data.db.MigrationState
+import me.rerere.rikkahub.data.event.AppEvent
+import me.rerere.rikkahub.data.event.AppEventBus
+import me.rerere.rikkahub.ui.activity.SafeModeActivity
+import me.rerere.rikkahub.ui.components.ui.TTSController
+import me.rerere.rikkahub.ui.context.LocalASRState
+import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.ui.context.LocalSettings
+import me.rerere.rikkahub.ui.context.LocalSharedTransitionScope
+import me.rerere.rikkahub.ui.context.LocalTTSState
+import me.rerere.rikkahub.ui.context.LocalToaster
+import me.rerere.rikkahub.ui.context.Navigator
+import me.rerere.rikkahub.ui.hooks.readBooleanPreference
+import me.rerere.rikkahub.ui.hooks.readStringPreference
+import me.rerere.rikkahub.ui.hooks.rememberCustomAsrState
+import me.rerere.rikkahub.ui.hooks.rememberCustomTtsState
+import me.rerere.rikkahub.ui.pages.assistant.AssistantPage
+import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantBasicPage
+import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantDetailPage
+import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantExtensionsPage
+import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantLocalToolPage
+import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantMcpPage
+import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantMemoryPage
+import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantPromptPage
+import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantRequestPage
+import me.rerere.rikkahub.ui.pages.backup.BackupPage
+import me.rerere.rikkahub.ui.pages.chat.ChatPage
+import me.rerere.rikkahub.ui.pages.debug.DebugPage
+import me.rerere.rikkahub.ui.pages.extensions.ExtensionsPage
+import me.rerere.rikkahub.ui.pages.extensions.PromptPage
+import me.rerere.rikkahub.ui.pages.extensions.QuickMessagesPage
+import me.rerere.rikkahub.ui.pages.extensions.skills.SkillDetailPage
+import me.rerere.rikkahub.ui.pages.extensions.skills.SkillsPage
+import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspacePage
+import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceDetailPage
+import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceFileEditorPage
+import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceTerminalPage
+import me.rerere.workspace.WorkspaceStorageArea
+import me.rerere.rikkahub.ui.pages.favorite.FavoritePage
+import me.rerere.rikkahub.ui.pages.history.HistoryPage
+import me.rerere.rikkahub.ui.pages.imggen.ImageGenPage
+import me.rerere.rikkahub.ui.pages.log.LogPage
+import me.rerere.rikkahub.ui.pages.search.SearchPage
+import me.rerere.rikkahub.ui.pages.setting.SettingAboutPage
+import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesPage
+import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesThemePage
+import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesNotificationPage
+import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesGeneralPage
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesNetworkPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesGeneralPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesUIPage
+<<<<<<< HEAD
 import me.rerere.rikkahub.ui.pages.setting.SettingThemePage
 import me.rerere.rikkahub.ui.pages.setting.SettingDonatePage
 import me.rerere.rikkahub.ui.pages.setting.SettingFilesPage
@@ -470,6 +583,321 @@ class RouteActivity : ComponentActivity() {
 
                             entry<Screen.SettingPreferencesNotification> {
                                 SettingPreferencesNotificationPage()
+=======
+import me.rerere.rikkahub.ui.pages.setting.SettingThemePage
+import me.rerere.rikkahub.ui.pages.setting.SettingDonatePage
+import me.rerere.rikkahub.ui.pages.setting.SettingFilesPage
+import me.rerere.rikkahub.ui.pages.setting.SettingMcpPage
+import me.rerere.rikkahub.ui.pages.setting.SettingModelPage
+import me.rerere.rikkahub.ui.pages.setting.SettingPage
+import me.rerere.rikkahub.ui.pages.setting.SettingProviderDetailPage
+import me.rerere.rikkahub.ui.pages.setting.SettingProviderPage
+import me.rerere.rikkahub.ui.pages.setting.SettingSearchDetailPage
+import me.rerere.rikkahub.ui.pages.setting.SettingSearchPage
+import me.rerere.rikkahub.ui.pages.setting.SettingSpeechPage
+import me.rerere.rikkahub.ui.pages.setting.SettingWebPage
+import me.rerere.rikkahub.ui.pages.share.handler.ShareHandlerPage
+import me.rerere.rikkahub.ui.pages.stats.StatsPage
+import me.rerere.rikkahub.ui.pages.translator.TranslatorPage
+import me.rerere.rikkahub.ui.pages.webview.WebViewPage
+import me.rerere.rikkahub.ui.theme.LocalDarkMode
+import me.rerere.rikkahub.ui.theme.RikkahubTheme
+import me.rerere.rikkahub.utils.CrashHandler
+import me.rerere.rikkahub.utils.openUsageAccessSettings
+import okhttp3.OkHttpClient
+import org.koin.android.ext.android.inject
+import org.koin.compose.koinInject
+import kotlin.uuid.Uuid
+
+private const val TAG = "RouteActivity"
+private const val ACTION_TRANSLATE = "me.rerere.rikkahub.action.TRANSLATE"
+
+class RouteActivity : ComponentActivity() {
+    private val okHttpClient by inject<OkHttpClient>()
+    private val settingsStore by inject<SettingsStore>()
+    private var navStack: MutableList<NavKey>? = null
+    private val pendingIntents = ArrayDeque<Intent>()
+
+    // Volume key listener registry — last registered handler wins
+    internal val volumeKeyListeners = mutableListOf<(isVolumeUp: Boolean) -> Boolean>()
+
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            val isVolumeUp = when (event.keyCode) {
+                KeyEvent.KEYCODE_VOLUME_UP -> true
+                KeyEvent.KEYCODE_VOLUME_DOWN -> false
+                else -> return super.dispatchKeyEvent(event)
+            }
+            if (volumeKeyListeners.lastOrNull()?.invoke(isVolumeUp) == true) return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        disableNavigationBarContrast()
+        super.onCreate(savedInstanceState)
+        if (CrashHandler.hasCrashed(this)) {
+            startActivity(Intent(this, SafeModeActivity::class.java))
+            finish()
+            return
+        }
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+        }
+        setContent {
+            RikkahubTheme {
+                setSingletonImageLoaderFactory { context ->
+                    ImageLoader.Builder(context)
+                        .crossfade(true)
+                        .components {
+                            add(
+                                OkHttpNetworkFetcherFactory(
+                                    callFactory = { okHttpClient },
+                                    cacheStrategy = { CacheControlCacheStrategy() },
+                                )
+                            )
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                add(AnimatedImageDecoder.Factory())
+                            } else {
+                                add(GifDecoder.Factory())
+                            }
+                            add(SvgDecoder.Factory(scaleToDensity = true))
+                        }
+                        .build()
+                }
+                AppRoutes()
+            }
+        }
+    }
+
+    private fun disableNavigationBarContrast() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent) {
+        val backStack = navStack ?: run {
+            // Compose 尚未创建导航栈，待就绪后处理。
+            pendingIntents.addLast(intent)
+            return
+        }
+        val destination = when (intent.action) {
+            ACTION_TRANSLATE -> Screen.Translator
+            Intent.ACTION_SEND -> Screen.ShareHandler(
+                text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty(),
+                streamUri = intent.getStringExtra(Intent.EXTRA_STREAM),
+            )
+            Intent.ACTION_PROCESS_TEXT -> Screen.ShareHandler(
+                text = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString().orEmpty(),
+            )
+            else -> intent.getStringExtra("conversationId")?.let { Screen.Chat(it) }
+        }
+        if (destination != null && backStack.lastOrNull() != destination) {
+            backStack.add(destination)
+        }
+    }
+
+    @OptIn(ExperimentalComposeUiApi::class)
+    @Composable
+    fun AppRoutes() {
+        val toastState = rememberToasterState()
+        val settings by settingsStore.settingsFlow.collectAsStateWithLifecycle()
+        val tts = rememberCustomTtsState()
+        val asr = rememberCustomAsrState()
+        val eventBus = koinInject<AppEventBus>()
+        LaunchedEffect(tts) {
+            eventBus.events.collect { event ->
+                when (event) {
+                    is AppEvent.Speak -> tts.speak(event.text)
+                    is AppEvent.OpenUsageAccessSettings -> this@RouteActivity.openUsageAccessSettings()
+                    is AppEvent.ChatGenerationUpdate -> Unit // 由 ChatNotificationManager 消费
+                    is AppEvent.ChatGenerationEnded -> Unit // 由 ChatNotificationManager 消费
+                }
+            }
+        }
+        val migrationState by DatabaseMigrationTracker.state.collectAsStateWithLifecycle()
+
+        val startScreen = Screen.Chat(
+            id = if (readBooleanPreference("create_new_conversation_on_start", true)) {
+                Uuid.random().toString()
+            } else {
+                readStringPreference(
+                    "lastConversationId",
+                    Uuid.random().toString()
+                ) ?: Uuid.random().toString()
+            }
+        )
+
+        val backStack = rememberNavBackStack(startScreen)
+        SideEffect {
+            navStack = backStack
+            while (pendingIntents.isNotEmpty()) {
+                handleIntent(pendingIntents.removeFirst())
+            }
+        }
+
+        SharedTransitionLayout {
+            CompositionLocalProvider(
+                LocalNavController provides Navigator(backStack),
+                LocalSharedTransitionScope provides this,
+                LocalSettings provides settings,
+                LocalToaster provides toastState,
+                LocalTTSState provides tts,
+                LocalASRState provides asr,
+            ) {
+                Toaster(
+                    state = toastState,
+                    darkTheme = LocalDarkMode.current,
+                    richColors = true,
+                    alignment = Alignment.TopCenter,
+                    showCloseButton = true,
+                )
+                TTSController()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .semantics { testTagsAsResourceId = true }
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    NavDisplay(
+                        backStack = backStack,
+                        entryDecorators = listOf(
+                            rememberSaveableStateHolderNavEntryDecorator(),
+                            rememberViewModelStoreNavEntryDecorator(),
+                        ),
+                        modifier = Modifier.fillMaxSize(),
+                        onBack = { backStack.removeLastOrNull() },
+                        transitionSpec = {
+                            if (backStack.size == 1) fadeIn() togetherWith fadeOut()
+                            else {
+                                slideInHorizontally { it } togetherWith
+                                    slideOutHorizontally { -it / 2 } + scaleOut(targetScale = 0.7f) + fadeOut()
+                            }
+                        },
+                        popTransitionSpec = {
+                            slideInHorizontally { -it / 2 } + scaleIn(initialScale = 0.7f) + fadeIn() togetherWith
+                                slideOutHorizontally { it }
+                        },
+                        predictivePopTransitionSpec = {
+                            slideInHorizontally { -it / 2 } + scaleIn(initialScale = 0.7f) + fadeIn() togetherWith
+                                slideOutHorizontally { it }
+                        },
+                        entryProvider = entryProvider {
+                            entry<Screen.Chat>(
+                                metadata = NavDisplay.transitionSpec { fadeIn() togetherWith fadeOut() }
+                                    + NavDisplay.popTransitionSpec { fadeIn() togetherWith fadeOut() }
+                            ) { key ->
+                                ChatPage(
+                                    id = Uuid.parse(key.id),
+                                    text = key.text,
+                                    files = key.files.map { it.toUri() },
+                                    nodeId = key.nodeId?.let { Uuid.parse(it) }
+                                )
+                            }
+
+                            entry<Screen.ShareHandler> { key ->
+                                ShareHandlerPage(
+                                    text = key.text,
+                                    image = key.streamUri
+                                )
+                            }
+
+                            entry<Screen.History> {
+                                HistoryPage()
+                            }
+
+                            entry<Screen.Favorite> {
+                                FavoritePage()
+                            }
+
+                            entry<Screen.Assistant> {
+                                AssistantPage()
+                            }
+
+                            entry<Screen.AssistantDetail> { key ->
+                                AssistantDetailPage(key.id)
+                            }
+
+                            entry<Screen.AssistantBasic> { key ->
+                                AssistantBasicPage(key.id)
+                            }
+
+                            entry<Screen.AssistantPrompt> { key ->
+                                AssistantPromptPage(key.id)
+                            }
+
+                            entry<Screen.AssistantMemory> { key ->
+                                AssistantMemoryPage(key.id)
+                            }
+
+                            entry<Screen.AssistantRequest> { key ->
+                                AssistantRequestPage(key.id)
+                            }
+
+                            entry<Screen.AssistantMcp> { key ->
+                                AssistantMcpPage(key.id)
+                            }
+
+                            entry<Screen.AssistantLocalTool> { key ->
+                                AssistantLocalToolPage(key.id)
+                            }
+
+                            entry<Screen.AssistantInjections> { key ->
+                                AssistantExtensionsPage(key.id)
+                            }
+
+                            entry<Screen.Translator> {
+                                TranslatorPage()
+                            }
+
+                            entry<Screen.Setting> {
+                                SettingPage()
+                            }
+
+                            entry<Screen.Backup> {
+                                BackupPage()
+                            }
+
+                            entry<Screen.ImageGen> {
+                                ImageGenPage()
+                            }
+
+                            entry<Screen.WebView> { key ->
+                                WebViewPage(key.url, key.contentId)
+                            }
+
+                            entry<Screen.SettingTheme> {
+                                SettingThemePage()
+                            }
+
+                            entry<Screen.SettingPreferences> {
+                                SettingPreferencesPage()
+                            }
+
+                            entry<Screen.SettingPreferencesTheme> {
+                                SettingPreferencesThemePage()
+                            }
+
+                            entry<Screen.SettingPreferencesNotification> {
+                                SettingPreferencesNotificationPage()
+                            }
+
+                            entry<Screen.SettingPreferencesGeneral> {
+                                SettingPreferencesGeneralPage()
+                            }
+
+                            entry<Screen.SettingPreferencesUI> {
+                                SettingPreferencesUIPage()
+>>>>>>> up-2.5.5
                             }
 
                             entry<Screen.SettingPreferencesNetwork> {

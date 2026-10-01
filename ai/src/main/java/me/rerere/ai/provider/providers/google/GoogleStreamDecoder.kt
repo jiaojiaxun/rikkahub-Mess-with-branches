@@ -14,6 +14,9 @@ import me.rerere.ai.provider.stream.DecodeResult
 import me.rerere.ai.provider.stream.SseEvent
 import me.rerere.ai.provider.stream.StreamChunkDecoder
 import me.rerere.ai.ui.GoogleThoughtMetadata
+import me.rerere.ai.ui.ServerToolMetadata
+import me.rerere.ai.ui.ServerToolProtocol
+import me.rerere.ai.ui.ServerToolStatus
 import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessageAnnotation
@@ -64,14 +67,26 @@ internal class GoogleStreamDecoder(
 
     private fun parseMessage(content: JsonObject, groundingMetadata: JsonObject?): UIMessage = UIMessage(
         role = MessageRole.ASSISTANT,
+<<<<<<< HEAD
         parts = content["parts"]?.jsonArray?.mapNotNull { parsePart(it.jsonObject) }.orEmpty(),
         annotations = parseAnnotations(groundingMetadata),
     )
 
     private fun parsePart(part: JsonObject): UIMessagePart? = when {
+=======
+        parts = content["parts"]?.jsonArray?.mapIndexed { index, part ->
+            parsePart(part.jsonObject, index)
+        }.orEmpty(),
+        annotations = parseAnnotations(groundingMetadata),
+    )
+
+    private fun parsePart(part: JsonObject, index: Int): UIMessagePart = when {
+>>>>>>> up-2.5.5
         part.containsKey("text") -> {
             val text = part["text"]?.jsonPrimitive?.contentOrNull ?: ""
+            val metadata = part.toGoogleThoughtMetadata()
             if (part["thought"]?.jsonPrimitive?.booleanOrNull == true) {
+<<<<<<< HEAD
                 val thoughtSignature = part["thoughtSignature"]?.jsonPrimitive?.contentOrNull
                 UIMessagePart.Reasoning(
                     reasoning = text,
@@ -80,19 +95,56 @@ internal class GoogleStreamDecoder(
                         GoogleThoughtMetadata(thoughtSignature = it).toMetadata()
                     },
                 )
+=======
+                UIMessagePart.Reasoning(text, Clock.System.now(), null, metadata)
+>>>>>>> up-2.5.5
             } else {
-                UIMessagePart.Text(text)
+                UIMessagePart.Text(text, metadata)
             }
         }
         part.containsKey("functionCall") -> {
             val functionCall = part["functionCall"]!!.jsonObject
+            val toolCallId = functionCall["id"]?.jsonPrimitive?.contentOrNull
+                ?: "$responseId:tool-${++toolSequence}"
             UIMessagePart.Tool(
-                toolCallId = "$responseId:tool-${++toolSequence}",
+                toolCallId = toolCallId,
                 toolName = functionCall["name"]?.jsonPrimitive?.contentOrNull ?: "",
                 input = functionCall["args"]?.let(json::encodeToString) ?: "",
                 output = emptyList(),
                 metadata = GoogleThoughtMetadata(
                     thoughtSignature = part["thoughtSignature"]?.jsonPrimitive?.contentOrNull,
+                ).toMetadata(),
+            )
+        }
+
+        part.containsKey("toolCall") -> {
+            val toolCall = part["toolCall"]!!.jsonObject
+            UIMessagePart.ServerTool(
+                toolCallId = toolCall["id"]?.jsonPrimitive?.contentOrNull
+                    ?: "$responseId:server-tool-${++toolSequence}",
+                toolName = toolCall["toolType"]?.jsonPrimitive?.contentOrNull ?: "",
+                input = toolCall["args"],
+                status = ServerToolStatus.IN_PROGRESS,
+                metadata = ServerToolMetadata(
+                    protocol = ServerToolProtocol.GOOGLE_GENERATE_CONTENT,
+                    call = part,
+                    callIndex = index,
+                ).toMetadata(),
+            )
+        }
+
+        part.containsKey("toolResponse") -> {
+            val toolResponse = part["toolResponse"]!!.jsonObject
+            UIMessagePart.ServerTool(
+                toolCallId = toolResponse["id"]?.jsonPrimitive?.contentOrNull
+                    ?: "$responseId:server-tool-${++toolSequence}",
+                toolName = toolResponse["toolType"]?.jsonPrimitive?.contentOrNull ?: "",
+                output = toolResponse["response"],
+                status = ServerToolStatus.COMPLETED,
+                metadata = ServerToolMetadata(
+                    protocol = ServerToolProtocol.GOOGLE_GENERATE_CONTENT,
+                    result = part,
+                    resultIndex = index,
                 ).toMetadata(),
             )
         }
@@ -105,9 +157,7 @@ internal class GoogleStreamDecoder(
             } else {
                 UIMessagePart.Image(
                     url = "data:$mimeType;base64,${inlineData["data"]?.jsonPrimitive?.contentOrNull ?: ""}",
-                    metadata = GoogleThoughtMetadata(
-                        thoughtSignature = part["thoughtSignature"]?.jsonPrimitive?.contentOrNull,
-                    ).toMetadata(),
+                    metadata = part.toGoogleThoughtMetadata(),
                 )
             }
         }
@@ -155,9 +205,9 @@ internal class GoogleStreamDecoder(
                     is UIMessagePart.Text -> if (part.text.isNotEmpty()) {
                         addAll(closeReasoning()); addAll(closeImage()); addAll(closeTools())
                         val id = textId ?: nextId(responseId, "text").also {
-                            textId = it; add(StreamChunk.TextStart(it))
+                            textId = it; add(StreamChunk.TextStart(it, part.metadata))
                         }
-                        add(StreamChunk.TextDelta(id, part.text))
+                        add(StreamChunk.TextDelta(id, part.text, part.metadata))
                     }
                     is UIMessagePart.Reasoning -> if (part.reasoning.isNotEmpty() || part.metadata != null) {
                         addAll(closeText()); addAll(closeImage()); addAll(closeTools())
@@ -172,6 +222,31 @@ internal class GoogleStreamDecoder(
                         if (openToolIds.add(id)) add(StreamChunk.ToolCallStart(id, part.toolName, part.metadata))
                         if (part.input.isNotEmpty()) {
                             add(StreamChunk.ToolCallDelta(id, inputDelta = part.input, metadata = part.metadata))
+                        }
+                    }
+                    is UIMessagePart.ServerTool -> {
+                        addAll(closeText()); addAll(closeReasoning()); addAll(closeImage()); addAll(
+                            closeTools()
+                        )
+                        if (part.status == ServerToolStatus.IN_PROGRESS) {
+                            add(
+                                StreamChunk.ServerToolStart(
+                                    id = part.toolCallId,
+                                    toolName = part.toolName,
+                                    input = part.input,
+                                    metadata = part.metadata,
+                                )
+                            )
+                        } else {
+                            add(
+                                StreamChunk.ServerToolEnd(
+                                    id = part.toolCallId,
+                                    input = part.input,
+                                    output = part.output,
+                                    status = part.status,
+                                    metadata = part.metadata,
+                                )
+                            )
                         }
                     }
                     is UIMessagePart.Image -> {
@@ -210,4 +285,9 @@ internal class GoogleStreamDecoder(
         private fun nextId(responseId: String, kind: String): String =
             "$responseId:$kind-${++sequence}"
     }
+
+    private fun JsonObject.toGoogleThoughtMetadata() =
+        this["thoughtSignature"]?.jsonPrimitive?.contentOrNull?.let {
+            GoogleThoughtMetadata(thoughtSignature = it).toMetadata()
+        }
 }

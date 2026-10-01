@@ -7,10 +7,14 @@ import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.CustomBody
 import me.rerere.ai.provider.CustomHeader
 import me.rerere.ai.provider.Model
+<<<<<<< HEAD
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.datastore.AutoCompactionThresholdMode
 import me.rerere.rikkahub.data.datastore.Settings
+=======
+import me.rerere.rikkahub.data.ai.tools.shouldUseExternalWebSearch
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
@@ -24,6 +28,29 @@ import kotlin.uuid.Uuid
 
 class ChatServiceTest {
     @Test
+<<<<<<< HEAD
+=======
+    fun `fork conversation inherits folder and workspace context`() {
+        val source = Conversation(
+            assistantId = Uuid.random(),
+            title = "Source conversation",
+            messageNodes = emptyList(),
+            workspaceCwd = "/workspace/project",
+            folderId = Uuid.random(),
+        )
+
+        val fork = createForkConversation(source, emptyList())
+
+        assertNotEquals(source.id, fork.id)
+        assertEquals(source.assistantId, fork.assistantId)
+        assertEquals(source.workspaceCwd, fork.workspaceCwd)
+        assertEquals(source.folderId, fork.folderId)
+        assertEquals("Source conversation(1)", fork.title)
+        assertFalse(fork.isPinned)
+    }
+
+    @Test
+>>>>>>> up-2.5.5
     fun `background generation params include model custom request configuration`() {
         val headers = listOf(CustomHeader(name = "X-Gateway-Token", value = "test-token"))
         val bodies = listOf(CustomBody(key = "gateway_mode", value = JsonPrimitive("strict")))
@@ -33,12 +60,14 @@ class ChatServiceTest {
             customBodies = bodies,
         )
 
-        val params = backgroundTextGenerationParams(model)
+        val conversationId = Uuid.random()
+        val params = backgroundTextGenerationParams(model, conversationId)
 
         assertEquals(model, params.model)
         assertEquals(ReasoningLevel.OFF, params.reasoningLevel)
         assertEquals(headers, params.customHeaders)
         assertEquals(bodies, params.customBody)
+        assertEquals(conversationId.toString(), params.sessionId)
     }
 
     @Test

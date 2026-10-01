@@ -1,0 +1,431 @@
+mode=merge-tree base=up-2.4.14(da5fd77bcd4f04a2aab77deeed8be85466f79ada) target=up-2.5.5(6c903feba7e6b65f518b320a88ae29efebae77c4) ours=57df568c299786971e9613cb8576df7a097d1e7f
+upstream changed paths (excl .github)=278 conflicted=89 clean=189
+
+== conflicted paths ==
+.agents/skills/claude-api/SKILL.md
+README.md
+README_ZH_CN.md
+README_ZH_TW.md
+ai/src/main/java/me/rerere/ai/provider/Provider.kt
+ai/src/main/java/me/rerere/ai/provider/ProviderSetting.kt
+ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleProvider.kt
+ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleStreamDecoder.kt
+ai/src/main/java/me/rerere/ai/provider/providers/openai/ResponseAPI.kt
+ai/src/main/java/me/rerere/ai/registry/ModelRegistry.kt
+ai/src/test/java/me/rerere/ai/provider/providers/openai/ResponseApiStreamDecoderTest.kt
+ai/src/test/java/me/rerere/ai/registry/ModelRegistryTest.kt
+app/schemas/me.rerere.rikkahub.data.db.AppDatabase/25.json
+app/src/main/AndroidManifest.xml
+app/src/main/java/me/rerere/rikkahub/RikkaHubApp.kt
+app/src/main/java/me/rerere/rikkahub/RouteActivity.kt
+app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
+app/src/main/java/me/rerere/rikkahub/data/ai/tools/SkillsTools.kt
+app/src/main/java/me/rerere/rikkahub/data/ai/tools/WorkspaceTools.kt
+app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/AskUserTool.kt
+app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/JavascriptTool.kt
+app/src/main/java/me/rerere/rikkahub/data/ai/transformers/WorkspaceReminderTransformer.kt
+app/src/main/java/me/rerere/rikkahub/data/datastore/DefaultProviders.kt
+app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt
+app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt
+app/src/main/java/me/rerere/rikkahub/data/db/dao/ConversationDAO.kt
+app/src/main/java/me/rerere/rikkahub/data/db/dao/MessageNodeDAO.kt
+app/src/main/java/me/rerere/rikkahub/data/db/dao/WorkspaceDAO.kt
+app/src/main/java/me/rerere/rikkahub/data/files/SkillManager.kt
+app/src/main/java/me/rerere/rikkahub/data/model/Assistant.kt
+app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt
+app/src/main/java/me/rerere/rikkahub/data/repository/WorkspaceRepository.kt
+app/src/main/java/me/rerere/rikkahub/data/sync/S3Sync.kt
+app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt
+app/src/main/java/me/rerere/rikkahub/di/AppModule.kt
+app/src/main/java/me/rerere/rikkahub/di/DataSourceModule.kt
+app/src/main/java/me/rerere/rikkahub/di/RepositoryModule.kt
+app/src/main/java/me/rerere/rikkahub/service/ChatService.kt
+app/src/main/java/me/rerere/rikkahub/service/ConversationSession.kt
+app/src/main/java/me/rerere/rikkahub/ui/components/ai/ChatInput.kt
+app/src/main/java/me/rerere/rikkahub/ui/components/ai/SearchPicker.kt
+app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessageTools.kt
+app/src/main/java/me/rerere/rikkahub/ui/components/ui/ChainOfThought.kt
+app/src/main/java/me/rerere/rikkahub/ui/components/ui/ErrorCard.kt
+app/src/main/java/me/rerere/rikkahub/ui/hooks/ChatInputState.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantBasicPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantPromptPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsVM.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailVM.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceFileEditorPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspacePage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSession.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSessionManager.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/imggen/ImgGenPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/search/SearchVM.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingFilesPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingModelPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderDetailPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderPage.kt
+app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingSearchPage.kt
+app/src/main/java/me/rerere/rikkahub/web/routes/ConversationRoutes.kt
+app/src/main/res/values-ar/strings.xml
+app/src/main/res/values-ja/strings.xml
+app/src/main/res/values-ko-rKR/strings.xml
+app/src/main/res/values-ru/strings.xml
+app/src/main/res/values-zh-rTW/strings.xml
+app/src/main/res/values-zh/strings.xml
+app/src/main/res/values/strings.xml
+app/src/release/generated/baselineProfiles/baseline-prof.txt
+app/src/release/generated/baselineProfiles/startup-prof.txt
+app/src/test/java/me/rerere/rikkahub/data/ai/transformers/TimeReminderTransformerTest.kt
+app/src/test/java/me/rerere/rikkahub/service/ChatServiceTest.kt
+common/src/main/java/me/rerere/common/js/QuickJSFetch.kt
+gradle/libs.versions.toml
+gradle/wrapper/gradle-wrapper.properties
+locale-tui/CLAUDE.md
+settings.gradle.kts
+speech/src/main/java/me/rerere/tts/controller/TtsController.kt
+speech/src/main/java/me/rerere/tts/provider/providers/GroqTTSProvider.kt
+speech/src/main/java/me/rerere/tts/provider/providers/QwenTTSProvider.kt
+workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt
+workspace/src/main/java/me/rerere/workspace/WorkspaceManager.kt
+workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt
+
+== merge messages ==
+CONFLICT (modify/delete): .agents/skills/claude-api/SKILL.md deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of .agents/skills/claude-api/SKILL.md left in tree.
+CONFLICT (modify/delete): .github/workflows/daily-build.yml deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of .github/workflows/daily-build.yml left in tree.
+Auto-merging README.md
+CONFLICT (content): Merge conflict in README.md
+CONFLICT (modify/delete): README_ZH_CN.md deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of README_ZH_CN.md left in tree.
+CONFLICT (modify/delete): README_ZH_TW.md deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of README_ZH_TW.md left in tree.
+Auto-merging ai/src/main/java/me/rerere/ai/provider/Provider.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/Provider.kt
+Auto-merging ai/src/main/java/me/rerere/ai/provider/ProviderSetting.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/ProviderSetting.kt
+Auto-merging ai/src/main/java/me/rerere/ai/provider/providers/claude/ClaudeProvider.kt
+Auto-merging ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleProvider.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleProvider.kt
+Auto-merging ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleStreamDecoder.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleStreamDecoder.kt
+Auto-merging ai/src/main/java/me/rerere/ai/provider/providers/openai/ChatCompletionsAPI.kt
+Auto-merging ai/src/main/java/me/rerere/ai/provider/providers/openai/ResponseAPI.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/provider/providers/openai/ResponseAPI.kt
+Auto-merging ai/src/main/java/me/rerere/ai/registry/ModelRegistry.kt
+CONFLICT (content): Merge conflict in ai/src/main/java/me/rerere/ai/registry/ModelRegistry.kt
+Auto-merging ai/src/main/java/me/rerere/ai/ui/Message.kt
+Auto-merging ai/src/main/java/me/rerere/ai/ui/UIMessagePart.kt
+Auto-merging ai/src/main/java/me/rerere/ai/util/Request.kt
+Auto-merging ai/src/test/java/me/rerere/ai/provider/providers/openai/ChatCompletionsRequestMessageTest.kt
+Auto-merging ai/src/test/java/me/rerere/ai/provider/providers/openai/ResponseApiStreamDecoderTest.kt
+CONFLICT (content): Merge conflict in ai/src/test/java/me/rerere/ai/provider/providers/openai/ResponseApiStreamDecoderTest.kt
+Auto-merging ai/src/test/java/me/rerere/ai/registry/ModelRegistryTest.kt
+CONFLICT (content): Merge conflict in ai/src/test/java/me/rerere/ai/registry/ModelRegistryTest.kt
+Auto-merging app/build.gradle.kts
+Auto-merging app/schemas/me.rerere.rikkahub.data.db.AppDatabase/25.json
+CONFLICT (add/add): Merge conflict in app/schemas/me.rerere.rikkahub.data.db.AppDatabase/25.json
+Auto-merging app/src/main/AndroidManifest.xml
+CONFLICT (content): Merge conflict in app/src/main/AndroidManifest.xml
+Auto-merging app/src/main/java/me/rerere/rikkahub/RikkaHubApp.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/RikkaHubApp.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/RouteActivity.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/RouteActivity.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/ai/mcp/McpManager.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/ai/mcp/McpSessionRegistry.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/ai/tools/SkillsTools.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/ai/tools/SkillsTools.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/ai/tools/WorkspaceTools.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/ai/tools/WorkspaceTools.kt
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/AskUserTool.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/AskUserTool.kt left in tree.
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/JavascriptTool.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/JavascriptTool.kt left in tree.
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/ai/transformers/TimeReminderTransformer.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/ai/transformers/WorkspaceReminderTransformer.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/ai/transformers/WorkspaceReminderTransformer.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/datastore/DefaultProviders.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/datastore/DefaultProviders.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/db/dao/ConversationDAO.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/db/dao/ConversationDAO.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/db/dao/MessageNodeDAO.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/db/dao/MessageNodeDAO.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/db/dao/WorkspaceDAO.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/db/dao/WorkspaceDAO.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/db/entity/WorkspaceEntity.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/db/fts/MessageFtsManager.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/files/FilesManager.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/files/SkillManager.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/files/SkillManager.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/model/Assistant.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/model/Assistant.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/model/Conversation.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/repository/WorkspaceRepository.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/repository/WorkspaceRepository.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/sync/S3Sync.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/sync/S3Sync.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/di/AppModule.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/di/AppModule.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/di/DataSourceModule.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/di/DataSourceModule.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/di/RepositoryModule.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/di/RepositoryModule.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/service/ChatService.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/service/ChatService.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/service/ConversationSession.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/service/ConversationSession.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/ai/ChatInput.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/ai/ChatInput.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/ai/FilesPicker.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/ai/SearchPicker.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/ai/SearchPicker.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessageEditedFiles.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessageTools.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessageTools.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/message/tools/BuiltinToolUIs.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/richtext/HighlightCodeBlock.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/richtext/Markdown.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/richtext/MarkdownNew.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/richtext/SimpleHtmlBlock.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/ui/ChainOfThought.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/ui/ChainOfThought.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/components/ui/ErrorCard.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/components/ui/ErrorCard.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/hooks/ChatInputState.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/hooks/ChatInputState.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/AssistantPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantBasicPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantBasicPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantPromptPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantPromptPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ConversationList.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/QuickMessagesPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillDetailPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillDetailVM.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsVM.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsVM.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailVM.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailVM.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceFileEditorPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceFileEditorPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspacePage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspacePage.kt
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalPage.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalPage.kt left in tree.
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSession.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSession.kt left in tree.
+CONFLICT (modify/delete): app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSessionManager.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSessionManager.kt left in tree.
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/imggen/ImgGenPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/imggen/ImgGenPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/imggen/ImgGenVM.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/search/SearchVM.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/search/SearchVM.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingAboutPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingFilesPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingFilesPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingMcpPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingModelPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingModelPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingPreferencesGeneralPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderDetailPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderDetailPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingSearchPage.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingSearchPage.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/components/ProviderConfigure.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/ui/pages/setting/components/TTSProviderConfigure.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/utils/AIIconMatcher.kt
+Auto-merging app/src/main/java/me/rerere/rikkahub/web/routes/ConversationRoutes.kt
+CONFLICT (content): Merge conflict in app/src/main/java/me/rerere/rikkahub/web/routes/ConversationRoutes.kt
+Auto-merging app/src/main/res/values-ar/strings.xml
+CONFLICT (add/add): Merge conflict in app/src/main/res/values-ar/strings.xml
+Auto-merging app/src/main/res/values-ja/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-ja/strings.xml
+Auto-merging app/src/main/res/values-ko-rKR/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-ko-rKR/strings.xml
+Auto-merging app/src/main/res/values-ru/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-ru/strings.xml
+Auto-merging app/src/main/res/values-zh-rTW/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-zh-rTW/strings.xml
+Auto-merging app/src/main/res/values-zh/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values-zh/strings.xml
+Auto-merging app/src/main/res/values/strings.xml
+CONFLICT (content): Merge conflict in app/src/main/res/values/strings.xml
+CONFLICT (modify/delete): app/src/release/generated/baselineProfiles/baseline-prof.txt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/release/generated/baselineProfiles/baseline-prof.txt left in tree.
+CONFLICT (modify/delete): app/src/release/generated/baselineProfiles/startup-prof.txt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of app/src/release/generated/baselineProfiles/startup-prof.txt left in tree.
+Auto-merging app/src/test/java/me/rerere/rikkahub/data/ai/transformers/TimeReminderTransformerTest.kt
+CONFLICT (content): Merge conflict in app/src/test/java/me/rerere/rikkahub/data/ai/transformers/TimeReminderTransformerTest.kt
+Auto-merging app/src/test/java/me/rerere/rikkahub/service/ChatServiceTest.kt
+CONFLICT (content): Merge conflict in app/src/test/java/me/rerere/rikkahub/service/ChatServiceTest.kt
+Auto-merging common/src/main/java/me/rerere/common/js/QuickJSFetch.kt
+CONFLICT (content): Merge conflict in common/src/main/java/me/rerere/common/js/QuickJSFetch.kt
+Auto-merging gradle/libs.versions.toml
+CONFLICT (content): Merge conflict in gradle/libs.versions.toml
+Auto-merging gradle/wrapper/gradle-wrapper.properties
+CONFLICT (content): Merge conflict in gradle/wrapper/gradle-wrapper.properties
+Auto-merging highlight/src/main/java/me/rerere/highlight/Highlighter.kt
+CONFLICT (modify/delete): locale-tui/CLAUDE.md deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of locale-tui/CLAUDE.md left in tree.
+Auto-merging search/build.gradle.kts
+Auto-merging search/src/main/java/me/rerere/search/ExaSearchService.kt
+Auto-merging search/src/main/java/me/rerere/search/SearchService.kt
+Auto-merging settings.gradle.kts
+CONFLICT (content): Merge conflict in settings.gradle.kts
+Auto-merging speech/src/main/java/me/rerere/tts/controller/TtsController.kt
+CONFLICT (content): Merge conflict in speech/src/main/java/me/rerere/tts/controller/TtsController.kt
+Auto-merging speech/src/main/java/me/rerere/tts/provider/TTSProviderSetting.kt
+Auto-merging speech/src/main/java/me/rerere/tts/provider/providers/GroqTTSProvider.kt
+CONFLICT (content): Merge conflict in speech/src/main/java/me/rerere/tts/provider/providers/GroqTTSProvider.kt
+Auto-merging speech/src/main/java/me/rerere/tts/provider/providers/QwenTTSProvider.kt
+CONFLICT (content): Merge conflict in speech/src/main/java/me/rerere/tts/provider/providers/QwenTTSProvider.kt
+Auto-merging speech/src/main/java/me/rerere/tts/provider/providers/XAITTSProvider.kt
+CONFLICT (modify/delete): workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt left in tree.
+Auto-merging workspace/src/main/java/me/rerere/workspace/WorkspaceManager.kt
+CONFLICT (content): Merge conflict in workspace/src/main/java/me/rerere/workspace/WorkspaceManager.kt
+CONFLICT (modify/delete): workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt deleted in HEAD and modified in up-2.5.5.  Version up-2.5.5 of workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt left in tree.
+
+== upstream commits (2.4.14..2.5.5) ==
+6c903feb chore: bump version to 2.5.5 (190)
+db1ce811 refactor(ui): 搜索选择器改用 MD3 分段列表，服务商页返回键回到上一页
+426ede84 chore: update dependencies
+53f224b1 feat(ui): 新增 ExpressivePopup 组件
+7f17dcc8 feat(skills): 新增内置技能 skill-creator
+3b346748 feat(skills): 支持内置技能，并对技能元数据做转义和限长
+9f02586d fix(skills): 保存技能文件失败时不再崩溃，GitHub 导入按字节保存避免二进制文件损坏
+44236d7b chore: 升级依赖并调高输入框玻璃效果透明度
+f099cd40 feat(skills): 技能页面支持按名称和描述搜索
+ed3569c7 fix(workspace): 文件编辑器不再将全文存入 saved state，修复大文件切后台崩溃 (#1953)
+82c339c1 refactor(ui): 统一列表 item 的操作与拖拽排序交互
+8b696c0c fix(mcp): 忽略名称为空的自定义请求头，修复连接报错 name is empty (#1949)
+158f1f68 chore: 更新混元配置
+233e095a feat(i18n): 新增阿拉伯语支持，locale-tui 支持术语表与重新翻译
+6719c301 chore(i18n): 补全缺失的翻译
+7508eee9 feat(ui): 适配 RTL 布局下的方向图标
+598b4efa feat(locale-tui): 新增 translate-missing 命令批量补全缺失翻译
+70b382f5 fix(settings): 修复读取失败时设置被意外重置为默认值
+b9c0d3b7 feat(debug): 新增数据恢复页，从聊天记录恢复缺失的助手
+7263dd36 chore: bump to 2.5.4
+54aa8114 fix(favorite): 修复收藏页侧滑删除失效
+5ac149b9 fix(openai): Responses API 工具参数事件缺失 item_id 时回退到 call_id/output_index (#1948)
+2cf09d2a fix(ui): 修复流式输出时思考步骤节点图标显示黑底 (#1946)
+324b337b fix: 避免代码块行号被复制
+4391d5a5 fix(google): 过滤工具参数中不兼容的 propertyNames 字段
+068103dd chore: mimo v2.6注册
+94504b5c Update DashScope reasoning parameter
+40426e93 chore: chat completions接口关闭思考传none
+42517943 docs: 移除PR相关内容，不再接受PR
+6adc0cf1 chore: bump to 2.5.3
+21448350 feat: 工作区支持长按多选导出
+b7f06db1 fix(ui): 修复思考步骤节点在半透明气泡下显示背景方块
+c3d6867c chore: 新增step-5模型注册
+458c16df feat: fork 对话标题自动使用原会话标题加序号
+4a3eefc1 fix: preserve conversation state across session switches
+445341e9 fix: restore favorites correctly after undoing deletion
+6e98691c fix: 移除ChatCompletionsAPI tool 消息多出来的 name 属性
+51a33198 chore: bump haze version
+7c1629d0 fix: speed up image crop confirmation (#1892)
+64319122 chore: 移除小马算力默认提供商
+a7850967 fix: 修复内联代码连字
+c8853531 fix(quickjs): 迁移到 quickjs-kt 并修复资源泄露
+5078ce19 Refresh MiniMax regional and TTS defaults (#1911)
+7ee13f2a feat: 支持blur/glass 2种输入栏效果
+9a35e3f2 chore: 升级haze版本
+3428c60b chore: bump to 2.5.2
+d47d13a6 fix: 完善所有语言的重新生成消息确认提示
+8e304bb1 feat: 火山引擎TTS支持
+bd936caa fix: 修复部分非聊天请求不带 session id 头的问题
+d6ba728e chore: 更新依赖项
+bc9d2582 chore: 修复误删 lib.versions.toml
+288a034c chore: 更新依赖
+2689e753 feat: 支持读取AGENTS.md
+46cacf23 chore: 注册deepseek-flash
+a9b35ba2 chore: bump to 2.5.1
+513b784c feat: add translator shortcut and unify intent navigation
+42b933d8 feat: add DEV badge to debug launcher icon
+6e0aa7d4 fix(chat): 允许工具执行完成前打开调用详情
+7038e981 feat: 工作区html/svg支持预览
+03246406 feat(workspace): 新增 Shell 兼容模式并调整基础信息页布局
+a7ee362f fix(theme): 修复退出工作区终端后系统栏图标颜色异常
+8b3e094b docs: 新增apimart赞助商，移除ack ai
+7dd2b3f8 docs: 新增apimart赞助商
+5bf6d8c2 docs: 新增apimart赞助商
+7b92f89e fix: 禁用代码块连字特性
+fcb04126 fix(web): support multiple selections in ask_user (#1654)
+77a58c2c fix: 修复统计页面遇到不合法 json 数据崩溃问题
+019c46ae chore: 添加/skills 到工作区免强制审批的可写安全区列表
+1a1e672e fix: 支持模型名/提供商名字输入空格，只在保存时去除收尾空格
+3896b6d6 feat: 图片生成页支持长按多选
+45275025 chore: 上下文限制支持 1~19 的值，并调整了相关配置文案
+05a85a09 chore: ask_user 工具所有选项都支持自定义文本回复
+20e552f9 fix: 添加X-Session-ID 头，并补全 opencode session 头支持
+dee88dca fix(chat): don't crash when workspace_edit_file input is not a JSON object (#1874)
+5b4d7895 feat: 支持自定义时间提醒间隔
+ab07ac1f feat(ai): 注册支持多模态的 DeepSeek V4.1 Flash
+3d75f83f fix(web-ui): 修复选择模型弹窗厂商标签堆叠 (#1871)
+12ee935e chore: bump to 2.5.0
+e5247be0 chore: update deps
+f2f687f0 Refine web chat composer, pickers, and message alignment
+55506496 fix: 修复连续工具审批丢失及取消状态误标
+a61d116d feat: 支持自定义 response api路径
+74397a32 chore: 新增 MaruCode 提供商
+a621e277 feat(chat): add voice mode with queued input and optional TTS
+580e05d6 feat(asr): support server VAD and Volcengine bidirectional streaming
+66de8b30 feat: 消息发送队列
+097cdb90 refactor: centralize chat tool assembly in ChatToolFactory
+7b76847f fix: prevent keyboard flicker when moving conversations
+5902feab fix: allow image-only messages without empty text parts
+104040df feat: improve terminal tabs and merge navigation into tab bar
+1d86b3c1 fix: prevent terminal keyboard gesture and resize issues
+ab8b6cc8 fix(ai): move provider blocking work to IO dispatcher
+a8f8c3a1 Preserve Exa freshness evidence in web search (#1854)
+b153028d chore: bump to 2.4.17
+aac5e43e feat: 工作区文件管理支持显示图片文件缩略图
+5736c05e fix: 修复代码块覆盖导出残留旧内容
+c73f8972 chore: 新增gpt 6到注册表
+5cdab947 fix: 为opencode端点添加x-opencode-session头
+0f2c495b feat(search): 支持切换当前助手与全部助手搜索
+4b36640a fix: 恢复图片选择器的文件浏览入口
+540b9dfa fix(backup): 使用一致性快照并在启动时安全恢复备份
+08c2648b chore: 移除记忆id显示
+ec20570b fix(i18n): 补全 TTS 播放倍速本地化
+4309fdfe chore: bump to 2.4.16
+883bde7d refactor(settings): 移动 TTS 默认播放倍速设置
+d3a53e0a fix: 改进图片选择，使用PickVisualMedia替代
+41353567 feat: 支持关闭自动重试
+9365c297 fix: 支持配置快速模型思考级别，并移除单独的标题和建议模型配置
+5c217d2e fix: 默认关闭 HTML/SVG 内嵌预览
+1b9dd092 fix: 移除硅基流动余额查询
+f7869e35 fix: 修复 gemini mix server/client tool下的错误
+0651cad9 fix: round bubble opacity percentage
+1231b8af test: 修正加密 reasoning 的请求断言
+f6a5330f feat: trace-cli 支持 Google Interactions API
+8ea375a9 fix: 修复 cloudflare mcp 没有匹配到 oauth 的问题
+ef94834a chore: mcp仅使用 client sdk
+2f05019b chore: 改进 tts 重试判断
+5403bc96 fix: 改进 TTS 稳定性，支持自动重试
+5662945c chore: bump to 2.4.15
+7da69770 feat(settings): add scoped file cleanup
+9851d037 fix: gemini允许服务端工具和客户端工具同时使用
+b6df5f04 refactor: 改进oauth流程
+ecc6d910 chore: 简化claude api skill
+321443d8 fix(chat): keep actions visible for tool-only messages
+5b890d22 fix(ai): remove vision support from hy4
+7aa909b8 chore: 回滚输入栏折叠功能
+eba2e96c chore: update dependencies
+9687f97a build: 北京时间下午五点也触发自动构建
+8a9f4f0f chore: 新增抖音群加群信息

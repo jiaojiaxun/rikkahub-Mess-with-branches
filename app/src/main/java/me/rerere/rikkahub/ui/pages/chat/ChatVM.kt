@@ -70,6 +70,10 @@ class ChatVM(
     // 聊天输入状态 - 保存在 ViewModel 中避免 TransactionTooLargeException
     val inputState = ChatInputState()
 
+    val voiceSession = VoiceSessionController(viewModelScope, context::getString) {
+        chatService.enqueueVoiceMessage(_conversationId, it)
+    }
+
     // 异步任务 (从ChatService获取，响应式)
     val conversationJob: StateFlow<Job?> =
         chatService
@@ -98,6 +102,7 @@ class ChatVM(
     }
 
     override fun onCleared() {
+        voiceSession.stop()
         super.onCleared()
         // 移除对话引用
         chatService.removeConversationReference(_conversationId)
@@ -123,6 +128,17 @@ class ChatVM(
     fun dismissError(id: Uuid) = chatService.dismissError(id)
 
     fun clearAllErrors() = chatService.clearAllErrors()
+
+    val messageQueue = chatService.getMessageQueueFlow(_conversationId)
+
+    fun removeQueuedMessage(id: Uuid) = chatService.removeQueuedMessage(_conversationId, id)
+
+    fun beginEditQueuedMessage(id: Uuid) = chatService.beginEditQueuedMessage(_conversationId, id)
+
+    fun finishEditQueuedMessage(id: Uuid, parts: List<UIMessagePart>?) =
+        chatService.finishEditQueuedMessage(_conversationId, id, parts)
+
+    fun resumeMessageQueue() = chatService.resumeMessageQueue(_conversationId)
 
     // 生成完成
     val generationDoneFlow: SharedFlow<Uuid> = chatService.generationDoneFlow
@@ -316,12 +332,13 @@ class ChatVM(
 
     fun updatePinnedStatus(conversation: Conversation) {
         viewModelScope.launch {
-            conversationRepo.togglePinStatus(conversation.id)
+            chatService.toggleConversationPinned(conversation.id)
         }
     }
 
     fun moveConversationToAssistant(conversation: Conversation, targetAssistantId: Uuid) {
         viewModelScope.launch {
+<<<<<<< HEAD
             val conversationFull = conversationRepo.getConversationById(conversation.id) ?: return@launch
             // Folders are per-assistant groupings; after switching assistant the old folder is
             // not visible under the new one, so clear the assignment to avoid losing the chat.
@@ -335,11 +352,11 @@ class ChatVM(
             // the old persona's behaviour, not this one's. Persistent "Always Allow" grants
             // stay (they were granted globally) but ChatScope is reset.
             me.rerere.rikkahub.data.ai.tools.ToolApprovalAllowList.clearChat(conversation.id)
+=======
+            chatService.moveConversationToAssistant(conversation.id, targetAssistantId)
+>>>>>>> up-2.5.5
             if (conversation.id == _conversationId) {
-                chatService.saveConversation(_conversationId, updatedConversation)
                 settingsStore.updateAssistant(targetAssistantId)
-            } else {
-                conversationRepo.updateConversation(updatedConversation)
             }
         }
     }

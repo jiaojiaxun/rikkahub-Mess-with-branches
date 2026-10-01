@@ -163,10 +163,7 @@ fun Route.conversationRoutes(
         // POST /api/conversations/{id}/pin - Toggle pinned status
         post("/{id}/pin") {
             val uuid = call.parameters["id"].toUuid("conversation id")
-            val conversation = conversationRepo.getConversationById(uuid)
-                ?: throw NotFoundException("Conversation not found")
-
-            chatService.saveConversation(uuid, conversation.copy(isPinned = !conversation.isPinned))
+            chatService.toggleConversationPinned(uuid)
             call.respond(HttpStatusCode.OK, mapOf("status" to "updated"))
         }
 
@@ -239,6 +236,7 @@ fun Route.conversationRoutes(
                 throw BadRequestException("Assistant not found")
             }
 
+<<<<<<< HEAD
             val conversation = conversationRepo.getConversationById(uuid)
                 ?: throw NotFoundException("Conversation not found")
 
@@ -246,6 +244,9 @@ fun Route.conversationRoutes(
             // because they were authorised under the previous assistant's behaviour.
             me.rerere.rikkahub.data.ai.tools.ToolApprovalAllowList.clearChat(uuid)
             chatService.saveConversation(uuid, conversation.copy(assistantId = targetAssistantId))
+=======
+            chatService.moveConversationToAssistant(uuid, targetAssistantId)
+>>>>>>> up-2.5.5
             call.respond(HttpStatusCode.OK, mapOf("status" to "updated"))
         }
 
@@ -385,14 +386,13 @@ fun Route.conversationRoutes(
             val id = call.parameters["id"] ?: return@sse
             val uuid = runCatching { Uuid.parse(id) }.getOrNull() ?: return@sse
 
-            chatService.initializeConversation(uuid)
             chatService.addConversationReference(uuid)
-
-            heartbeat {
-                period = 1.seconds
-            }
-
             try {
+                chatService.initializeConversation(uuid)
+                heartbeat {
+                    period = 1.seconds
+                }
+
                 var sequence = 0L
                 var previousDto: ConversationDto? = null
 

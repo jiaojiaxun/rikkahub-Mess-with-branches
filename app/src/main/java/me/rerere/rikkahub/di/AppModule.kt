@@ -2,10 +2,15 @@ package me.rerere.rikkahub.di
 
 import kotlinx.serialization.json.Json
 import me.rerere.rikkahub.AppScope
+<<<<<<< HEAD
 import me.rerere.rikkahub.data.ai.AILoggingManager
 import me.rerere.rikkahub.data.ai.tools.LocalTools
 import me.rerere.rikkahub.data.ai.tools.local.BiometricResultBuffer
 import me.rerere.rikkahub.data.ai.tools.local.CameraResultBuffer
+=======
+import me.rerere.rikkahub.data.ai.tools.local.LocalTools
+import me.rerere.rikkahub.data.ai.tools.ChatToolFactory
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.data.event.AppEventBus
 import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.data.ai.TranslationHandler
@@ -114,6 +119,18 @@ val appModule = module {
     single { ModelContextLengthResolver(get()) }
 
     single {
+        ChatToolFactory(
+            json = get(),
+            memoryRepository = get(),
+            conversationRepository = get(),
+            localTools = get(),
+            mcpManager = get(),
+            skillManager = get(),
+            workspaceRepository = get(),
+        )
+    }
+
+    single {
         ChatService(
             context = get(),
             appScope = get(),
@@ -121,15 +138,18 @@ val appModule = module {
             settingsStore = get(),
             conversationRepo = get(),
             memoryRepository = get(),
-            generationHandler = get(),
+            generationLoop = get(),
             translationHandler = get(),
             templateTransformer = get(),
             providerManager = get(),
-            localTools = get(),
+            chatToolFactory = get(),
             mcpManager = get(),
             filesManager = get(),
+<<<<<<< HEAD
             skillManager = get(),
             toolApprovalPreferences = get(),
+=======
+>>>>>>> up-2.5.5
             workspaceRepository = get(),
             folderRepository = get(),
             networkTranslator = get(),

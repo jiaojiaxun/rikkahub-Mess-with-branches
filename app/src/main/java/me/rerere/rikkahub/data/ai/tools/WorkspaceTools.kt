@@ -254,6 +254,71 @@ private fun kotlinx.serialization.json.JsonObject.workspacePath(name: String): S
     return normalized
 }
 
+<<<<<<< HEAD
+=======
+private fun statEntryCommand(path: String): String {
+    val pathArg = path.shellQuote()
+    return """
+        if [ -d $pathArg ]; then entry_type=d; else entry_type=f; fi
+        entry_size=${'$'}(stat -c '%s' -- $pathArg) || exit 1
+        entry_mtime=${'$'}(stat -c '%Y' -- $pathArg) || exit 1
+        printf '%s\0%s\0%s\0%s\0' "${'$'}entry_type" "${'$'}entry_size" "${'$'}entry_mtime" $pathArg
+    """.trimIndent()
+}
+
+private fun String.parseRootfsEntry(): WorkspaceFileEntry =
+    parseRootfsEntries().singleOrNull() ?: error("Invalid file metadata output")
+
+private fun String.parseRootfsEntries(): List<WorkspaceFileEntry> {
+    val fields = split('\u0000').dropLastWhile { it.isEmpty() }
+    require(fields.size % 4 == 0) { "Invalid file metadata output" }
+    return fields.chunked(4).map { chunk ->
+        val type = chunk[0]
+        val size = chunk[1].toLongOrNull() ?: error("Invalid file size: ${chunk[1]}")
+        val updatedAt = (chunk[2].toLongOrNull() ?: error("Invalid file mtime: ${chunk[2]}")) * 1_000L
+        val path = chunk[3]
+        WorkspaceFileEntry(
+            path = path,
+            name = path.rootfsName(),
+            isDirectory = type == "d",
+            sizeBytes = size,
+            updatedAt = updatedAt,
+        )
+    }
+}
+
+private fun kotlinx.serialization.json.JsonObject.absolutePath(name: String): String {
+    val path = string(name)?.replace('\\', '/')?.trim() ?: error("$name is required")
+    require(path.isNotBlank()) { "$name is required" }
+    require(path.startsWith("/")) { "$name must be an absolute path inside Rootfs" }
+    require(!path.contains('\u0000')) { "$name contains invalid character" }
+    return path
+}
+
+// 免强制审批的可写安全区: 工作区文件目录、临时目录和技能目录
+private val WRITABLE_ROOT_PREFIXES = listOf("/workspace", "/tmp", "/skills")
+
+private fun kotlinx.serialization.json.JsonElement.pathOutsideWritableRoots(name: String): Boolean =
+    runCatching {
+        jsonObject.absolutePath(name).isOutsideWritableRoots()
+    }.getOrDefault(true)
+
+private fun String.isOutsideWritableRoots(): Boolean {
+    val normalized = trimEnd('/').ifBlank { "/" }
+    return WRITABLE_ROOT_PREFIXES.none { prefix ->
+        normalized == prefix || normalized.startsWith("$prefix/")
+    }
+}
+
+private fun String.rootfsName(): String =
+    trimEnd('/').substringAfterLast('/').ifBlank { "/" }
+
+private fun String.shellQuote(): String =
+    "'" + replace("'", "'\"'\"'") + "'"
+
+private fun Boolean.shellFlag(): Int = if (this) 1 else 0
+
+>>>>>>> up-2.5.5
 private fun JsonObjectBuilder.putPathProperty(required: Boolean) {
     put("path", buildJsonObject {
         put("type", "string")

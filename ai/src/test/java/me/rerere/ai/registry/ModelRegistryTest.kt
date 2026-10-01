@@ -123,5 +123,51 @@ class ModelRegistryTest {
             reasonerAbilities,
             ModelRegistry.MODEL_ABILITIES.getData("deepseek-v4-pro")
         )
+<<<<<<< HEAD
+=======
+        assertEquals(
+            listOf(Modality.TEXT, Modality.IMAGE),
+            ModelRegistry.MODEL_INPUT_MODALITIES.getData("deepseek-v4-flash-vision-exp")
+        )
+        assertEquals(
+            reasonerAbilities,
+            ModelRegistry.MODEL_ABILITIES.getData("deepseek-v4-flash-vision-exp")
+        )
+        assertEquals(1_000_000, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("deepseek-v4-flash"))
+        assertEquals(1_000_000, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("deepseek-v4-pro"))
+        assertEquals(1_000_000, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("deepseek-v4-flash-vision-exp"))
+        assertEquals(null, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("deepseek-v3"))
+    }
+
+    @Test
+    fun testStep5() {
+        val visionInput = listOf(Modality.TEXT, Modality.IMAGE)
+        val toolReasoning = listOf(ModelAbility.TOOL, ModelAbility.REASONING)
+        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("step-5"))
+        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("step-5-preview"))
+        assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("step-5"))
+        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("step-3"))
+    }
+
+    @Test
+    fun testContextLengthDefault() {
+        assertEquals(null, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("unknown-model-xyz"))
+        assertEquals(null, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("gpt-4o"))
+        assertEquals(null, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("claude-4-sonnet"))
+    }
+
+    @Test
+    fun testContextLengthDsl() {
+        val model = defineModel {
+            tokens("custom", "ctx")
+            contextLength(1_000_000)
+        }
+        assertEquals(1_000_000, model.contextLength)
+
+        val defaultModel = defineModel {
+            tokens("custom", "default")
+        }
+        assertEquals(null, defaultModel.contextLength)
+>>>>>>> up-2.5.5
     }
 }

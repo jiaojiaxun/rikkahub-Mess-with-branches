@@ -12,6 +12,9 @@ import me.rerere.rikkahub.data.files.SkillManager
 import me.rerere.rikkahub.data.files.SkillMetadata
 import me.rerere.rikkahub.data.files.SkillPaths
 
+// 与 Agent Skills 规范的 description 上限一致
+private const val MAX_SKILL_DESCRIPTION_LENGTH = 1024
+
 fun createSkillTools(
     enabledSkills: Set<String>,
     allSkills: List<SkillMetadata>,
@@ -45,6 +48,7 @@ fun createSkillTools(
             """.trimIndent(),
             systemPrompt = { _, _ ->
                 buildString {
+<<<<<<< HEAD
                     // Auto-load skills with `auto_load: true` in their SKILL.md frontmatter:
                     // their body (auto_load_path file if set, else SKILL.md) is inlined into
                     // the system prompt every turn, no `use_skill` call needed. Use for the
@@ -89,6 +93,17 @@ fun createSkillTools(
                         }
                         append("</available_skills>")
                         appendLine()
+=======
+                    appendLine("**Skills**")
+                    appendLine("You have access to the following skills. Use the `use_skill` tool to load a skill's instructions when the user's request matches.")
+                    appendLine("<available_skills>")
+                    available.forEach { skill ->
+                        appendLine("  <skill>")
+                        // 技能可能来自第三方导入，转义并限长，防止 name/description 闭合标签注入任意系统提示
+                        appendLine("    <name>${skill.name.escapeXml()}</name>")
+                        appendLine("    <description>${skill.description.take(MAX_SKILL_DESCRIPTION_LENGTH).escapeXml()}</description>")
+                        appendLine("  </skill>")
+>>>>>>> up-2.5.5
                     }
                 }
             },
@@ -147,6 +162,7 @@ fun createSkillTools(
                     )
                 )
                 val name = it.jsonObject["name"]?.jsonPrimitive?.content
+<<<<<<< HEAD
                     ?: return@Tool err(
                         "missing_required_arg",
                         "use_skill requires a 'name' argument identifying which skill to load.",
@@ -156,6 +172,21 @@ fun createSkillTools(
                         "skill_not_enabled",
                         "Skill '$name' is not in the enabled-skills set for this assistant.",
                     )
+=======
+                    ?: error("name is required")
+                // 模型可能照抄系统提示中转义后的名称，两种形式都接受
+                val skill = available.firstOrNull { skill -> skill.name == name || skill.name.escapeXml() == name }
+                    ?: error("Skill '$name' is not available. Available skills: ${available.joinToString { it.name }}")
+                val path = it.jsonObject["path"]?.jsonPrimitive?.content
+                val content = if (path.isNullOrBlank()) {
+                    require(skill.skillFile.exists()) { "Skill '$name' not found" }
+                    SkillFrontmatterParser.extractBody(skill.skillFile.readText())
+                } else {
+                    val target = SkillPaths.resolveSkillFile(skill.skillDir, path)
+                        ?: error("Path '$path' is outside the skill directory")
+                    require(target.exists()) { "File '$path' not found in skill '$name'" }
+                    target.readText()
+>>>>>>> up-2.5.5
                 }
                 // Resolve through the skill's own directory rather than looking it up by
                 // name. A skill whose frontmatter `name:` differs from its folder name
@@ -199,4 +230,15 @@ fun createSkillTools(
             }
         )
     )
+}
+
+private fun String.escapeXml(): String = buildString(length) {
+    for (c in this@escapeXml) {
+        when (c) {
+            '&' -> append("&amp;")
+            '<' -> append("&lt;")
+            '>' -> append("&gt;")
+            else -> append(c)
+        }
+    }
 }

@@ -1,16 +1,23 @@
 package me.rerere.rikkahub.service
 
 import android.app.Application
+<<<<<<< HEAD
 import android.content.Context
 import android.os.SystemClock
+=======
+>>>>>>> up-2.5.5
 import android.util.Log
 import androidx.core.net.toUri
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.completeWith
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,11 +25,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
@@ -31,6 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+<<<<<<< HEAD
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.jsonObject
@@ -39,6 +43,10 @@ import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.core.Tool
 import me.rerere.ai.provider.Modality
 import me.rerere.ai.provider.BuiltInTools
+=======
+import me.rerere.ai.core.MessageRole
+import me.rerere.ai.core.ReasoningLevel
+>>>>>>> up-2.5.5
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelAbility
 import me.rerere.ai.provider.ProviderManager
@@ -48,7 +56,6 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.canResumeToolExecution
 import me.rerere.ai.ui.finishPendingTools
-import me.rerere.ai.ui.finishReasoning
 import me.rerere.ai.ui.isEmptyInputMessage
 import me.rerere.ai.ui.limitContext
 import me.rerere.common.android.Logging
@@ -58,7 +65,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
 import me.rerere.rikkahub.data.ai.GenerationChunk
-import me.rerere.rikkahub.data.ai.GenerationHandler
+import me.rerere.rikkahub.data.ai.GenerationLoop
 import me.rerere.rikkahub.data.ai.TranslationHandler
 import me.rerere.rikkahub.data.ai.ContextBudgetPlanner
 import me.rerere.rikkahub.data.ai.ContextCompactionPlanner
@@ -66,6 +73,7 @@ import me.rerere.rikkahub.data.ai.ContextCompactionPresentation
 import me.rerere.rikkahub.data.ai.CompactedMessageView
 import me.rerere.rikkahub.data.ai.ContextCompactionView
 import me.rerere.rikkahub.data.ai.mcp.McpManager
+<<<<<<< HEAD
 import me.rerere.rikkahub.data.ai.tools.LocalTools
 import me.rerere.rikkahub.data.translation.NetworkTranslator
 import me.rerere.rikkahub.data.translation.TranslationMode
@@ -75,6 +83,11 @@ import me.rerere.rikkahub.data.ai.tools.createWorkspaceTools
 import me.rerere.rikkahub.plugin.provider.PluginToolProvider
 import me.rerere.rikkahub.data.preferences.isWorkspaceToolName
 import me.rerere.rikkahub.data.files.SkillManager
+=======
+import me.rerere.rikkahub.data.ai.tools.ChatToolFactory
+import me.rerere.rikkahub.data.ai.tools.InvalidMcpServerNamesException
+import me.rerere.rikkahub.data.ai.tools.shouldUseExternalWebSearch
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.data.ai.transformers.Base64ImageToLocalFileTransformer
 import me.rerere.rikkahub.data.ai.transformers.DocumentAsPromptTransformer
 import me.rerere.rikkahub.data.ai.transformers.OcrTransformer
@@ -102,7 +115,11 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.ConversationCompaction
 import me.rerere.rikkahub.data.model.MessageNode
+<<<<<<< HEAD
 import me.rerere.rikkahub.data.model.AssistantAffectScope
+=======
+import me.rerere.rikkahub.data.model.localFileUrls
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.data.model.replaceRegexes
 import me.rerere.rikkahub.data.model.toMessageNode
 import me.rerere.rikkahub.data.repository.ConversationRepository
@@ -112,11 +129,15 @@ import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.web.BadRequestException
 import me.rerere.rikkahub.web.NotFoundException
 import me.rerere.rikkahub.utils.applyPlaceholders
+<<<<<<< HEAD
 import java.time.Instant
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+=======
+import java.util.Locale
+>>>>>>> up-2.5.5
 import kotlin.uuid.Uuid
 
 private const val TAG = "ChatService"
@@ -163,14 +184,21 @@ private fun Throwable.isContextLimitError(): Boolean {
 
 internal fun backgroundTextGenerationParams(
     model: Model,
+<<<<<<< HEAD
     reasoningLevel: ReasoningLevel = ReasoningLevel.OFF,
+=======
+    conversationId: Uuid,
+    reasoningLevel: ReasoningLevel = ReasoningLevel.AUTO,
+>>>>>>> up-2.5.5
 ): TextGenerationParams = TextGenerationParams(
     model = model,
     reasoningLevel = reasoningLevel,
     customHeaders = model.customHeaders,
     customBody = model.customBodies,
+    sessionId = conversationId.toString(),
 )
 
+<<<<<<< HEAD
 /**
  * Resolve the compression model's usable context ceiling. The token-threshold setting is an
  * explicit user-controlled limit when that mode is selected, which also covers providers such
@@ -236,6 +264,25 @@ internal fun isStalledTurn(succeeded: Boolean, lastMessage: UIMessage?): Boolean
 internal fun shouldUseExternalWebSearch(assistant: Assistant, model: Model): Boolean {
     return assistant.enableWebSearch && BuiltInTools.Search !in model.tools
 }
+=======
+internal fun createForkConversation(
+    source: Conversation,
+    messageNodes: List<MessageNode>,
+    existingTitles: Set<String> = emptySet(),
+): Conversation = Conversation(
+    id = Uuid.random(),
+    assistantId = source.assistantId,
+    title = generateSequence(1) { it + 1 }
+        .map { "${source.title}($it)" }
+        .first { it !in existingTitles },
+    messageNodes = messageNodes,
+    customSystemPrompt = source.customSystemPrompt,
+    modeInjectionIds = source.modeInjectionIds,
+    lorebookIds = source.lorebookIds,
+    workspaceCwd = source.workspaceCwd,
+    folderId = source.folderId,
+)
+>>>>>>> up-2.5.5
 
 data class ChatError(
     val id: Uuid = Uuid.random(),
@@ -247,7 +294,7 @@ data class ChatError(
 )
 
 enum class ChatErrorSolution {
-    CheckTitleModelSettings,
+    CheckFastModelSettings,
 }
 
 private val inputTransformers by lazy {
@@ -275,15 +322,18 @@ class ChatService(
     private val settingsStore: SettingsStore,
     private val conversationRepo: ConversationRepository,
     private val memoryRepository: MemoryRepository,
-    private val generationHandler: GenerationHandler,
+    private val generationLoop: GenerationLoop,
     private val translationHandler: TranslationHandler,
     private val templateTransformer: TemplateTransformer,
     private val providerManager: ProviderManager,
-    private val localTools: LocalTools,
+    private val chatToolFactory: ChatToolFactory,
     val mcpManager: McpManager,
     private val filesManager: FilesManager,
+<<<<<<< HEAD
     private val skillManager: SkillManager,
     private val toolApprovalPreferences: me.rerere.rikkahub.data.preferences.ToolApprovalPreferences,
+=======
+>>>>>>> up-2.5.5
     private val workspaceRepository: WorkspaceRepository,
     private val folderRepository: FolderRepository,
     private val networkTranslator: NetworkTranslator,
@@ -292,9 +342,13 @@ class ChatService(
     // workspace 系统提示注入 (依赖 workspaceRepository, 故在类内构造)
     private val workspaceReminderTransformer = WorkspaceReminderTransformer(workspaceRepository)
 
-    // 统一会话管理
-    private val sessions = ConcurrentHashMap<Uuid, ConversationSession>()
-    private val _sessionsVersion = MutableStateFlow(0L)
+    private val sessionManager = ConversationSessionManager(
+        scope = appScope,
+        createInitialConversation = { id ->
+            Conversation.ofId(id, assistantId = settingsStore.settingsFlow.value.getCurrentAssistant().id)
+        },
+        onGenerationFinished = ::onSessionGenerationFinished,
+    )
 
     /**
      * Per-conversation mutex serialising state-mutating operations: handleToolApproval,
@@ -377,6 +431,7 @@ class ChatService(
     private val _generationDoneFlow = MutableSharedFlow<Uuid>()
     val generationDoneFlow: SharedFlow<Uuid> = _generationDoneFlow.asSharedFlow()
 
+<<<<<<< HEAD
     // 前台状态管理
     private val _isForeground = MutableStateFlow(false)
     val isForeground: StateFlow<Boolean> = _isForeground.asStateFlow()
@@ -480,32 +535,39 @@ class ChatService(
 
     // ---- 引用管理 ----
 
+=======
+    fun cleanup() = runCatching { sessionManager.cleanup() }
+
+    private fun onSessionGenerationFinished(session: ConversationSession, cause: Throwable?) {
+        if (cause != null) session.messageQueue.pause()
+        if (session.state.value.currentMessages.any { message ->
+                message.parts.any { it is UIMessagePart.Tool && it.isPending }
+            }) {
+            session.messageQueue.failReplyWaiters(context.getString(R.string.chat_page_voice_tool_approval))
+        }
+        appScope.launch { dispatchNextQueuedMessage(session.id) }
+    }
+
+    // 保留 UI/Web 的入口，生命周期和状态查询统一交给 SessionManager。
+>>>>>>> up-2.5.5
     fun addConversationReference(conversationId: Uuid) {
-        getOrCreateSession(conversationId).acquire()
+        sessionManager.acquire(conversationId)
     }
 
     fun removeConversationReference(conversationId: Uuid) {
-        sessions[conversationId]?.release()
+        sessionManager.release(conversationId)
     }
 
-    private fun launchWithConversationReference(
-        conversationId: Uuid,
-        block: suspend () -> Unit
-    ): Job = appScope.launch {
-        addConversationReference(conversationId)
-        try {
-            block()
-        } finally {
-            removeConversationReference(conversationId)
-        }
-    }
+    fun getConversationFlow(conversationId: Uuid): StateFlow<Conversation> =
+        sessionManager.getConversationFlow(conversationId)
 
-    // ---- 对话状态访问 ----
+    fun getGenerationJobStateFlow(conversationId: Uuid): Flow<Job?> =
+        sessionManager.getGenerationJobStateFlow(conversationId)
 
-    fun getConversationFlow(conversationId: Uuid): StateFlow<Conversation> {
-        return getOrCreateSession(conversationId).state
-    }
+    fun getProcessingStatusFlow(conversationId: Uuid): StateFlow<String?> =
+        sessionManager.getProcessingStatusFlow(conversationId)
 
+<<<<<<< HEAD
     fun getGenerationJobStateFlow(conversationId: Uuid): Flow<Job?> {
         val session = sessions[conversationId] ?: return flowOf(null)
         return session.generationJob
@@ -553,14 +615,121 @@ class ChatService(
                 newConversation = true
             ).updateCurrentMessages(assistant.presetMessages)
             updateConversation(conversationId, newConversation)
+=======
+    fun getConversationJobs(): Flow<Map<Uuid, Job?>> = sessionManager.getConversationJobs()
+
+    private fun launchGenerationJob(
+        conversationId: Uuid,
+        keepAliveInBackground: Boolean = true,
+        block: suspend () -> Unit,
+    ): Job {
+        if (!keepAliveInBackground) return appScope.launch(start = CoroutineStart.LAZY) { block() }
+
+        return appScope.launch(start = CoroutineStart.LAZY) {
+            val generationId = Uuid.random()
+            val foregroundStarted = ChatGenerationForegroundService.acquire(
+                context = context,
+                generationId = generationId,
+                conversationId = conversationId,
+            )
+            try {
+                block()
+            } finally {
+                if (foregroundStarted) {
+                    ChatGenerationForegroundService.release(context, generationId)
+                }
+            }
+        }
+    }
+
+    // ---- 初始化对话 ----
+
+    suspend fun initializeConversation(conversationId: Uuid) {
+        sessionManager.withSession(conversationId) { session ->
+            session.initialize {
+                conversationRepo.getConversationById(conversationId) ?: run {
+                    // 新建对话, 并添加预设消息
+                    val currentSettings = settingsStore.settingsFlowRaw.first()
+                    val assistant = currentSettings.getCurrentAssistant()
+                    Conversation.ofId(
+                        id = conversationId,
+                        assistantId = assistant.id,
+                        newConversation = true
+                    ).updateCurrentMessages(assistant.presetMessages)
+                }
+            }
+            settingsStore.updateAssistant(session.state.value.assistantId)
+>>>>>>> up-2.5.5
         }
     }
 
     // ---- 发送消息 ----
 
+    fun getMessageQueueFlow(conversationId: Uuid): StateFlow<MessageQueueState> =
+        sessionManager.getMessageQueueFlow(conversationId)
+
+    fun removeQueuedMessage(conversationId: Uuid, messageId: Uuid) {
+        sessionManager.get(conversationId)?.messageQueue?.remove(messageId)?.let(::cleanupQueuedAttachments)
+        dispatchNextQueuedMessage(conversationId)
+    }
+
+    fun beginEditQueuedMessage(conversationId: Uuid, messageId: Uuid): QueuedMessage? =
+        sessionManager.get(conversationId)?.messageQueue?.beginEdit(messageId)
+
+    fun finishEditQueuedMessage(
+        conversationId: Uuid,
+        messageId: Uuid,
+        parts: List<UIMessagePart>? = null
+    ) {
+        sessionManager.get(conversationId)?.messageQueue?.finishEdit(messageId, parts)
+            ?.let(::cleanupQueuedAttachments)
+        dispatchNextQueuedMessage(conversationId)
+    }
+
+    private fun cleanupQueuedAttachments(previous: QueuedMessage) {
+        val candidates = previous.parts.localFileUrls()
+        if (candidates.isEmpty()) return
+        appScope.launch {
+            try {
+                // 未打开的会话及未选中的分支也可能引用同一附件。
+                val persistedReferences =
+                    candidates.filter { conversationRepo.hasFileReference(it) }.toSet()
+                // 数据库查询挂起期间队列可能已推进，删除前重新读取内存引用。
+                val currentSessions = sessionManager.snapshot()
+                val unusedFiles = unreferencedQueuedAttachmentUrls(
+                    previous = previous,
+                    conversations = currentSessions.map { it.state.value },
+                    pendingMessages = currentSessions.flatMap {
+                        it.messageQueue.state.value.messages + listOfNotNull(it.submittingMessage)
+                    },
+                ) - persistedReferences
+                if (unusedFiles.isNotEmpty()) {
+                    filesManager.deleteChatFiles(unusedFiles.map { it.toUri() })
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                // 无法确认引用时保留文件，避免误删。
+                Log.w(TAG, "Failed to clean queued attachments", e)
+            }
+        }
+    }
+
+    fun resumeMessageQueue(conversationId: Uuid) {
+        sessionManager.get(conversationId)?.messageQueue?.resume()
+        dispatchNextQueuedMessage(conversationId)
+    }
+
     fun sendMessage(conversationId: Uuid, content: List<UIMessagePart>, answer: Boolean = true) {
         if (content.isEmptyInputMessage()) return
+        val session = sessionManager.getOrCreate(conversationId)
+        synchronized(session) {
+            if (session.messageQueue.state.value.messages.isEmpty()) session.messageQueue.resume()
+            session.messageQueue.enqueue(content, answer)
+            dispatchNextQueuedMessage(conversationId)
+        }
+    }
 
+<<<<<<< HEAD
         val session = getOrCreateSession(conversationId)
         session.processingStatus.value = "正在准备发送"
         val previousJob = session.getJob()
@@ -579,6 +748,50 @@ class ChatService(
                 if (previousGenerationWasActive) {
                     finishInterruptedPendingTools(conversationId)
                 }
+=======
+    /** Enqueue immediately; the result belongs to this item even after edits or later turns. */
+    fun enqueueVoiceMessage(conversationId: Uuid, text: String): Deferred<String?> {
+        val session = sessionManager.getOrCreate(conversationId)
+        val reply = CompletableDeferred<String?>()
+        synchronized(session) {
+            check(text.isNotBlank()) { context.getString(R.string.chat_page_voice_empty) }
+            check(!session.messageQueue.state.value.paused || session.messageQueue.state.value.messages.isEmpty()) {
+                context.getString(R.string.chat_page_voice_resume_queue)
+            }
+            check(session.state.value.currentMessages.none { message ->
+                message.parts.any { it is UIMessagePart.Tool && it.isPending }
+            }) { context.getString(R.string.chat_page_voice_tools_before_resume) }
+            if (session.messageQueue.state.value.messages.isEmpty()) session.messageQueue.resume()
+            session.messageQueue.enqueue(listOf(UIMessagePart.Text(text)), reply = reply)
+            dispatchNextQueuedMessage(conversationId)
+        }
+        return reply
+    }
+
+    private fun dispatchNextQueuedMessage(conversationId: Uuid): Job? {
+        val session = sessionManager.get(conversationId) ?: return null
+        synchronized(session) {
+            // A pending tool approval is still part of the current turn.
+            if (session.getJob() != null || session.state.value.currentMessages.any { message ->
+                    message.parts.any { it is UIMessagePart.Tool && it.isPending }
+                }) return null
+            val next = session.messageQueue.takeNext() ?: return null
+            session.submittingMessage = next
+            return sendQueuedMessage(session, next)
+        }
+    }
+
+    private fun sendQueuedMessage(session: ConversationSession, queued: QueuedMessage): Job {
+        val conversationId = session.id
+        val content = queued.parts
+        val answer = queued.answer
+        val job = launchGenerationJob(
+            conversationId = conversationId,
+            keepAliveInBackground = answer,
+        ) {
+            try {
+                finishInterruptedPendingTools(conversationId)
+>>>>>>> up-2.5.5
 
                 // The chat screen can be recreated before its asynchronous initialization
                 // finishes. Load the durable conversation before taking the snapshot used for
@@ -601,7 +814,12 @@ class ChatService(
                         parts = processedContent,
                     ).toMessageNode(),
                 )
+<<<<<<< HEAD
                 saveConversation(conversationId, withUser)
+=======
+                saveConversation(conversationId, newConversation)
+                session.submittingMessage = null
+>>>>>>> up-2.5.5
 
                 // Phase 16 — fast-path router. If the assistant has it enabled and the user's
                 // message matches a deterministic intent, run the matching tool and inject the
@@ -617,15 +835,37 @@ class ChatService(
                     handleMessageComplete(conversationId)
                 }
 
-                _generationDoneFlow.emit(conversationId)
+                queued.reply?.completeWith(runCatching {
+                    val messages = session.state.value.currentMessages
+                    check(!session.messageQueue.state.value.paused) { context.getString(R.string.chat_page_voice_generation_failed) }
+                    check(messages.none { message -> message.parts.any { it is UIMessagePart.Tool && it.isPending } }) {
+                        context.getString(R.string.chat_page_voice_tool_approval)
+                    }
+                    val previousIds = currentConversation.currentMessages.map { it.id }.toSet()
+                    messages.filter { it.id !in previousIds && it.role == MessageRole.ASSISTANT }
+                        .joinToString("\n") { it.toText() }
+                })
+                // Voice owns playback, including when its observer has already left the page.
+                // The ordinary autoplay collector must not read a late voice reply again.
+                if (queued.reply == null) _generationDoneFlow.emit(conversationId)
             } catch (e: Exception) {
+                queued.reply?.completeExceptionally(e)
                 e.printStackTrace()
+                if (e is CancellationException) throw e
+                session.messageQueue.pause()
                 addError(e, conversationId, title = context.getString(R.string.error_title_send_message))
             } finally {
                 releaseForegroundWork()
             }
         }
+        job.invokeOnCompletion { cause ->
+            if (cause != null) queued.reply?.completeExceptionally(cause)
+            synchronized(session) {
+                if (session.submittingMessage?.id == queued.id) session.submittingMessage = null
+            }
+        }
         session.setJob(job)
+        return job
     }
 
     /**
@@ -778,14 +1018,18 @@ class ChatService(
         conversationId: Uuid,
         message: UIMessage,
         regenerateAssistantMsg: Boolean = true
-    ) {
-        val session = getOrCreateSession(conversationId)
-        session.getJob()?.cancel()
+    ) = synchronized(sessionManager.getOrCreate(conversationId)) {
+        val session = sessionManager.getOrCreate(conversationId)
+        val previousJob = session.getJob()
 
         val releaseForegroundWork = foregroundWorkTracker.acquire()
         val job = appScope.launch {
             try {
+<<<<<<< HEAD
                 awaitForegroundWorkReady()
+=======
+                previousJob?.join()
+>>>>>>> up-2.5.5
                 val conversation = session.state.value
 
                 // Locate the message's node up front. indexOf returns -1 when the node is no
@@ -829,6 +1073,8 @@ class ChatService(
 
                 _generationDoneFlow.emit(conversationId)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                session.messageQueue.pause()
                 addError(e, conversationId, title = context.getString(R.string.error_title_regenerate_message))
             } finally {
                 releaseForegroundWork()
@@ -851,11 +1097,17 @@ class ChatService(
         approved: Boolean,
         reason: String = "",
         answer: String? = null,
+<<<<<<< HEAD
         scope: ApprovalScope = ApprovalScope.Once,
         toolName: String? = null,
     ) {
         val session = getOrCreateSession(conversationId)
         val convMutex = mutexFor(conversationId)
+=======
+    ) = synchronized(sessionManager.getOrCreate(conversationId)) {
+        val session = sessionManager.getOrCreate(conversationId)
+        val previousJob = session.getJob()
+>>>>>>> up-2.5.5
 
         // Snapshot the prior generation job BEFORE the appScope.launch below replaces it
         // via setJob. session.setJob runs synchronously after launch returns; the launched
@@ -890,6 +1142,7 @@ class ChatService(
         val releaseForegroundWork = foregroundWorkTracker.acquire()
         val job = appScope.launch {
             try {
+<<<<<<< HEAD
                 awaitForegroundWorkReady()
                 convMutex.withLock {
                     // Hydrate from disk if the in-memory session is empty (post-restart
@@ -906,10 +1159,19 @@ class ChatService(
                     priorGenerationJob?.let { runCatching { it.cancelAndJoin() } }
 
                     val conversation = session.state.value
+=======
+                afterPreviousGeneration(previousJob) {
+                    val conversation = session.state.value
+                    // Ignore double taps and stale approvals for completed or inactive tools.
+                    if (conversation.currentMessages.none { message ->
+                            message.getTools().any { it.toolCallId == toolCallId && it.isPending }
+                        }) return@afterPreviousGeneration
+>>>>>>> up-2.5.5
                     val newApprovalState = when {
                         answer != null -> ToolApprovalState.Answered(answer)
                         approved -> ToolApprovalState.Approved
                         else -> ToolApprovalState.Denied(reason)
+<<<<<<< HEAD
                     }
 
                     // Update the tool approval state, but only on the SPECIFIC tool that
@@ -969,14 +1231,55 @@ class ChatService(
                     handleMessageComplete(conversationId)
                 }
                 _generationDoneFlow.emit(conversationId)
+=======
+                    }
+
+                    // Update the tool approval state
+                    val updatedNodes = conversation.messageNodes.map { node ->
+                        node.copy(
+                            messages = node.messages.map { msg ->
+                                msg.copy(
+                                    parts = msg.parts.map { part ->
+                                        when {
+                                            part is UIMessagePart.Tool && part.toolCallId == toolCallId -> {
+                                                part.copy(approvalState = newApprovalState)
+                                            }
+
+                                            else -> part
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                    }
+                    val updatedConversation = conversation.copy(messageNodes = updatedNodes)
+                    saveConversation(conversationId, updatedConversation)
+
+                    // Check if there are still pending tools
+                    val hasPendingTools = updatedNodes.any { node ->
+                        node.currentMessage.parts.any { part ->
+                            part is UIMessagePart.Tool && part.isPending
+                        }
+                    }
+
+                    // Only continue generation when all pending tools are handled
+                    if (!hasPendingTools) {
+                        handleMessageComplete(conversationId)
+                    }
+
+                    _generationDoneFlow.emit(conversationId)
+                }
+>>>>>>> up-2.5.5
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                session.messageQueue.pause()
                 addError(e, conversationId, title = context.getString(R.string.error_title_tool_approval))
             } finally {
                 releaseForegroundWork()
             }
         }
 
-        session.setJob(job)
+        session.setJob(job, cancelPrevious = false)
     }
 
     /** Always-scope grant for [toolName]. Workspace tools (the "workspace_" prefix,
@@ -1228,6 +1531,7 @@ class ChatService(
         val initialConversation = getConversationFlow(conversationId).value
         val assistant = settings.getAssistantById(initialConversation.assistantId)
             ?: settings.getCurrentAssistant()
+<<<<<<< HEAD
         val model = settings.findModelById(
             initialConversation.chatModelId ?: assistant.chatModelId ?: settings.chatModelId
         )
@@ -1252,6 +1556,10 @@ class ChatService(
                     "Re-enable it in Settings → Providers, or pick a different model with /model."
             )
         }
+=======
+        val model = settings.findModelById(assistant.chatModelId ?: settings.chatModelId)
+            ?: throw IllegalStateException("No chat model selected")
+>>>>>>> up-2.5.5
 
         val senderName = if (assistant.useAssistantAvatar) {
             assistant.name.ifEmpty { context.getString(R.string.assistant_page_default_assistant) }
@@ -1279,7 +1587,29 @@ class ChatService(
             checkInvalidMessages(conversationId)
             val conversation = getConversationFlow(conversationId).value
 
+            val tools = try {
+                chatToolFactory.createTools(
+                    settings = settings,
+                    assistant = assistant,
+                    model = model,
+                    workspaceCwd = conversation.workspaceCwd,
+                )
+            } catch (error: InvalidMcpServerNamesException) {
+                sessionManager.get(conversationId)?.messageQueue?.pause()
+                addError(
+                    error = IllegalStateException(
+                        context.getString(
+                            R.string.error_mcp_invalid_server_name,
+                            error.names.joinToString(", "),
+                        )
+                    ),
+                    conversationId = conversationId,
+                )
+                return
+            }
+
             // start generating
+<<<<<<< HEAD
             val session = getOrCreateSession(conversationId)
             var compactedMessageView = if (messageRange == null) {
                 prepareMessagesForGeneration(
@@ -1301,6 +1631,10 @@ class ChatService(
                 compactedMessageView!!.messages
             }
             generationHandler.generateText(
+=======
+            val session = sessionManager.getOrCreate(conversationId)
+            generationLoop.generateText(
+>>>>>>> up-2.5.5
                 settings = settings,
                 model = model,
                 processingStatus = session.processingStatus,
@@ -1413,6 +1747,7 @@ class ChatService(
                     add(workspaceReminderTransformer)
                 },
                 outputTransformers = outputTransformers,
+<<<<<<< HEAD
                 tools = buildList {
                     if (useExternalWebSearch) {
                         addAll(createSearchTools(settings))
@@ -1514,6 +1849,13 @@ class ChatService(
                 // user presses Stop so a cancelled job cannot discard its last partial chunk.
                 withContext(NonCancellable) {
                     persistStreamingStateNow(conversationId, updateSearchIndex = true)
+=======
+                tools = tools,
+            ).onCompletion {
+                // 可能被取消了，或者意外结束，兜底更新
+                val updatedConversation = session.finishGeneration { conversation ->
+                    saveConversation(conversationId, conversation)
+>>>>>>> up-2.5.5
                 }
 
             }.collect { chunk ->
@@ -1554,6 +1896,7 @@ class ChatService(
                     }
                 }
             }
+<<<<<<< HEAD
         }
 
         val generationFailure = generationResult.exceptionOrNull()
@@ -1635,6 +1978,13 @@ class ChatService(
             }.onFailure { saveErr ->
                 Log.w(TAG, "handleMessageComplete: failure-path save failed", saveErr)
             }
+=======
+        }.onFailure {
+            // 兜底取消 Live Update 通知（生成开始前失败时 onCompletion 不会执行）
+            appEventBus.tryEmit(AppEvent.ChatGenerationEnded(conversationId, senderName, null))
+            if (it is CancellationException) throw it
+            sessionManager.get(conversationId)?.messageQueue?.pause()
+>>>>>>> up-2.5.5
 
             it.printStackTrace()
             addError(it, conversationId, title = context.getString(R.string.error_title_generation))
@@ -1642,6 +1992,7 @@ class ChatService(
             Logging.log(TAG, it.stackTraceToString())
         }.onSuccess {
             val finalConversation = getConversationFlow(conversationId).value
+<<<<<<< HEAD
 
             if (isStalledTurn(succeeded = true, lastMessage = finalConversation.currentMessages.lastOrNull())) {
                 // A stalled success (reasoning/tool-only turn) needs a way forward, not topic
@@ -1658,10 +2009,13 @@ class ChatService(
                     generateSuggestion(conversationId, finalConversation)
                 }
             }
+=======
+>>>>>>> up-2.5.5
 
-            launchWithConversationReference(conversationId) {
+            sessionManager.launchWithSession(conversationId) {
                 generateTitle(conversationId, finalConversation)
             }
+<<<<<<< HEAD
         }
     }
 
@@ -1671,6 +2025,14 @@ class ChatService(
         return createWorkspaceTools(workspaceId, workspaceRepository, cwd)
     }
 
+=======
+            sessionManager.launchWithSession(conversationId) {
+                generateSuggestion(conversationId, finalConversation)
+            }
+        }
+    }
+
+>>>>>>> up-2.5.5
     // ---- 检查无效消息 ----
 
     private suspend fun checkInvalidMessages(conversationId: Uuid) {
@@ -1730,8 +2092,7 @@ class ChatService(
                 UIMessagePart.Text(
                     """{"status":"cancelled","error":"Generation cancelled by user before tool execution completed."}"""
                 )
-            ),
-            approvalState = ToolApprovalState.Denied("Generation cancelled by user")
+            )
         )
     }
 
@@ -1786,7 +2147,7 @@ class ChatService(
 
         runCatching {
             val settings = settingsStore.settingsFlow.first()
-            val model = settings.findModelById(settings.titleModelId, fallback = settings.fastModelId)
+            val model = settings.findModelById(settings.fastModelId)
                 ?: return@runCatching
             val provider = model.findProvider(settings.providers) ?: return@runCatching
             // Same defence as handleLlmTurn: don't burn tokens on a disabled provider.
@@ -1803,7 +2164,7 @@ class ChatService(
                                 .takeLast(4).joinToString("\n\n") { it.summaryAsText(maxLength = 500) })
                     ),
                 ),
-                params = backgroundTextGenerationParams(model),
+                params = backgroundTextGenerationParams(model, conversationId, settings.fastModelReasoningLevel),
             )
 
             // 生成完，conversation可能不是最新了，因此需要重新获取
@@ -1814,6 +2175,7 @@ class ChatService(
                 )
             }
         }.onFailure {
+<<<<<<< HEAD
             // Title generation is auxiliary — a failure here doesn't block the chat
             // and surfaces visibly as a blank conversation title in the list. Don't
             // push it onto the user-facing error stream: when the title model 429s,
@@ -1821,6 +2183,15 @@ class ChatService(
             // and the user gets a popup per message until they switch models. Match
             // the generateSuggestion pattern (log only) to keep the surface quiet.
             Log.w(TAG, "generateTitle failed", it)
+=======
+            it.printStackTrace()
+            addError(
+                error = it,
+                conversationId = conversationId,
+                title = context.getString(R.string.error_title_generate_title),
+                solution = ChatErrorSolution.CheckFastModelSettings,
+            )
+>>>>>>> up-2.5.5
         }
     }
 
@@ -1833,13 +2204,13 @@ class ChatService(
         runCatching {
             val settings = settingsStore.settingsFlow.first()
             if (!settings.enableSuggestion) return@runCatching
-            val model = settings.findModelById(settings.suggestionModelId, fallback = settings.fastModelId)
+            val model = settings.findModelById(settings.fastModelId)
                 ?: return@runCatching
             val provider = model.findProvider(settings.providers) ?: return@runCatching
             // Same defence as handleLlmTurn: don't burn tokens on a disabled provider.
             if (!provider.enabled) return@runCatching
 
-            sessions[conversationId]?.let { session ->
+            sessionManager.get(conversationId)?.let { session ->
                 updateConversation(
                     conversationId,
                     session.state.value.copy(chatSuggestions = emptyList())
@@ -1857,14 +2228,14 @@ class ChatService(
                                 .takeLast(8).joinToString("\n\n") { it.summaryAsText(maxLength = 500) }),
                     )
                 ),
-                params = backgroundTextGenerationParams(model),
+                params = backgroundTextGenerationParams(model, conversationId, settings.fastModelReasoningLevel),
             )
             val suggestions =
                 result.message.toText().split("\n").map { it.trim() }
                     .filter { it.isNotBlank() }
 
             val latestConversation = conversationRepo.getConversationById(conversationId)
-                ?: sessions[conversationId]?.state?.value
+                ?: sessionManager.get(conversationId)?.state?.value
                 ?: conversation
             saveConversation(
                 conversationId,
@@ -2301,8 +2672,48 @@ class ChatService(
                 )
             }
 
+<<<<<<< HEAD
             return result.message.toText().trim()
                 .takeIf { it.isNotBlank() }
+=======
+        if (keepRecentMessages > 0 && allMessages.size > keepRecentMessages) {
+            messagesToCompress = allMessages.dropLast(keepRecentMessages)
+            messagesToKeep = allMessages.takeLast(keepRecentMessages)
+        } else if (keepRecentMessages > 0) {
+            // Not enough messages to compress while keeping recent ones
+            throw IllegalStateException(context.getString(R.string.chat_page_compress_not_enough_messages))
+        } else {
+            messagesToCompress = allMessages
+            messagesToKeep = emptyList()
+        }
+
+        fun splitMessages(messages: List<UIMessage>): List<List<UIMessage>> {
+            if (messages.size <= maxMessagesPerChunk) return listOf(messages)
+            val mid = messages.size / 2
+            val left = splitMessages(messages.subList(0, mid))
+            val right = splitMessages(messages.subList(mid, messages.size))
+            return left + right
+        }
+
+        suspend fun compressMessages(messages: List<UIMessage>): String {
+            val contentToCompress = messages.joinToString("\n\n") { it.summaryAsText(maxLength = 2000) }
+            val prompt = settings.compressPrompt.applyPlaceholders(
+                "content" to contentToCompress,
+                "target_tokens" to targetTokens.toString(),
+                "additional_context" to if (additionalPrompt.isNotBlank()) {
+                    "Additional instructions from user: $additionalPrompt"
+                } else "",
+                "locale" to Locale.getDefault().displayName
+            )
+
+            val result = providerHandler.generateText(
+                providerSetting = provider,
+                messages = listOf(UIMessage.user(prompt)),
+                params = backgroundTextGenerationParams(model, conversationId),
+            )
+
+            return result.message.toText().trim().takeIf { it.isNotBlank() }
+>>>>>>> up-2.5.5
                 ?: throw IllegalStateException("Failed to generate compressed summary")
         }
 
@@ -2427,9 +2838,9 @@ class ChatService(
 
     private fun updateConversation(conversationId: Uuid, conversation: Conversation) {
         if (conversation.id != conversationId) return
-        val session = getOrCreateSession(conversationId)
+        val session = sessionManager.getOrCreate(conversationId)
         checkFilesDelete(conversation, session.state.value)
-        session.state.value = conversation
+        session.updateConversation(conversation)
     }
 
     fun updateConversationState(conversationId: Uuid, update: (Conversation) -> Conversation) {
@@ -2448,6 +2859,37 @@ class ChatService(
         }
     }
 
+    private suspend fun updateConversationMetadata(
+        conversationId: Uuid,
+        update: (Conversation) -> Conversation,
+        persist: suspend (Conversation) -> Unit,
+    ) {
+        sessionManager.withSession(conversationId) { session ->
+            session.initialize {
+                conversationRepo.getConversationById(conversationId)
+                    ?: throw NotFoundException("Conversation not found")
+            }
+            session.updateMetadata(update, persist)
+        }
+    }
+
+    suspend fun toggleConversationPinned(conversationId: Uuid) {
+        updateConversationMetadata(
+            conversationId = conversationId,
+            update = { it.copy(isPinned = !it.isPinned) },
+            persist = { conversationRepo.updatePinStatus(conversationId, it.isPinned) },
+        )
+    }
+
+    suspend fun moveConversationToAssistant(conversationId: Uuid, assistantId: Uuid) {
+        updateConversationMetadata(
+            conversationId = conversationId,
+            // 文件夹属于助手，移动后清除原助手的文件夹归属。
+            update = { it.copy(assistantId = assistantId, folderId = null) },
+            persist = { conversationRepo.updateConversationAssistant(conversationId, it.assistantId) },
+        )
+    }
+
     /**
      * 移动会话到文件夹（folderId 为 null 表示移出到未归类）。
      *
@@ -2457,7 +2899,7 @@ class ChatService(
      * 先改内存可确保这段窗口内的整对象保存也带上新 folderId。
      */
     suspend fun moveConversationToFolder(conversationId: Uuid, folderId: Uuid?) {
-        if (sessions.containsKey(conversationId)) {
+        if (sessionManager.get(conversationId) != null) {
             updateConversationState(conversationId) { it.copy(folderId = folderId) }
         }
         conversationRepo.updateConversationFolderId(conversationId, folderId)
@@ -2480,7 +2922,7 @@ class ChatService(
      * 仅活跃 session 可能在生成；内存态 folderId 为权威（移动会先同步内存态）。
      */
     fun hasGeneratingConversationInFolder(folderId: Uuid): Boolean {
-        return sessions.values.any { it.isGenerating && it.state.value.folderId == folderId }
+        return sessionManager.snapshot().any { it.isGenerating && it.state.value.folderId == folderId }
     }
 
     /**
@@ -2491,14 +2933,18 @@ class ChatService(
      * 后续整对象保存会写回一个已被删除的 folder_id，导致会话在列表中悬空。
      */
     suspend fun deleteFolder(folderId: Uuid) {
-        sessions.values
+        sessionManager.snapshot()
             .filter { it.state.value.folderId == folderId }
             .forEach { updateConversationState(it.id) { c -> c.copy(folderId = null) } }
         folderRepository.deleteFolder(folderId)
     }
 
     private fun checkFilesDelete(newConversation: Conversation, oldConversation: Conversation) {
-        val newFiles = newConversation.files
+        val session = sessionManager.get(newConversation.id)
+        val queuedFiles = (session?.messageQueue?.state?.value?.messages.orEmpty() +
+                listOfNotNull(session?.submittingMessage))
+            .flatMap { it.parts }.localFileUrls().map { it.toUri() }
+        val newFiles = newConversation.files + queuedFiles
         val oldFiles = oldConversation.files
         val deletedFiles = oldFiles.filter { file ->
             newFiles.none { it == file }
@@ -2605,7 +3051,14 @@ class ChatService(
                 updateSearchIndex = updateSearchIndex,
             )
         }
+<<<<<<< HEAD
         return true
+=======
+
+        // 删除消息或切换分支也可能解除工具审批阻塞，保存成功后重新检查队列。
+        // 调度器仍会检查当前生成任务、待审批工具、暂停状态及编辑占位。
+        dispatchNextQueuedMessage(conversationId)
+>>>>>>> up-2.5.5
     }
 
     // ---- 翻译消息 ----
@@ -2747,6 +3200,7 @@ class ChatService(
                 )
             }
 
+<<<<<<< HEAD
         val forkConversation = Conversation(
             id = Uuid.random(),
             assistantId = currentConversation.assistantId,
@@ -2755,6 +3209,13 @@ class ChatService(
             modeInjectionIds = currentConversation.modeInjectionIds,
             lorebookIds = currentConversation.lorebookIds,
         )
+=======
+        val existingTitles = conversationRepo
+            .getConversationsOfAssistant(currentConversation.assistantId)
+            .first()
+            .mapTo(mutableSetOf()) { it.title }
+        val forkConversation = createForkConversation(currentConversation, copiedNodes, existingTitles)
+>>>>>>> up-2.5.5
 
         saveConversation(forkConversation.id, forkConversation)
         return forkConversation
@@ -2894,6 +3355,7 @@ class ChatService(
 
     // 停止当前会话生成任务（不清理会话缓存）
     suspend fun stopGeneration(conversationId: Uuid) {
+<<<<<<< HEAD
         val convMutex = mutexFor(conversationId)
         // cancelAndJoin BEFORE the mutex so the cancelled coroutine can drain its own
         // writes (which may try to acquire the same mutex via their save path).
@@ -2927,5 +3389,15 @@ class ChatService(
             val updatedConversation = currentConversation.copy(messageNodes = updatedNodes)
             saveConversation(conversationId, updatedConversation)
         }
+=======
+        val session = sessionManager.get(conversationId) ?: return
+        val jobs = synchronized(session) {
+            session.messageQueue.pause()
+            session.cancelJobs()
+        }
+        if (jobs.isEmpty()) return
+        jobs.forEach { it.join() }
+        finishInterruptedPendingTools(conversationId)
+>>>>>>> up-2.5.5
     }
 }

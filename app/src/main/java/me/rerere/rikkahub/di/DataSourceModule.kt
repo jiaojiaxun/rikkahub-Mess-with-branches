@@ -1,15 +1,10 @@
 package me.rerere.rikkahub.di
 
-import androidx.room.Room
-import androidx.room.RoomDatabase
-import androidx.sqlite.db.SupportSQLiteDatabase
 import android.content.Context
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.http.HttpHeaders
 import io.pebbletemplates.pebble.PebbleEngine
-import io.requery.android.database.sqlite.RequerySQLiteOpenHelperFactory
-import io.requery.android.database.sqlite.SQLiteCustomExtension
 import kotlinx.serialization.json.Json
 import me.rerere.ai.provider.ProviderManager
 import me.rerere.common.http.AcceptLanguageBuilder
@@ -18,7 +13,12 @@ import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.data.ai.AIRequestInterceptor
 import me.rerere.rikkahub.data.ai.RequestLoggingInterceptor
 import me.rerere.rikkahub.data.ai.transformers.AssistantTemplateLoader
+<<<<<<< HEAD
 import me.rerere.rikkahub.data.ai.GenerationHandler
+=======
+import me.rerere.rikkahub.data.ai.GenerationLoop
+import me.rerere.rikkahub.data.ai.TranslationHandler
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.data.ai.transformers.TemplateTransformer
 import me.rerere.rikkahub.data.api.HuggingFaceAPI
 import me.rerere.rikkahub.data.api.RikkaHubAPI
@@ -36,15 +36,21 @@ import me.rerere.rikkahub.data.gemini.GeminiOAuthManager
 import me.rerere.rikkahub.data.gemini.GeminiProvider
 import me.rerere.rikkahub.data.grok.GrokProvider
 import me.rerere.rikkahub.data.datastore.SettingsStore
+<<<<<<< HEAD
 import me.rerere.rikkahub.data.network.SettingsProxyAuthenticator
 import me.rerere.rikkahub.data.network.SettingsProxySelector
 import me.rerere.rikkahub.data.network.SettingsSocks5Authenticator
+=======
+import me.rerere.rikkahub.data.sync.BackupManager
+import me.rerere.rikkahub.data.db.AppDatabaseFactory
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.Migration_30_31
 import me.rerere.rikkahub.data.db.Migration_31_32
 import me.rerere.rikkahub.data.db.Migration_32_33
 import me.rerere.rikkahub.data.db.Migration_33_34
 import me.rerere.rikkahub.data.db.fts.MessageFtsManager
+<<<<<<< HEAD
 import me.rerere.rikkahub.data.db.fts.SimpleDictManager
 import me.rerere.rikkahub.data.db.migrations.Migration_6_7
 import me.rerere.rikkahub.data.db.migrations.Migration_11_12
@@ -52,6 +58,8 @@ import me.rerere.rikkahub.data.db.migrations.Migration_13_14
 import me.rerere.rikkahub.data.db.migrations.Migration_14_15
 import me.rerere.rikkahub.data.db.migrations.Migration_15_16
 import me.rerere.rikkahub.data.db.migrations.Migration_23_24
+=======
+>>>>>>> up-2.5.5
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.sync.webdav.WebDavSync
 import me.rerere.search.SearchService
@@ -74,6 +82,7 @@ val dataSourceModule = module {
 
     single {
         val context: Context = get()
+<<<<<<< HEAD
         Room.databaseBuilder(context, AppDatabase::class.java, "rikka_hub")
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .addMigrations(Migration_6_7, Migration_11_12, Migration_13_14, Migration_14_15, Migration_15_16, Migration_23_24, Migration_30_31(), Migration_31_32(), Migration_32_33(), Migration_33_34())
@@ -123,6 +132,9 @@ val dataSourceModule = module {
                 }
             )))
             .build()
+=======
+        AppDatabaseFactory.create(context)
+>>>>>>> up-2.5.5
     }
 
     single {
@@ -179,17 +191,20 @@ val dataSourceModule = module {
         MessageFtsManager(get())
     }
 
-    single { McpManager(settingsStore = get(), appScope = get(), filesManager = get(), appEventBus = get()) }
+    single { McpManager(settingsStore = get(), appScope = get(), filesManager = get()) }
 
     single {
-        GenerationHandler(
+        GenerationLoop(
             context = get(),
             providerManager = get(),
             json = get(),
+<<<<<<< HEAD
             memoryRepo = get(),
             conversationRepo = get(),
             aiLoggingManager = get(),
             systemPromptBuilder = get(),
+=======
+>>>>>>> up-2.5.5
         )
     }
 
@@ -417,10 +432,11 @@ val dataSourceModule = module {
         }
     }
 
+    single { BackupManager(context = get(), database = get(), settingsStore = get(), json = get()) }
+
     single {
         WebDavSync(
-            settingsStore = get(),
-            json = get(),
+            backupManager = get(),
             context = get(),
             httpClient = get(),
             appDatabase = get(),
@@ -445,8 +461,7 @@ val dataSourceModule = module {
 
     single {
         S3Sync(
-            settingsStore = get(),
-            json = get(),
+            backupManager = get(),
             context = get(),
             httpClient = get(),
             appDatabase = get(),
