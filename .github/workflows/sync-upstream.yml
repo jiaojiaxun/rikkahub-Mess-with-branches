@@ -1,0 +1,25 @@
+name: Sync upstream (apply official diff)
+
+on:
+  push:
+    branches: [feat/chat-dual-mode-html]
+    paths:
+      - '.github/workflows/sync-upstream.yml'
+      - 'scripts/sync_upstream.sh'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply upstream diff and push sync branch
+        env:
+          BASE_TAG: '2.4.14'
+          TARGET_TAG: '2.5.5'
+        run: bash scripts/sync_upstream.sh
