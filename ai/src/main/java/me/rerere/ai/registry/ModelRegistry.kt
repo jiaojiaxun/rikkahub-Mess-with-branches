@@ -286,13 +286,33 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
+    // 2026-09-10: DeepSeek retired V4-Flash / V4-Flash-Vision-Exp. On the official API,
+    // deepseek-v4-flash and deepseek-v4-flash-vision-exp route to V4.1-Flash (native
+    // vision); since 2026-09-14 deepseek-v4-pro does too. Third-party hosts may still
+    // serve the old text-only weights; users can override modalities per model.
     private val DEEPSEEK_V4_FLASH = defineModel {
         tokens("deepseek", "v", "4", "flash")
+        visionInput()
         toolReasoningAbility()
     }
 
     private val DEEPSEEK_V4_PRO = defineModel {
         tokens("deepseek", "v", "4", "pro")
+        visionInput()
+        toolReasoningAbility()
+    }
+
+    // Current official id for V4.1-Flash.
+    private val DEEPSEEK_FLASH = defineModel {
+        tokens("deepseek", "flash")
+        visionInput()
+        toolReasoningAbility()
+    }
+
+    // Open-weights / third-party ids such as deepseek-ai/DeepSeek-V4.1-Flash.
+    private val DEEPSEEK_V4_1_FLASH = defineModel {
+        tokens("deepseek", "v", "4", "1", "flash")
+        visionInput()
         toolReasoningAbility()
     }
 
@@ -585,6 +605,8 @@ object ModelRegistry {
         DEEPSEEK_REASONER,
         DEEPSEEK_V4_FLASH,
         DEEPSEEK_V4_PRO,
+        DEEPSEEK_FLASH,
+        DEEPSEEK_V4_1_FLASH,
         DEEPSEEK_V3_1,
         DEEPSEEK_V3_2,
         QWEN_3,
