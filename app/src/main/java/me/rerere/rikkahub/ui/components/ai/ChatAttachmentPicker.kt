@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.components.ai
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -8,17 +9,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.dokar.sonner.ToastType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.common.android.appTempFolder
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.data.files.FilesManager
+import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionCamera
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionManager
 import me.rerere.rikkahub.ui.components.ui.permission.rememberPermissionState
@@ -26,9 +33,16 @@ import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.hooks.ChatInputState
 import me.rerere.rikkahub.utils.ImageUtils
 import me.rerere.rikkahub.utils.isAllowedFileType
+import me.rerere.rikkahub.utils.looksLikeText
+import me.rerere.workspace.WorkspaceStorageArea
 import org.koin.compose.koinInject
 import java.io.File
 import kotlin.uuid.Uuid
+
+private const val TAG = "ChatAttachmentPicker"
+
+/** Workspace folder that receives files the model cannot take as attachments. */
+private const val WORKSPACE_UPLOAD_DIR = "uploads"
 
 internal data class ChatAttachmentPickerActions(
     val onTakePicture: () -> Unit,
@@ -47,7 +61,9 @@ internal fun rememberChatAttachmentPickerActions(
     val context = LocalContext.current
     val resources = LocalResources.current
     val toaster = LocalToaster.current
+    val scope = rememberCoroutineScope()
     val filesManager: FilesManager = koinInject()
+    val workspaceRepository: WorkspaceRepository = koinInject()
     val cameraPermission = rememberPermissionState(PermissionCamera)
     PermissionManager(permissionState = cameraPermission)
 
@@ -154,34 +170,73 @@ internal fun rememberChatAttachmentPickerActions(
             }
         }
 
+    // Any file can be picked. Documents the model can read (known text/office/PDF types, or
+    // anything whose content is UTF-8 text) become attachments; everything else is copied
+    // into the assistant's workspace and its path is added to the message so the model can
+    // use workspace tools on it.
     val filePickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-            if (uris.isNotEmpty()) {
-                val documents = uris.mapNotNull { uri ->
+            if (uris.isEmpty()) return@rememberLauncherForActivityResult
+            scope.launch {
+                val documents = mutableListOf<UIMessagePart.Document>()
+                val importedPaths = mutableListOf<String>()
+                val workspaceId = setting.getCurrentAssistant().workspaceId?.toString()
+                uris.forEach { uri ->
                     val fileName = filesManager.getFileNameFromUri(uri) ?: "file"
-                    val mime = filesManager.getFileMimeType(uri) ?: "text/plain"
-                    if (isAllowedFileType(fileName, mime)) {
-                        val localUri = filesManager.createChatFilesByContents(listOf(uri)).firstOrNull()
-                            ?: run {
-                                toaster.show(
-                                    resources.getString(R.string.chat_input_file_read_failed, fileName),
-                                    type = ToastType.Error
-                                )
-                                return@mapNotNull null
-                            }
-                        UIMessagePart.Document(url = localUri.toString(), fileName = fileName, mime = mime)
-                    } else {
+                    val rawMime = filesManager.getFileMimeType(uri)
+                    val attachMime = when {
+                        isAllowedFileType(fileName, rawMime ?: "application/octet-stream") ->
+                            rawMime ?: "text/plain"
+                        withContext(Dispatchers.IO) { context.isTextContent(uri) } -> "text/plain"
+                        else -> null
+                    }
+                    if (attachMime != null) {
+                        val localUri = withContext(Dispatchers.IO) {
+                            filesManager.createChatFilesByContents(listOf(uri)).firstOrNull()
+                        }
+                        if (localUri == null) {
+                            toaster.show(
+                                resources.getString(R.string.chat_input_file_read_failed, fileName),
+                                type = ToastType.Error
+                            )
+                        } else {
+                            documents += UIMessagePart.Document(
+                                url = localUri.toString(),
+                                fileName = fileName,
+                                mime = attachMime,
+                            )
+                        }
+                        return@forEach
+                    }
+                    if (workspaceId == null) {
                         toaster.show(
-                            resources.getString(R.string.chat_input_unsupported_file_type, fileName),
+                            resources.getString(R.string.chat_input_file_no_workspace, fileName),
                             type = ToastType.Error
                         )
-                        null
+                        return@forEach
+                    }
+                    val path = importToWorkspace(context, workspaceRepository, workspaceId, uri, fileName)
+                    if (path == null) {
+                        toaster.show(
+                            resources.getString(R.string.chat_input_file_read_failed, fileName),
+                            type = ToastType.Error
+                        )
+                    } else {
+                        importedPaths += path
+                        toaster.show(
+                            resources.getString(R.string.chat_input_file_imported_to_workspace, fileName, path),
+                            type = ToastType.Success
+                        )
                     }
                 }
-                if (documents.isNotEmpty()) {
-                    inputState.addFiles(documents)
-                    onAttachmentAdded()
+                if (documents.isNotEmpty()) inputState.addFiles(documents)
+                if (importedPaths.isNotEmpty()) {
+                    val prefix = if (inputState.textContent.text.isEmpty()) "" else "\n"
+                    inputState.appendText(
+                        prefix + importedPaths.joinToString("\n") { "[File imported to workspace: $it]" }
+                    )
                 }
+                if (documents.isNotEmpty() || importedPaths.isNotEmpty()) onAttachmentAdded()
             }
         }
 
@@ -192,4 +247,43 @@ internal fun rememberChatAttachmentPickerActions(
         onPickAudio = { audioPickerLauncher.launch("audio/*") },
         onPickFile = { filePickerLauncher.launch(arrayOf("*/*")) },
     )
+}
+
+/** Reads the first 8 KB of [uri] and checks whether it is UTF-8 text. */
+private fun Context.isTextContent(uri: Uri): Boolean = runCatching {
+    contentResolver.openInputStream(uri)?.use { input ->
+        val buffer = ByteArray(8 * 1024)
+        var total = 0
+        while (total < buffer.size) {
+            val read = input.read(buffer, total, buffer.size - total)
+            if (read <= 0) break
+            total += read
+        }
+        looksLikeText(buffer.copyOf(total))
+    } ?: false
+}.getOrDefault(false)
+
+/**
+ * Copies [uri] into `uploads/` of the workspace and returns the workspace-relative path, or
+ * null on failure. When the name is taken a timestamp prefix is added instead of overwriting.
+ */
+private suspend fun importToWorkspace(
+    context: Context,
+    repository: WorkspaceRepository,
+    workspaceId: String,
+    uri: Uri,
+    fileName: String,
+): String? = withContext(Dispatchers.IO) {
+    val safeName = fileName.substringAfterLast('/').substringAfterLast('\\')
+        .takeIf { it.isNotBlank() && it != "." && it != ".." } ?: "file"
+    suspend fun importAs(name: String): String {
+        val input = context.contentResolver.openInputStream(uri) ?: error("cannot open $fileName")
+        return input.use {
+            repository.importFile(workspaceId, WorkspaceStorageArea.FILES, WORKSPACE_UPLOAD_DIR, name, it).path
+        }
+    }
+    runCatching { importAs(safeName) }
+        .recoverCatching { importAs("${System.currentTimeMillis()}_$safeName") }
+        .onFailure { Log.e(TAG, "import to workspace failed: $fileName", it) }
+        .getOrNull()
 }

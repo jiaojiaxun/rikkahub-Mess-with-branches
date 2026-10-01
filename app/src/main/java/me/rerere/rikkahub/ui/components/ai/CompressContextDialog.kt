@@ -29,12 +29,15 @@ import kotlinx.coroutines.Job
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.ui.OutlinedNumberInput
 import me.rerere.rikkahub.ui.components.ui.RabbitLoadingIndicator
+import kotlin.uuid.Uuid
 
 @Composable
 fun CompressContextDialog(
     defaultTargetTokens: Int,
     onDismiss: () -> Unit,
-    onConfirm: (additionalPrompt: String, targetTokens: Int, keepRecentMessages: Int) -> Job
+    onConfirm: (additionalPrompt: String, targetTokens: Int, keepRecentMessages: Int) -> Job,
+    // Conversation being compressed; used to show the compression model's live reply.
+    conversationId: Uuid? = null,
 ) {
     var additionalPrompt by remember { mutableStateOf("") }
     var targetTokensK by remember(defaultTargetTokens) { mutableStateOf("") }
@@ -77,6 +80,10 @@ fun CompressContextDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(stringResource(R.string.chat_page_compressing))
                     }
+                    CompactionStreamPreview(
+                        conversationId = conversationId,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 } else {
                     Text(stringResource(R.string.chat_page_compress_context_desc))
 

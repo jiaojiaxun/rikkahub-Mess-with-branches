@@ -60,6 +60,11 @@ jobs:
         if: hashFiles('scripts/patch_batch2.py') != ''
         run: python3 scripts/patch_batch2.py
 
+      # Batch 3: WebDAV list, live compaction output, long user message folding, strings.
+      - name: Patch batch 3 fixes
+        if: hashFiles('scripts/patch_batch3.py') != ''
+        run: python3 scripts/patch_batch3.py
+
       - name: Compile Kotlin (release)
         id: compile
         continue-on-error: true
