@@ -1,0 +1,114 @@
+base=41afd5e07bbf789c3ec4a3e127937bf03845cc3e upstream=6c903feba7e6b65f518b320a88ae29efebae77c4
+applied=42 already_present=0 conflicted=66 missing=0
+
+== conflicted / skipped (resolve manually, in this order) ==
+CONFLICT eba2e96c 2.4.15 依赖更新（后续功能所需） :: gradle/libs.versions.toml 
+CONFLICT 5b890d22 2.4.15 模型支持：hy4 移除视觉 :: ai/src/main/java/me/rerere/ai/registry/ModelRegistry.kt 
+CONFLICT b6df5f04 2.4.15 改进 MCP OAuth 兼容性 :: app/src/main/AndroidManifest.xml app/src/main/java/me/rerere/rikkahub/RouteActivity.kt settings.gradle.kts 
+CONFLICT 9851d037 2.4.15 Gemini 同时使用云端与本地工具 :: ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleProvider.kt 
+CONFLICT 7da69770 2.4.15 文件清理按时间范围筛选、存储管理界面 :: app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingFilesPage.kt app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml 
+CONFLICT 5403bc96 2.4.16 语音播放稳定性：TTS 自动重试 :: speech/src/main/java/me/rerere/tts/controller/TtsController.kt 
+CONFLICT 2f05019b 2.4.16 语音播放稳定性：重试判断 :: speech/src/main/java/me/rerere/tts/controller/TtsController.kt speech/src/main/java/me/rerere/tts/provider/providers/GroqTTSProvider.kt speech/src/main/java/me/rerere/tts/provider/providers/QwenTTSProvider.kt 
+CONFLICT f7869e35 2.4.16 修复 Google 多种工具同时使用异常 :: ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleProvider.kt ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleStreamDecoder.kt 
+CONFLICT 9365c297 2.4.16 快速模型思考级别，统一用于标题和建议 :: app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt app/src/main/java/me/rerere/rikkahub/service/ChatService.kt app/src/main/java/me/rerere/rikkahub/ui/components/ui/ErrorCard.kt app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingModelPage.kt 
+CONFLICT 41353567 2.4.16 自动重试开关 :: app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values/strings.xml 
+CONFLICT ec20570b 2.4.17 语音播放倍速多语言文本 :: app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml 
+CONFLICT 540b9dfa 2.4.17 备份与恢复可靠性（一致性快照） :: app/src/main/java/me/rerere/rikkahub/RikkaHubApp.kt app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt app/src/main/java/me/rerere/rikkahub/data/sync/S3Sync.kt app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt app/src/main/java/me/rerere/rikkahub/di/DataSourceModule.kt 
+CONFLICT 0f2c495b 2.4.17 搜索消息：当前助手/全部助手 :: app/src/main/java/me/rerere/rikkahub/ui/pages/search/SearchVM.kt app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values/strings.xml 
+CONFLICT aac5e43e 2.4.17 工作区图片缩略图 :: app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailPage.kt workspace/src/main/java/me/rerere/workspace/WorkspaceManager.kt 
+CONFLICT ab8b6cc8 2.5.0 稳定性：provider 阻塞工作移到 IO :: ai/src/main/java/me/rerere/ai/provider/providers/openai/ResponseAPI.kt 
+CONFLICT 1d86b3c1 2.5.0 终端键盘手势与尺寸问题 :: app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalPage.kt 
+CONFLICT 104040df 2.5.0 终端标签改进 :: app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalPage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSession.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSessionManager.kt 
+CONFLICT 5902feab 2.5.0 修复纯图片发送 :: app/src/main/java/me/rerere/rikkahub/ui/hooks/ChatInputState.kt 
+CONFLICT 7b76847f 2.5.0 修复键盘闪烁 :: app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt 
+CONFLICT 097cdb90 2.5.0 工具组装集中到 ChatToolFactory（语音模式前置） :: app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt app/src/main/java/me/rerere/rikkahub/di/AppModule.kt app/src/main/java/me/rerere/rikkahub/di/DataSourceModule.kt app/src/main/java/me/rerere/rikkahub/service/ChatService.kt app/src/test/java/me/rerere/rikkahub/service/ChatServiceTest.kt 
+CONFLICT 66de8b30 2.5.0 消息发送队列 :: app/src/main/java/me/rerere/rikkahub/data/db/dao/MessageNodeDAO.kt app/src/main/java/me/rerere/rikkahub/service/ChatService.kt app/src/main/java/me/rerere/rikkahub/service/ConversationSession.kt app/src/main/java/me/rerere/rikkahub/ui/components/ai/ChatInput.kt 
+CONFLICT a621e277 2.5.0 语音模式 :: app/src/main/java/me/rerere/rikkahub/service/ChatService.kt app/src/main/java/me/rerere/rikkahub/service/MessageQueue.kt app/src/main/java/me/rerere/rikkahub/ui/components/ai/ChatInput.kt app/src/main/java/me/rerere/rikkahub/ui/components/ai/MessageQueuePanel.kt app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values/strings.xml app/src/test/java/me/rerere/rikkahub/service/MessageQueueTest.kt 
+CONFLICT a61d116d 2.5.0 自定义 Response API 路径 :: ai/src/main/java/me/rerere/ai/provider/ProviderSetting.kt 
+CONFLICT 55506496 2.5.0 修复工具操作确认异常 :: app/src/main/java/me/rerere/rikkahub/service/ChatService.kt app/src/main/java/me/rerere/rikkahub/service/ConversationSession.kt app/src/test/java/me/rerere/rikkahub/service/ConversationSessionTest.kt 
+CONFLICT e5247be0 2.5.0 依赖更新 :: gradle/libs.versions.toml 
+CONFLICT ab07ac1f 2.5.1 完善模型支持：DeepSeek V4.1 Flash 多模态 :: ai/src/main/java/me/rerere/ai/registry/ModelRegistry.kt 
+CONFLICT 5b4d7895 2.5.1 自定义时间提醒间隔 :: app/src/main/java/me/rerere/rikkahub/data/model/Assistant.kt app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values/strings.xml app/src/test/java/me/rerere/rikkahub/data/ai/transformers/TimeReminderTransformerTest.kt 
+CONFLICT 05a85a09 2.5.1 助手提问支持自定义文字回复 :: app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/AskUserTool.kt 
+CONFLICT 45275025 2.5.1 更灵活的历史消息数量（1~19） :: app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantBasicPage.kt app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values/strings.xml 
+CONFLICT 3896b6d6 2.5.1 图片生成页长按多选 :: app/src/main/java/me/rerere/rikkahub/ui/pages/imggen/ImgGenPage.kt app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values/strings.xml 
+CONFLICT 019c46ae 2.5.1 /skills 加入免审批可写安全区 :: app/src/main/java/me/rerere/rikkahub/data/ai/tools/WorkspaceTools.kt 
+CONFLICT 77a58c2c 2.5.1 修复统计页崩溃 :: app/src/main/java/me/rerere/rikkahub/data/db/dao/MessageNodeDAO.kt 
+CONFLICT 03246406 2.5.1 终端兼容模式 :: app/schemas/me.rerere.rikkahub.data.db.AppDatabase/25.json app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt app/src/main/java/me/rerere/rikkahub/data/db/dao/WorkspaceDAO.kt app/src/main/java/me/rerere/rikkahub/data/repository/WorkspaceRepository.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailPage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailVM.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalPage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSession.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSessionManager.kt app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values/strings.xml workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt workspace/src/main/java/me/rerere/workspace/WorkspaceManager.kt workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt 
+CONFLICT 7038e981 2.5.1 工作区网页和矢量图片预览 :: app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceFileEditorPage.kt 
+CONFLICT 6e0aa7d4 2.5.1 工具执行期间查看调用详情 :: app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessageTools.kt 
+CONFLICT 513b784c 2.5.1 翻译快捷入口 :: app/src/main/java/me/rerere/rikkahub/RouteActivity.kt 
+CONFLICT 46cacf23 2.5.2 DeepSeek Flash 适配 :: ai/src/main/java/me/rerere/ai/registry/ModelRegistry.kt 
+CONFLICT 2689e753 2.5.2 读取工作区 AGENTS.md :: app/src/main/java/me/rerere/rikkahub/data/ai/transformers/WorkspaceReminderTransformer.kt 
+CONFLICT 288a034c 2.5.2 依赖更新 :: gradle/libs.versions.toml gradle/wrapper/gradle-wrapper.properties 
+CONFLICT bc9d2582 2.5.2 依赖更新（libs.versions.toml 修复） :: gradle/libs.versions.toml 
+CONFLICT d6ba728e 2.5.2 依赖更新 :: gradle/libs.versions.toml 
+CONFLICT bd936caa 2.5.2 服务兼容：非聊天请求带 session id :: ai/src/main/java/me/rerere/ai/provider/Provider.kt app/src/main/java/me/rerere/rikkahub/data/ai/GenerationLoop.kt app/src/main/java/me/rerere/rikkahub/service/ChatService.kt 
+CONFLICT 9a35e3f2 2.5.3 haze 升级（输入栏效果前置） :: gradle/libs.versions.toml 
+CONFLICT 7ee13f2a 2.5.3 输入栏模糊/玻璃背景 :: app/src/main/java/me/rerere/rikkahub/ui/components/ai/ChatInput.kt app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingAboutPage.kt app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values/strings.xml gradle/libs.versions.toml 
+CONFLICT c8853531 2.5.3 工具运行稳定性：quickjs-kt :: app/src/main/java/me/rerere/rikkahub/RikkaHubApp.kt app/src/main/java/me/rerere/rikkahub/data/ai/tools/local/JavascriptTool.kt app/src/release/generated/baselineProfiles/baseline-prof.txt app/src/release/generated/baselineProfiles/startup-prof.txt common/src/main/java/me/rerere/common/js/QuickJSFetch.kt gradle/libs.versions.toml 
+CONFLICT 51a33198 2.5.3 haze 升级 :: gradle/libs.versions.toml 
+CONFLICT 4a3eefc1 2.5.3 切换对话时状态保留 :: app/src/main/java/me/rerere/rikkahub/data/db/dao/ConversationDAO.kt app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt app/src/main/java/me/rerere/rikkahub/service/ChatService.kt app/src/main/java/me/rerere/rikkahub/service/ConversationSession.kt app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt app/src/main/java/me/rerere/rikkahub/web/routes/ConversationRoutes.kt app/src/test/java/me/rerere/rikkahub/service/ConversationSessionTest.kt 
+CONFLICT 458c16df 2.5.3 分支沿用原标题加序号 :: app/src/main/java/me/rerere/rikkahub/service/ChatService.kt app/src/test/java/me/rerere/rikkahub/service/ChatServiceTest.kt 
+CONFLICT c3d6867c 2.5.3 Step-5 模型 :: ai/src/test/java/me/rerere/ai/registry/ModelRegistryTest.kt 
+CONFLICT b7f06db1 2.5.3 思考步骤显示（半透明气泡背景方块） :: app/src/main/java/me/rerere/rikkahub/ui/components/ui/ChainOfThought.kt 
+CONFLICT 21448350 2.5.3 工作区长按多选导出 :: app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailPage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailVM.kt 
+CONFLICT 4391d5a5 2.5.4 Google 过滤不兼容的 propertyNames :: ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleProvider.kt 
+CONFLICT 2cf09d2a 2.5.4 流式时思考步骤图标黑底 :: app/src/main/java/me/rerere/rikkahub/ui/components/ui/ChainOfThought.kt 
+CONFLICT b9c0d3b7 2.5.5 数据恢复页 :: app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt 
+CONFLICT 70b382f5 2.5.5 修复设置读取失败被重置 :: app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt 
+CONFLICT 598b4efa 2.5.5 locale-tui 补全翻译工具（阿拉伯语前置） :: locale-tui/CLAUDE.md 
+CONFLICT 7508eee9 2.5.5 RTL 方向图标 :: gradle/libs.versions.toml 
+CONFLICT 6719c301 2.5.5 补全缺失翻译 :: app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml 
+CONFLICT 233e095a 2.5.5 阿拉伯语支持 :: .agents/skills/locale-tui-localization/SKILL.md app/src/main/res/values-ar/strings.xml locale-tui/CLAUDE.md locale-tui/config.yml locale-tui/src/main.py 
+CONFLICT 82c339c1 2.5.5 统一列表操作与拖拽排序 :: app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantPromptPage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsPage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspacePage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderDetailPage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderPage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingSearchPage.kt 
+CONFLICT f099cd40 2.5.5 技能页搜索 :: app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsPage.kt app/src/main/res/values-ar/strings.xml app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko-rKR/strings.xml app/src/main/res/values-ru/strings.xml app/src/main/res/values-zh-rTW/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values/strings.xml 
+CONFLICT 44236d7b 2.5.5 输入框透明度调整 :: app/src/main/java/me/rerere/rikkahub/ui/components/ai/ChatInput.kt gradle/libs.versions.toml 
+CONFLICT 9f02586d 2.5.5 保存技能文件崩溃、GitHub 导入不损坏 :: app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsVM.kt 
+CONFLICT 3b346748 2.5.5 内置技能支持 :: app/src/main/java/me/rerere/rikkahub/RikkaHubApp.kt app/src/main/java/me/rerere/rikkahub/data/ai/tools/SkillsTools.kt app/src/main/java/me/rerere/rikkahub/data/ai/transformers/WorkspaceReminderTransformer.kt app/src/main/java/me/rerere/rikkahub/data/files/SkillManager.kt app/src/main/java/me/rerere/rikkahub/di/RepositoryModule.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsPage.kt app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceTerminalSession.kt 
+CONFLICT 7f17dcc8 2.5.5 内置技能「技能创建助手」 :: app/src/test/java/me/rerere/rikkahub/data/files/BuiltinSkillsTest.kt 
+CONFLICT db1ce811 2.5.5 搜索服务选择器改版、服务商页返回键 :: app/src/main/java/me/rerere/rikkahub/ui/components/ai/SearchPicker.kt 
+
+== applied ==
+OK 321443d8 2.4.15 修复仅含工具操作的消息无操作按钮
+OK ef94834a 2.4.16 MCP 仅使用 client sdk（授权登录改进前置）
+OK 8ea375a9 2.4.16 改善部分服务授权登录（cloudflare mcp oauth）
+OK 0651cad9 2.4.16 聊天气泡透明度百分比显示
+OK 1b9dd092 2.4.16 移除硅基流动余额查询
+OK 5c217d2e 2.4.16 网页/矢量图代码默认不自动预览
+OK d3a53e0a 2.4.16 图片选择体验（PickVisualMedia）
+OK 883bde7d 2.4.16 默认播放速度移至常规设置
+OK 08c2648b 2.4.17 优化记忆信息展示
+OK 4b36640a 2.4.17 恢复图片选择器文件浏览入口
+OK 5cdab947 2.4.17 OpenCode 兼容（x-opencode-session）
+OK c73f8972 2.4.17 GPT-6 模型识别
+OK 5736c05e 2.4.17 导出代码块残留旧内容
+OK a8f8c3a1 2.5.0 Exa 搜索更多参数
+OK 580e05d6 2.5.0 语音识别：服务端 VAD、火山双向流
+OK f2f687f0 2.5.0 优化网页聊天界面
+OK 3d75f83f 2.5.1 界面显示：网页版模型弹窗厂商标签
+OK dee88dca 2.5.1 修复崩溃：workspace_edit_file 非对象参数
+OK 20e552f9 2.5.1 服务兼容：X-Session-ID
+OK 1a1e672e 2.5.1 修复输入问题：名称可输入空格
+OK fcb04126 2.5.1 网页版提问多选
+OK 7b92f89e 2.5.1 显示问题：代码块连字
+OK a7ee362f 2.5.1 显示问题：退出终端后系统栏颜色
+OK 8e304bb1 2.5.2 火山引擎语音朗读
+OK d47d13a6 2.5.2 重新生成消息确认提示
+OK 5078ce19 2.5.3 MiniMax 语音默认设置
+OK a7850967 2.5.3 文字显示：内联代码连字
+OK 64319122 2.5.3 移除小马算力默认提供商
+OK 7c1629d0 2.5.3 图片裁剪速度
+OK 6e98691c 2.5.3 工具稳定性：移除 tool 消息多余 name
+OK 445341e9 2.5.3 撤销删除后收藏恢复
+OK 40426e93 2.5.4 Chat Completions 关闭思考传 none
+OK 94504b5c 2.5.4 DashScope 推理参数
+OK 068103dd 2.5.4 MiMo v2.6 注册
+OK 324b337b 2.5.4 代码块行号不被复制
+OK 5ac149b9 2.5.4 Responses API 缺 item_id 回退
+OK 54aa8114 2.5.4 收藏页侧滑删除
+OK 158f1f68 2.5.5 混元配置
+OK 8b696c0c 2.5.5 MCP 空请求头名称
+OK ed3569c7 2.5.5 文件编辑器大文件切后台崩溃
+OK 53f224b1 2.5.5 ExpressivePopup 组件（搜索选择器前置）
+OK 426ede84 2.5.5 依赖更新
