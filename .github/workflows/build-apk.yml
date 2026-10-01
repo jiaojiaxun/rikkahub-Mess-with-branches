@@ -11,10 +11,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      # The repo has two git submodules (material3/material-color-utilities and
-      # llama-cpp/native/llama.cpp). checkout does NOT fetch them by default, which
-      # left those directories empty and made every previous CI run fail inside Gradle
-      # with no Kotlin error at all. recursive keeps nested submodules working too.
+      # Two git submodules (material3/material-color-utilities, llama-cpp/native/llama.cpp)
+      # are not fetched by default; without them every build fails inside Gradle.
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -24,10 +22,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # The :web module needs two JS toolchains, both missing from the runner image:
-      #   installWebUiDeps -> `bun install --frozen-lockfile`   (in web-ui/)
-      #   buildWebUi       -> `pnpm run build`                  (Linux branch of the when{})
-      # Missing bun is what failed run #14 right after the submodule fix.
+      # :web needs bun (installWebUiDeps) and pnpm (buildWebUi on Linux).
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -46,14 +41,15 @@ jobs:
       - name: Patch LocalTools.kt (chat_ui + app_control groups)
         run: python3 scripts/patch_chat_ui_tools.py
 
+      - name: Patch AssistantLocalToolPage.kt (settings switches)
+        run: python3 scripts/patch_local_tool_page.py
+
       - name: Patch RikkaHubApp.kt (skin store init)
         run: python3 scripts/patch_skin_store_init.py
 
       - name: Patch ChatPage.kt (embed html layer)
         run: python3 scripts/patch_chat_page_html.py
 
-      # Split compile from packaging so a failure's stage is unambiguous.
-      # release is already debug-signed inside app/build.gradle.kts (no keystore step).
       - name: Compile Kotlin (release)
         id: compile
         continue-on-error: true
@@ -61,8 +57,10 @@ jobs:
           chmod +x gradlew
           set +e
           ./gradlew :app:compileReleaseKotlin --no-daemon --stacktrace > compile.log 2>&1
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           tail -n 20 compile.log
+          exit $code
 
       - name: Report Kotlin compile errors
         if: steps.compile.outcome == 'failure'
@@ -75,8 +73,10 @@ jobs:
         run: |
           set +e
           ./gradlew :app:assembleRelease --no-daemon --stacktrace > build.log 2>&1
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           tail -n 20 build.log
+          exit $code
 
       - name: Report packaging / lint errors
         if: steps.build.outcome == 'failure'
