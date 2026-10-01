@@ -10,6 +10,7 @@ import me.rerere.ai.ui.ImageAspectRatio
 import me.rerere.ai.ui.ImageGenerationItem
 import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.UIMessage
+import java.util.UUID
 
 // 提供商实现
 // 采用无状态设计，使用时除了需要传入需要的参数外，还需要传入provider setting作为参数
@@ -76,6 +77,11 @@ data class TextGenerationParams(
     val reasoningLevel: ReasoningLevel = ReasoningLevel.OFF,
     val customHeaders: List<CustomHeader> = emptyList(),
     val customBody: List<CustomBody> = emptyList(),
+    /**
+     * Sent as X-Session-ID (and x-opencode-session for opencode endpoints). Upstream 2.5.1:
+     * a fresh id per params unless the caller passes the conversation's id.
+     */
+    val sessionId: String? = UUID.randomUUID().toString(),
 )
 
 @Serializable
