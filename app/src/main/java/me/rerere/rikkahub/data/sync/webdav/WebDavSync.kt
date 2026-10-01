@@ -15,10 +15,14 @@ import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.WebDavConfig
 import me.rerere.rikkahub.data.files.FileFolders
+import me.rerere.rikkahub.data.sync.AGENT_FULL_DB_ENTRY
+import me.rerere.rikkahub.data.sync.AGENT_FULL_PREFIX
+import me.rerere.rikkahub.data.sync.AGENT_FULL_SETTINGS_ENTRY
 import me.rerere.rikkahub.data.sync.BackupExportFormat
 import me.rerere.rikkahub.data.sync.BackupProgress
 import me.rerere.rikkahub.data.sync.BackupRestoreMode
 import me.rerere.rikkahub.data.sync.fileName
+import me.rerere.rikkahub.data.sync.isBackupArchiveName
 import me.rerere.rikkahub.utils.fileSizeToString
 import me.rerere.workspace.WorkspaceManager
 import java.io.File
@@ -110,7 +114,7 @@ class WebDavSync(
         val client = getClient(config)
         client.ensureCollectionExists().getOrThrow()
         client.list().getOrThrow()
-            .filter { !it.isCollection && it.displayName.startsWith("backup_") && it.displayName.endsWith(".zip") }
+            .filter { !it.isCollection && isBackupArchiveName(it.displayName) }
             .map { resource ->
                 WebDavBackupItem(
                     href = resource.href,
@@ -139,9 +143,9 @@ class WebDavSync(
                         phase = "下载备份",
                         completed = completed,
                         total = total.takeIf { it > 0L } ?: item.size,
-                            detail = "已下载 ${completed.fileSizeToString()}",
-                            totalLabel = "实际 ZIP 文件",
-                        )
+                        detail = "已下载 ${completed.fileSizeToString()}",
+                        totalLabel = "实际 ZIP 文件",
+                    )
                 )
             }.getOrThrow()
             restoreFromBackupFile(backupFile, config, mode, onProgress)
@@ -164,6 +168,23 @@ class WebDavSync(
         restoreFromBackupFile(file, config, mode, onProgress)
     }
 
+    /**
+     * Builds a backup ZIP.
+     *
+     * Both formats carry the RikkaHub 2.4.14-compatible core at the archive root: filtered
+     * settings.json, a converted v24 database (rikka_hub.db plus empty sidecars) and top-level
+     * uploads / fonts / skills. The official importer copies exactly these entries and skips
+     * everything else.
+     *
+     * [BackupExportFormat.FULL] additionally stores this build's own data under
+     * [AGENT_FULL_PREFIX]: a consistent snapshot of the live database, the unfiltered settings,
+     * nested uploads, images, tool outputs and workspaces. This app restores those in place of
+     * the core, so nothing fork-specific is lost.
+     *
+     * Database files are never copied raw while Room is open: snapshots come from
+     * `VACUUM INTO` (or a WAL checkpoint plus copy), so committed data still in the WAL is
+     * included.
+     */
     suspend fun prepareBackupFile(
         config: WebDavConfig,
         onProgress: (BackupProgress) -> Unit = {},
@@ -172,121 +193,137 @@ class WebDavSync(
         val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
         val backupFile = File(context.cacheDir, format.fileName(timestamp))
         backupFile.delete()
+        val full = format == BackupExportFormat.FULL
+        val includeDb = config.items.contains(WebDavConfig.BackupItem.DATABASE)
+        val includeFiles = config.items.contains(WebDavConfig.BackupItem.FILES)
 
-        val settingsText = if (format == BackupExportFormat.OFFICIAL) {
-            createOfficialSettingsText()
-        } else {
-            json.encodeToString(settingsStore.settingsFlow.value)
-        }
-        val selectedRoots = if (config.items.contains(WebDavConfig.BackupItem.FILES)) {
-            if (format == BackupExportFormat.OFFICIAL) {
-                listOf(
-                    File(context.filesDir, FileFolders.UPLOAD),
-                    File(context.filesDir, FileFolders.SKILLS),
-                    File(context.filesDir, FileFolders.FONTS),
-                )
-            } else {
-                listOf(
-                    File(context.filesDir, FileFolders.UPLOAD),
-                    File(context.filesDir, FileFolders.SKILLS),
-                    File(context.filesDir, FileFolders.FONTS),
-                    File(context.filesDir, FileFolders.IMAGES),
-                    File(context.filesDir, "workspaces"),
-                )
-            }
-        } else emptyList()
         val dbRoot = context.getDatabasePath("rikka_hub")
-        val officialDb = if (format == BackupExportFormat.OFFICIAL && config.items.contains(WebDavConfig.BackupItem.DATABASE)) {
-            checkpointDatabase()
-            createOfficialDatabaseSnapshot(dbRoot)
-        } else null
-        val dbFilesForExport = if (officialDb != null) {
-            // Official 2.4.14 restores all three database paths by blindly copying ZIP
-            // entries. The converted database is a standalone DELETE-journal snapshot, so
-            // its sidecars must be present as empty entries: otherwise the official importer
-            // leaves the user's previous WAL/SHM files beside the newly copied database.
-            // Those stale sidecars can make the next Room open observe the wrong database
-            // generation (or report a malformed database). Empty entries deliberately replace
-            // them and are harmless because the snapshot itself is not in WAL mode.
-            val officialWal = File(officialDb.parentFile, "${officialDb.name}-wal").apply {
-                writeBytes(ByteArray(0))
+        var officialWarning: String? = null
+        var officialDb: File? = null
+        var agentDb: File? = null
+        try {
+            if (includeDb) {
+                onProgress(BackupProgress("准备数据库", detail = "生成一致的数据库快照"))
+                checkpointDatabase()
+                officialDb = if (full) {
+                    // The fork's own snapshot is what matters for a FULL backup; a failed
+                    // conversion only drops the official-app compatibility of this archive.
+                    runCatching { createOfficialDatabaseSnapshot(dbRoot) }
+                        .onFailure {
+                            Log.w(TAG, "official-compatible snapshot failed; FULL backup continues", it)
+                            officialWarning = it.message
+                        }
+                        .getOrNull()
+                } else {
+                    createOfficialDatabaseSnapshot(dbRoot)
+                }
+                if (full) agentDb = createFullDatabaseSnapshot(dbRoot)
             }
-            val officialShm = File(officialDb.parentFile, "${officialDb.name}-shm").apply {
-                writeBytes(ByteArray(0))
+
+            val officialSettings = createOfficialSettingsText().toByteArray()
+            val agentSettings = if (full) {
+                json.encodeToString(settingsStore.settingsFlow.value).toByteArray()
+            } else null
+            val dbEntries = buildList {
+                officialDb?.let { db ->
+                    // Official 2.4.14 restores all three database paths by blindly copying ZIP
+                    // entries. The converted database is a standalone DELETE-journal snapshot,
+                    // so its sidecars must be present as empty entries: otherwise the official
+                    // importer leaves the user's previous WAL/SHM files beside the newly copied
+                    // database, and the next Room open can observe the wrong database
+                    // generation (or report a malformed database).
+                    val wal = File(db.parentFile, "${db.name}-wal").apply { writeBytes(ByteArray(0)) }
+                    val shm = File(db.parentFile, "${db.name}-shm").apply { writeBytes(ByteArray(0)) }
+                    add(db to "rikka_hub.db")
+                    add(wal to "rikka_hub-wal")
+                    add(shm to "rikka_hub-shm")
+                }
+                agentDb?.let { add(it to AGENT_FULL_DB_ENTRY) }
             }
-            listOf(
-                officialDb to "rikka_hub.db",
-                officialWal to "rikka_hub-wal",
-                officialShm to "rikka_hub-shm",
-            )
-        } else {
-            listOf(
-                dbRoot to "rikka_hub.db",
-                File(dbRoot.parentFile, "rikka_hub-wal") to "rikka_hub-wal",
-                File(dbRoot.parentFile, "rikka_hub-shm") to "rikka_hub-shm",
-            )
-        }
-        val totalBytes = (settingsText.toByteArray().size +
-            if (config.items.contains(WebDavConfig.BackupItem.DATABASE)) {
-                dbFilesForExport.filter { it.first.isFile }.sumOf { it.first.length() }
-            } else 0L) + selectedRoots.sumOf(::directorySize)
-        var completedBytes = 0L
-        fun report(phase: String, detail: String) {
-            onProgress(
-                BackupProgress(
-                    phase = phase,
-                    completed = completedBytes,
-                    total = totalBytes.coerceAtLeast(1L),
-                    detail = detail,
-                    totalLabel = "压缩前输入数据",
+            val fileEntries = if (includeFiles) backupFileEntries(full) else emptyList()
+            val totalBytes = (officialSettings.size + (agentSettings?.size ?: 0)).toLong() +
+                dbEntries.sumOf { it.first.length() } + fileEntries.sumOf { it.first.length() }
+
+            var completedBytes = 0L
+            fun report(phase: String, detail: String) {
+                onProgress(
+                    BackupProgress(
+                        phase = phase,
+                        completed = completedBytes,
+                        total = totalBytes.coerceAtLeast(1L),
+                        detail = detail,
+                        totalLabel = "压缩前输入数据",
+                    )
                 )
-            )
-        }
-        fun onBytes(phase: String, detail: String): (Long) -> Unit = { bytes ->
-            completedBytes += bytes
-            report(phase, detail)
-        }
+            }
+            fun onBytes(phase: String, detail: String): (Long) -> Unit = { bytes ->
+                completedBytes += bytes
+                report(phase, detail)
+            }
 
-        ZipOutputStream(FileOutputStream(backupFile)).use { zip ->
-            report("写入设置", "settings.json")
-            zip.putNextEntry(ZipEntry("settings.json"))
-            zip.write(settingsText.toByteArray())
-            zip.closeEntry()
-            completedBytes += settingsText.toByteArray().size
-            report("写入设置", "已写入 settings.json")
+            ZipOutputStream(FileOutputStream(backupFile)).use { zip ->
+                report("写入设置", "settings.json")
+                addBytesToZip(zip, "settings.json", officialSettings)
+                completedBytes += officialSettings.size
+                agentSettings?.let {
+                    addBytesToZip(zip, AGENT_FULL_SETTINGS_ENTRY, it)
+                    completedBytes += it.size
+                }
+                report("写入设置", "已写入设置")
 
-            if (config.items.contains(WebDavConfig.BackupItem.DATABASE)) {
-                dbFilesForExport.filter { it.first.isFile }.forEach { (file, entry) ->
+                dbEntries.forEach { (file, entry) ->
                     addFileToZip(zip, file, entry, onBytes("备份数据库", entry))
                 }
-            }
-            if (config.items.contains(WebDavConfig.BackupItem.FILES)) {
-                val entries = if (format == BackupExportFormat.OFFICIAL) {
-                    listOf(
-                        File(context.filesDir, FileFolders.UPLOAD) to "${FileFolders.UPLOAD}/",
-                        File(context.filesDir, FileFolders.SKILLS) to "${FileFolders.SKILLS}/",
-                        File(context.filesDir, FileFolders.FONTS) to "${FileFolders.FONTS}/",
-                    )
-                } else {
-                    listOf(
-                        File(context.filesDir, FileFolders.UPLOAD) to "${FileFolders.UPLOAD}/",
-                        File(context.filesDir, FileFolders.SKILLS) to "${FileFolders.SKILLS}/",
-                        File(context.filesDir, FileFolders.FONTS) to "${FileFolders.FONTS}/",
-                        File(context.filesDir, FileFolders.IMAGES) to "${FileFolders.IMAGES}/",
-                        File(context.filesDir, "workspaces") to "workspaces/",
-                    )
+                fileEntries.forEach { (file, entry) ->
+                    addFileToZip(zip, file, entry, onBytes("备份文件", entry))
                 }
-                entries.filter { it.first.isDirectory }.forEach { (root, prefix) ->
-                    addDirectoryToZip(zip, root, root, prefix, onBytes("备份文件", prefix))
+            }
+
+            val summary = (agentDb ?: officialDb)?.let { db ->
+                SQLiteDatabase.openDatabase(db.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use {
+                    "${countRows(it, "ConversationEntity")} 个对话、${countRows(it, "message_node")} 个消息节点"
+                }
+            } ?: "未包含数据库"
+            val warning = officialWarning?.let { "；官方兼容部分生成失败（$it），此备份只能由本分支恢复" }.orEmpty()
+            report(
+                "备份文件完成",
+                "${backupFile.name}：$summary，${fileEntries.size} 个文件，ZIP ${backupFile.length().fileSizeToString()}$warning",
+            )
+            Log.i(TAG, "prepareBackupFile: ${backupFile.name} $summary files=${fileEntries.size}$warning")
+            backupFile
+        } finally {
+            officialDb?.let(::deleteOfficialDatabaseSnapshot)
+            agentDb?.let(::deleteOfficialDatabaseSnapshot)
+        }
+    }
+
+    /**
+     * Files to archive, as (file, entry name). RikkaHub 2.4.14 restores only top-level files of
+     * uploads/ and fonts/ and aborts the whole import on a nested uploads path, so nested files
+     * go under [AGENT_FULL_PREFIX] (this app maps them back; the official app skips them).
+     */
+    private fun backupFileEntries(full: Boolean): List<Pair<File, String>> = buildList {
+        listOf(FileFolders.UPLOAD, FileFolders.FONTS).forEach { folder ->
+            val root = File(context.filesDir, folder)
+            root.walkTopDown().filter(File::isFile).forEach { file ->
+                val relative = file.relativeTo(root).invariantSeparatorsPath
+                when {
+                    !relative.contains('/') -> add(file to "$folder/$relative")
+                    full -> add(file to "$AGENT_FULL_PREFIX$folder/$relative")
                 }
             }
         }
-        officialDb?.let(::deleteOfficialDatabaseSnapshot)
-        report(
-            "备份文件完成",
-            "${format.name}: ${backupFile.name}，实际 ZIP 大小 ${backupFile.length().fileSizeToString()}",
-        )
-        backupFile
+        val trees = if (full) {
+            listOf(FileFolders.SKILLS, FileFolders.IMAGES, FileFolders.TOOL_OUTPUTS, "workspaces")
+        } else {
+            listOf(FileFolders.SKILLS)
+        }
+        trees.forEach { folder ->
+            val root = File(context.filesDir, folder)
+            root.walkTopDown().filter(File::isFile).forEach { file ->
+                add(file to "$folder/${file.relativeTo(root).invariantSeparatorsPath}")
+            }
+        }
     }
 
     private suspend fun restoreFromBackupFile(
@@ -310,6 +347,12 @@ class WebDavSync(
         }.onFailure { Log.w(TAG, "WAL checkpoint failed; copying available database files", it) }
     }
 
+    private fun addBytesToZip(zip: ZipOutputStream, entryName: String, bytes: ByteArray) {
+        zip.putNextEntry(ZipEntry(entryName))
+        zip.write(bytes)
+        zip.closeEntry()
+    }
+
     private fun addFileToZip(
         zip: ZipOutputStream,
         file: File,
@@ -329,19 +372,49 @@ class WebDavSync(
         }
     }
 
-    private fun addDirectoryToZip(
-        zip: ZipOutputStream,
-        root: File,
-        current: File,
-        prefix: String,
-        onBytes: (Long) -> Unit,
-    ) {
-        current.listFiles()?.forEach { file ->
-            if (file.isDirectory) {
-                addDirectoryToZip(zip, root, file, prefix, onBytes)
-            } else if (file.isFile) {
-                addFileToZip(zip, file, prefix + file.relativeTo(root).invariantSeparatorsPath, onBytes)
+    /**
+     * Standalone copy of the live database in this build's own schema. `VACUUM INTO` reads the
+     * live connection's committed view, so data still sitting in the WAL is included; the old
+     * raw copy of rikka_hub / -wal / -shm could miss it or capture a torn pair.
+     */
+    private fun createFullDatabaseSnapshot(source: File): File {
+        require(source.isFile) { "数据库文件不存在，无法生成完整备份" }
+        val snapshot = File(context.cacheDir, "agent_db_${System.nanoTime()}.db")
+        val liveDb = appDatabase.openHelper.writableDatabase
+        try {
+            val escapedPath = snapshot.absolutePath.replace("'", "''")
+            runCatching {
+                liveDb.execSQL("VACUUM INTO '$escapedPath'")
+            }.onFailure { error ->
+                Log.w(TAG, "VACUUM INTO unavailable; using checkpoint + file copy", error)
+                snapshot.delete()
+                checkpointDatabase()
+                source.copyTo(snapshot, overwrite = true)
+                copyDatabaseSidecar(source, snapshot, "-wal")
+                SQLiteDatabase.openDatabase(
+                    snapshot.absolutePath,
+                    null,
+                    SQLiteDatabase.OPEN_READWRITE,
+                ).use { copied ->
+                    copied.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
+                }
+                File(snapshot.parentFile, snapshot.name + "-wal").delete()
+                File(snapshot.parentFile, snapshot.name + "-shm").delete()
             }
+            require(snapshot.isFile && snapshot.length() > 0L) { "无法生成完整数据库快照" }
+            val liveNodes = countRows(liveDb, "message_node")
+            val snapshotNodes = SQLiteDatabase.openDatabase(
+                snapshot.absolutePath,
+                null,
+                SQLiteDatabase.OPEN_READONLY,
+            ).use { countRows(it, "message_node") }
+            require(liveNodes == 0L || snapshotNodes > 0L) {
+                "完整备份快照缺少聊天消息节点: live=$liveNodes snapshot=$snapshotNodes"
+            }
+            return snapshot
+        } catch (error: Throwable) {
+            deleteOfficialDatabaseSnapshot(snapshot)
+            throw error
         }
     }
 
@@ -620,9 +693,6 @@ class WebDavSync(
                 while (cursor.moveToNext()) add(cursor.getString(nameIndex))
             }
         }
-
-    private fun directorySize(root: File): Long =
-        if (root.isFile) root.length() else if (root.isDirectory) root.walkTopDown().filter(File::isFile).sumOf(File::length) else 0L
 
     private fun resolveCacheFile(displayName: String): File? {
         val name = File(displayName).name

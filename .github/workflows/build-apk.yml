@@ -65,6 +65,11 @@ jobs:
         if: hashFiles('scripts/patch_batch3.py') != ''
         run: python3 scripts/patch_batch3.py
 
+      # Batch 4: FULL backups restore the fork's own database/settings; safer entry aliases.
+      - name: Patch batch 4 fixes
+        if: hashFiles('scripts/patch_batch4.py') != ''
+        run: python3 scripts/patch_batch4.py
+
       - name: Compile Kotlin (release)
         id: compile
         continue-on-error: true
