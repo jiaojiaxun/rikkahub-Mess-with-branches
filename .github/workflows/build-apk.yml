@@ -50,13 +50,15 @@ jobs:
       - name: Patch ChatPage.kt (embed html layer)
         run: python3 scripts/patch_chat_page_html.py
 
+      # --continue: keep compiling independent modules after the first failure so one
+      # run surfaces every module's Kotlin errors as annotations.
       - name: Compile Kotlin (release)
         id: compile
         continue-on-error: true
         run: |
           chmod +x gradlew
           set +e
-          ./gradlew :app:compileReleaseKotlin --no-daemon --stacktrace > compile.log 2>&1
+          ./gradlew :app:compileReleaseKotlin --continue --no-daemon --stacktrace > compile.log 2>&1
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           tail -n 20 compile.log
