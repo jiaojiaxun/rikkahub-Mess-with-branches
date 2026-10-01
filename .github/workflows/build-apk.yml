@@ -2,7 +2,7 @@ name: Build APK (dual-mode chat)
 
 on:
   push:
-    branches: [feat/chat-dual-mode-html]
+    branches: [feat/chat-dual-mode-html, 'port/**']
   workflow_dispatch:
 
 jobs:
