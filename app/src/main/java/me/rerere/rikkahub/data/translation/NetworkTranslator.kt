@@ -126,10 +126,11 @@ internal fun chunkForTranslation(text: String, maxChars: Int = NetworkTranslator
     }
     for (line in text.split("\n")) {
         if (line.length > maxChars) {
-            emit("\n")
+            if (current.isNotEmpty()) emit("\n")
+            val lastPiece = (line.length - 1) / maxChars
             line.chunked(maxChars).forEachIndexed { i, piece ->
                 current.append(piece)
-                emit(if (i == (line.length - 1) / maxChars) "\n" else "")
+                emit(if (i == lastPiece) "\n" else "")
             }
             continue
         }
