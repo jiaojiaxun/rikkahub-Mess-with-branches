@@ -1,0 +1,22 @@
+name: Port upstream (per release-note commit)
+
+on:
+  push:
+    branches: [feat/chat-dual-mode-html]
+    paths:
+      - '.github/workflows/port-upstream.yml'
+      - 'scripts/port_upstream.sh'
+      - 'scripts/upstream_port_list.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Port listed upstream commits
+        run: bash scripts/port_upstream.sh
