@@ -296,8 +296,16 @@ object ModelRegistry {
     // deepseek-v4-flash and deepseek-v4-flash-vision-exp route to V4.1-Flash (native
     // vision); since 2026-09-14 deepseek-v4-pro does too. Third-party hosts may still
     // serve the old text-only weights; users can override modalities per model.
+    // (Upstream 2.5.5 still marks v4-flash / v4-pro text-only; we deliberately differ.)
     private val DEEPSEEK_V4_FLASH = defineModel {
         tokens("deepseek", "v", "4", "flash")
+        visionInput()
+        toolReasoningAbility()
+    }
+
+    // Upstream 2.4.11 / 2.5.5: experimental vision id, kept as its own entry.
+    private val DEEPSEEK_V4_FLASH_VISION_EXP = defineModel {
+        tokens("deepseek", "v", "4", "flash", "vision", "exp")
         visionInput()
         toolReasoningAbility()
     }
@@ -308,14 +316,14 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
-    // Current official id for V4.1-Flash.
+    // Current official id for V4.1-Flash (upstream 2.5.2, 46cacf23).
     private val DEEPSEEK_FLASH = defineModel {
         tokens("deepseek", "flash")
         visionInput()
         toolReasoningAbility()
     }
 
-    // Open-weights / third-party ids such as deepseek-ai/DeepSeek-V4.1-Flash.
+    // Open-weights / third-party ids such as deepseek-ai/DeepSeek-V4.1-Flash (upstream 2.5.1, ab07ac1f).
     private val DEEPSEEK_V4_1_FLASH = defineModel {
         tokens("deepseek", "v", "4", "1", "flash")
         visionInput()
@@ -355,6 +363,12 @@ object ModelRegistry {
 
     private val QWEN_3_7 = defineModel {
         tokens("qwen", "3", "7")
+        visionInput()
+        toolReasoningAbility()
+    }
+
+    private val QWEN_3_8 = defineModel {
+        tokens("qwen", "3", "8")
         visionInput()
         toolReasoningAbility()
     }
@@ -451,6 +465,13 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
+    // Upstream 2.5.3 (c3d6867c).
+    private val STEP_5 = defineModel {
+        tokens("step", "5")
+        visionInput()
+        toolReasoningAbility()
+    }
+
     private val INTERN_S1 = defineModel {
         tokens("intern", "s", "1")
         visionInput()
@@ -484,6 +505,17 @@ object ModelRegistry {
 
     private val GLM_5_2 = defineModel {
         tokens("glm", "5", "2")
+        toolReasoningAbility()
+    }
+
+    private val GLM_5_3 = defineModel {
+        tokens("glm", "5", "3")
+        toolReasoningAbility()
+    }
+
+    private val GLM_5_3_FLASH = defineModel {
+        tokens("glm", "5", "3", "flash")
+        visionInput()
         toolReasoningAbility()
     }
 
@@ -552,6 +584,12 @@ object ModelRegistry {
         toolReasoningAbility()
     }
 
+    // Upstream 2.4.15 (5b890d22): hy4 has no vision input.
+    private val HY4 = defineModel {
+        tokens("hy", "4")
+        toolReasoningAbility()
+    }
+
     private val LONGCAT_2 = defineModel {
         tokens("longcat", "2", "0")
         toolReasoningAbility()
@@ -616,16 +654,18 @@ object ModelRegistry {
         DEEPSEEK_CHAT,
         DEEPSEEK_R1_MODEL,
         DEEPSEEK_REASONER,
-        DEEPSEEK_V4_FLASH,
-        DEEPSEEK_V4_PRO,
         DEEPSEEK_FLASH,
+        DEEPSEEK_V4_FLASH,
+        DEEPSEEK_V4_FLASH_VISION_EXP,
         DEEPSEEK_V4_1_FLASH,
+        DEEPSEEK_V4_PRO,
         DEEPSEEK_V3_1,
         DEEPSEEK_V3_2,
         QWEN_3,
         QWEN_3_5,
         QWEN_3_6,
         QWEN_3_7,
+        QWEN_3_8,
         QWEN_3_5_MAX,
         QWEN_3_6_MAX,
         QWEN_3_7_MAX,
@@ -642,6 +682,7 @@ object ModelRegistry {
         KIMI_K3_ALIAS,
         STEP_3,
         STEP_3_7_FLASH,
+        STEP_5,
         INTERN_S1,
         GLM_4_5,
         GLM_4_6,
@@ -649,6 +690,8 @@ object ModelRegistry {
         GLM_5,
         GLM_5_1,
         GLM_5_2,
+        GLM_5_3,
+        GLM_5_3_FLASH,
         MINIMAX_M2,
         MINIMAX_M2_5,
         MINIMAX_M2_7,
@@ -661,6 +704,7 @@ object ModelRegistry {
         XIAOMI_MIMO_V3,
         XIAOMI_MIMO_V3_PRO,
         HY3,
+        HY4,
         LONGCAT_2,
         MUSE_SPARK,
         MUSE_GLIMMER,
