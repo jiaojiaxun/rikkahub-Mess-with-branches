@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -171,15 +172,23 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
 
     private fun parseUsage(usage: JsonObject?): TokenUsage? {
         if (usage == null) return null
+        // Dialects report the cache hit in different fields (OpenAI nested, Moonshot top-level,
+        // DeepSeek prompt_cache_hit_tokens). Some gateways send several and leave the unused
+        // one at 0, so take the largest instead of the first non-null.
+        val cachedTokens = listOfNotNull(
+            usage["prompt_tokens_details"]?.jsonObjectOrNull
+                ?.get("cached_tokens")?.jsonPrimitiveOrNull?.intOrNull,
+            usage["cached_tokens"]?.jsonPrimitiveOrNull?.intOrNull,
+            usage["prompt_cache_hit_tokens"]?.jsonPrimitiveOrNull?.intOrNull,
+        ).maxOrNull() ?: 0
         return TokenUsage(
             promptTokens = usage["prompt_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
             completionTokens = usage["completion_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
             totalTokens = usage["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-            cachedTokens = usage["prompt_tokens_details"]?.jsonObjectOrNull
-                ?.get("cached_tokens")?.jsonPrimitive?.intOrNull
-                ?: usage["cached_tokens"]?.jsonPrimitive?.intOrNull
-                ?: usage["prompt_cache_hit_tokens"]?.jsonPrimitive?.intOrNull
-                ?: 0,
+            cachedTokens = cachedTokens,
+            // OpenRouter reports the generation cost (USD) in the final usage chunk. Only the
+            // non-stream parser read it before, so streamed replies (the default) showed none.
+            cost = usage["cost"]?.jsonPrimitiveOrNull?.doubleOrNull,
         )
     }
 

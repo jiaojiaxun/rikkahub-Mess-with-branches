@@ -110,6 +110,26 @@ jobs:
           fi
           exit $code
 
+      # Non-blocking: usage / cost / cache accounting and the context-budget estimator.
+      - name: Unit tests (usage accounting + context budget)
+        id: stats_tests
+        if: steps.compile.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set +e
+          ./gradlew :ai:testDebugUnitTest --tests 'me.rerere.ai.ui.StreamUsageAccountingTest' \
+            :app:testDebugUnitTest --tests 'me.rerere.rikkahub.data.ai.ContextBudgetPlanner*' \
+            --continue --no-daemon > stats-test.log 2>&1
+          code=$?
+          tail -n 30 stats-test.log
+          if [ "$code" -ne 0 ]; then
+            python3 scripts/report_build_errors.py stats-test.log || true
+            grep -E "Test > .* FAILED|AssertionError|expected:<" stats-test.log | head -n 20 | sed 's/^/::warning title=StatsTests::/'
+          else
+            echo "::notice title=StatsTests::all tests passed"
+          fi
+          exit $code
+
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -119,6 +139,7 @@ jobs:
             compile.log
             build.log
             test.log
+            stats-test.log
           if-no-files-found: ignore
 
       - name: Fail when a build step failed

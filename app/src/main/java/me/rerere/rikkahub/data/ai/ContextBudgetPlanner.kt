@@ -60,9 +60,6 @@ object ContextBudgetPlanner {
             val usage = messages[usageIndex].usage!!
             val reportedTotal = usage.totalTokens.takeIf { it > 0 }
                 ?: (usage.promptTokens + usage.completionTokens)
-            // Tool outputs are attached to the assistant message only after the provider has
-            // reported usage for its tool-call response. They therefore are not represented in
-            // that usage figure, even though the next model request includes them.
             reportedTotal.toLong() +
                 estimatePostUsageToolOutputTokens(messages[usageIndex]) +
                 messages.drop(usageIndex + 1).sumOf(::estimateMessageTokens)
@@ -88,16 +85,25 @@ object ContextBudgetPlanner {
     }
 
     /**
-     * Estimates only the execution results that were appended after provider usage was emitted.
-     * Tool-call names and arguments already belong to the assistant completion represented by the
-     * reported usage, so counting them here would double-count that response.
+     * Estimates only the tool results appended after provider usage was emitted. Tool-call
+     * names and arguments already belong to the reported completion.
+     *
+     * Only the trailing run of tool parts counts. A multi-step reply (tool -> tool -> answer)
+     * keeps every step in one message, and its usage belongs to the LAST request, whose prompt
+     * already contained every earlier tool result. Counting those again inflated the estimate
+     * and triggered compaction too early.
      */
     @Suppress("DEPRECATION")
-    private fun estimatePostUsageToolOutputTokens(message: UIMessage): Long = message.parts.sumOf { part ->
-        when (part) {
-            is UIMessagePart.Tool -> part.output.sumOf(::estimatePartTokens)
-            is UIMessagePart.ToolResult -> estimateTextTokens(part.content.toString())
-            else -> 0L
+    private fun estimatePostUsageToolOutputTokens(message: UIMessage): Long {
+        val lastNonTool = message.parts.indexOfLast { part ->
+            part !is UIMessagePart.Tool && part !is UIMessagePart.ToolResult
+        }
+        return message.parts.drop(lastNonTool + 1).sumOf { part ->
+            when (part) {
+                is UIMessagePart.Tool -> part.output.sumOf(::estimatePartTokens)
+                is UIMessagePart.ToolResult -> estimateTextTokens(part.content.toString())
+                else -> 0L
+            }
         }
     }
 
