@@ -256,7 +256,7 @@
   <string name="chat_message_tool_search_web">搜尋網頁: %1$s</string>
   <string name="chat_message_tool_submit">提交</string>
   <string name="chat_page_cancel">取消</string>
-  <string name="chat_page_check_title_model_settings">檢查標題模型設定</string>
+  <string name="chat_page_check_fast_model_settings">檢查快速模型設定</string>
   <string name="chat_page_clear_all_errors">清除全部</string>
   <string name="chat_page_compress_additional_prompt">額外指示（選填）</string>
   <string name="chat_page_compress_additional_prompt_hint">指定要保留或聚焦的內容</string>
@@ -537,7 +537,7 @@
   <string name="reasoning_picker_title">調整模型思考深度</string>
   <string name="reasoning_xhigh">超高</string>
   <string name="regenerate">重新生成</string>
-  <string name="regenerate_confirm_message">您確定要重新產生這則訊息嗎？</string>
+  <string name="regenerate_confirm_message">您確定要重新生成此訊息嗎？此訊息下方的所有訊息都會被刪除。</string>
   <string name="render_with_webview">網頁視圖渲染</string>
   <string name="rikkahub_provider_description">官方免費 AI 服務，使用用戶贊助資金為新用戶提供部分免費模型作為備用，無需 API 金鑰。具有嚴格速率限制，若您已購買自己的提供者，請盡量使用自有提供者。</string>
   <string name="safe_mode_assistants">助理</string>
@@ -763,7 +763,7 @@
   <string name="setting_page_built_in_tools_search_desc">啟用 Google 搜尋整合</string>
   <string name="setting_page_built_in_tools_url_context">URL 上下文</string>
   <string name="setting_page_built_in_tools_url_context_desc">啟用 URL 內容處理</string>
-  <string name="setting_page_chat_storage">聊天記錄儲存</string>
+  <string name="setting_page_chat_storage">儲存空間管理</string>
   <string name="setting_page_chat_storage_desc">%1$d 個檔案，%2$.2f MB</string>
   <string name="setting_page_code_display_settings">程式碼顯示</string>
   <string name="setting_page_color_mode">顏色模式</string>
@@ -1562,7 +1562,7 @@
   <string name="setting_display_page_tts_read_outside_brackets_title">TTS 不朗讀括號內的內容</string>
   <string name="setting_display_page_tts_read_outside_brackets_desc">啟用後，TTS 將不朗讀括號內的內容</string>
   <string name="assistant_page_context_message_limit">上下文訊息限制</string>
-  <string name="assistant_page_context_message_limit_desc">限制發送給模型的最近訊息數量。當超出限制時，上下文會一次性修剪到大約一半，而不是每次輪次刪除一條訊息，這樣請求前綴保持穩定，提示詞緩存可以在多次輪次中繼續運作。</string>
+  <string name="assistant_page_context_message_limit_desc">限制傳送給模型的最近訊息數量</string>
   <string name="assistant_page_context_message_limit_count">上下文訊息限制：%d</string>
   <string name="assistant_page_context_message_limit_unlimited">無限上下文訊息</string>
   <string name="assistant_page_context_message_limit_warning">限制上下文會在每次上下文被裁減時使提示詞快取失效。較大的限制裁減頻率較低；無限則永不裁減並保持快取完整。</string>

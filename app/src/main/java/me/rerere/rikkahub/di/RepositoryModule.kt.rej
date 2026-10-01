@@ -1,0 +1,12 @@
+diff a/app/src/main/java/me/rerere/rikkahub/di/RepositoryModule.kt b/app/src/main/java/me/rerere/rikkahub/di/RepositoryModule.kt	(rejected hunks)
+@@ -56,6 +56,10 @@ val repositoryModule = module {
+                     source = File(context.filesDir, FileFolders.SKILLS).apply { mkdirs() },
+                     target = "/skills",
+                 ),
++                WorkspaceBindMount(
++                    source = File(context.filesDir, FileFolders.BUILTIN_SKILLS).apply { mkdirs() },
++                    target = "/builtin_skills",
++                ),
+                 WorkspaceBindMount(
+                     source = File(context.filesDir, FileFolders.TOOL_OUTPUTS).apply { mkdirs() },
+                     target = "/tool_outputs",

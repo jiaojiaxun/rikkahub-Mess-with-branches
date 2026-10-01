@@ -1,0 +1,68 @@
+diff a/app/src/main/java/me/rerere/rikkahub/ui/pages/search/SearchVM.kt b/app/src/main/java/me/rerere/rikkahub/ui/pages/search/SearchVM.kt	(rejected hunks)
+@@ -45,30 +68,57 @@ class SearchVM(
+ 
+     init {
+         viewModelScope.launch {
+-            _searchQuery
+-                .debounce(300L)
+-                .collectLatest { query -> performSearch(query) }
++            searchRequests.receiveAsFlow().collectLatest { request -> performSearch(request) }
++        }
++        viewModelScope.launch {
++            settingsStore.settingsFlow
++                .map { it.getCurrentAssistant().id }
++                .distinctUntilChanged()
++                .collect { assistantId ->
++                    currentAssistantId = assistantId
++                    if (searchScope == MessageSearchScope.CURRENT_ASSISTANT) {
++                        search()
++                    }
++                }
+         }
+     }
+ 
+     fun onQueryChange(query: String) {
+         searchQuery = query
+-        _searchQuery.value = query
++        requestSearch(debounce = true)
++    }
++
++    fun onScopeChange(scope: MessageSearchScope) {
++        if (searchScope == scope) return
++        searchScope = scope
++        search()
+     }
+ 
+     fun onSortChange(sort: MessageSearchSort) {
+         if (sortOrder == sort) return
+         sortOrder = sort
+         context.writeStringPreference(SORT_ORDER_PREF_KEY, sort.name)
+-        viewModelScope.launch {
+-            performSearch(searchQuery)
+-        }
++        search()
+     }
+ 
+     fun search() {
+-        viewModelScope.launch {
+-            performSearch(searchQuery)
++        requestSearch()
++    }
++
++    private fun requestSearch(debounce: Boolean = false) {
++        val assistantId = when (searchScope) {
++            MessageSearchScope.CURRENT_ASSISTANT -> currentAssistantId
++            MessageSearchScope.ALL_ASSISTANTS -> null
+         }
++        searchRequests.trySend(
++            SearchRequest(
++                query = searchQuery,
++                sort = sortOrder,
++                scope = searchScope,
++                assistantId = assistantId,
++                debounce = debounce,
++            )
++        )
+     }
+ 
+     fun rebuildIndex() {

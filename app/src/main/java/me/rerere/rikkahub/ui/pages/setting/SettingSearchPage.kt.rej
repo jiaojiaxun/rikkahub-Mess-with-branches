@@ -1,0 +1,51 @@
+diff a/app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingSearchPage.kt b/app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingSearchPage.kt	(rejected hunks)
+@@ -305,39 +304,17 @@ private fun SearchProviderCard(
+                 SearchAbilityTagLine(options = service)
+             }
+ 
+-            IconButton(onClick = { showMenu = true }) {
+-                Icon(
+-                    imageVector = HugeIcons.MoreVertical,
+-                    contentDescription = null
++            ItemActionMenu(
++                actions = listOf(
++                    ItemAction(
++                        text = stringResource(R.string.delete),
++                        icon = HugeIcons.Delete01,
++                        destructive = true,
++                        enabled = canDelete,
++                        onClick = onDelete,
++                    ),
+                 )
+-                DropdownMenu(
+-                    expanded = showMenu,
+-                    onDismissRequest = { showMenu = false }
+-                ) {
+-                    DropdownMenuItem(
+-                        text = { Text(stringResource(R.string.edit)) },
+-                        onClick = {
+-                            showMenu = false
+-                            onEdit()
+-                        },
+-                        leadingIcon = {
+-                            Icon(HugeIcons.PencilEdit01, contentDescription = null)
+-                        }
+-                    )
+-                    DropdownMenuItem(
+-                        text = { Text(stringResource(R.string.delete)) },
+-                        onClick = {
+-                            showMenu = false
+-                            onDelete()
+-                        },
+-                        leadingIcon = {
+-                            Icon(HugeIcons.Delete01, contentDescription = null)
+-                        },
+-                        enabled = canDelete
+-                    )
+-                }
+-            }
+-
++            )
+         }
+     }
+ }

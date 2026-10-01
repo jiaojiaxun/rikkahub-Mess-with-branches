@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -167,7 +169,7 @@ fun ImageGenPage(
         ) { page ->
             when (page) {
                 0 -> ImageGenScreen(vm = vm)
-                1 -> ImageGalleryScreen(vm = vm)
+                1 -> ImageGalleryScreen(vm = vm, isActive = pagerState.currentPage == 1)
             }
         }
     }
@@ -514,6 +516,7 @@ private fun ReferenceImagesRow(
 @Composable
 private fun ImageGalleryScreen(
     vm: ImgGenVM,
+    isActive: Boolean,
 ) {
     val generatedImages = vm.generatedImages.collectAsLazyPagingItems()
     val context = LocalContext.current

@@ -86,11 +86,10 @@ class TtsController(
     private val queue: java.util.concurrent.ConcurrentLinkedQueue<TtsChunk> = java.util.concurrent.ConcurrentLinkedQueue()
     private val allChunks: MutableList<TtsChunk> = mutableListOf()
     private val cache = java.util.concurrent.ConcurrentHashMap<UUID, kotlinx.coroutines.Deferred<TTSResponse>>()
-    private var lastPrefetchedIndex: Int = -1
 
     // 行为参数
     private val chunkDelayMs = 120L
-    private val prefetchCount = 4
+    private val prefetchCount = 2
 
     // 状态流（保留与旧版兼容的 StateFlow）
     private val _isAvailable = MutableStateFlow(false)
@@ -174,7 +173,6 @@ class TtsController(
         }
 
         if (workerJob?.isActive != true) startWorker()
-        prefetchFrom((_currentChunk.value).coerceAtLeast(0))
     }
 
     private fun internalReset() {
@@ -187,7 +185,6 @@ class TtsController(
         allChunks.clear()
         cache.values.forEach { it.cancel(CancellationException("Reset")) }
         cache.clear()
-        lastPrefetchedIndex = -1
         _isSpeaking.update { false }
         _currentChunk.update { 0 }
         _totalChunks.update { 0 }
@@ -238,7 +235,6 @@ class TtsController(
         allChunks.clear()
         cache.values.forEach { it.cancel(CancellationException("Stopped")) }
         cache.clear()
-        lastPrefetchedIndex = -1
         _isSpeaking.update { false }
         _currentChunk.update { 0 }
         _totalChunks.update { 0 }
@@ -282,8 +278,8 @@ class TtsController(
                         )
                     }
 
-                    // 预取下一窗口
-                    prefetchFrom(chunk.index + 1)
+                    // 仅预取当前分片后的固定窗口
+                    prefetchNextChunks(chunk.index)
 
                     val response = try {
                         awaitOrCreate(chunk, provider)

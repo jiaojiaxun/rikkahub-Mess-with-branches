@@ -1,0 +1,23 @@
+diff a/app/src/main/java/me/rerere/rikkahub/data/ai/tools/SkillsTools.kt b/app/src/main/java/me/rerere/rikkahub/data/ai/tools/SkillsTools.kt	(rejected hunks)
+@@ -32,8 +35,9 @@ fun createSkillTools(
+                     appendLine("<available_skills>")
+                     available.forEach { skill ->
+                         appendLine("  <skill>")
+-                        appendLine("    <name>${skill.name}</name>")
+-                        appendLine("    <description>${skill.description}</description>")
++                        // 技能可能来自第三方导入，转义并限长，防止 name/description 闭合标签注入任意系统提示
++                        appendLine("    <name>${skill.name.escapeXml()}</name>")
++                        appendLine("    <description>${skill.description.take(MAX_SKILL_DESCRIPTION_LENGTH).escapeXml()}</description>")
+                         appendLine("  </skill>")
+                     }
+                     append("</available_skills>")
+@@ -61,7 +65,8 @@ fun createSkillTools(
+             execute = {
+                 val name = it.jsonObject["name"]?.jsonPrimitive?.content
+                     ?: error("name is required")
+-                val skill = available.firstOrNull { skill -> skill.name == name }
++                // 模型可能照抄系统提示中转义后的名称，两种形式都接受
++                val skill = available.firstOrNull { skill -> skill.name == name || skill.name.escapeXml() == name }
+                     ?: error("Skill '$name' is not available. Available skills: ${available.joinToString { it.name }}")
+                 val path = it.jsonObject["path"]?.jsonPrimitive?.content
+                 val content = if (path.isNullOrBlank()) {

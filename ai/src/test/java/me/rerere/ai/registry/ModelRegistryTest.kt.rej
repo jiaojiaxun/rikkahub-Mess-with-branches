@@ -1,0 +1,18 @@
+diff a/ai/src/test/java/me/rerere/ai/registry/ModelRegistryTest.kt b/ai/src/test/java/me/rerere/ai/registry/ModelRegistryTest.kt	(rejected hunks)
+@@ -141,6 +141,16 @@ class ModelRegistryTest {
+         assertEquals(null, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("deepseek-v3"))
+     }
+ 
++    @Test
++    fun testStep5() {
++        val visionInput = listOf(Modality.TEXT, Modality.IMAGE)
++        val toolReasoning = listOf(ModelAbility.TOOL, ModelAbility.REASONING)
++        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("step-5"))
++        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("step-5-preview"))
++        assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("step-5"))
++        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("step-3"))
++    }
++
+     @Test
+     fun testContextLengthDefault() {
+         assertEquals(null, ModelRegistry.MODEL_CONTEXT_LENGTH.getData("unknown-model-xyz"))

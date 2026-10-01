@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelType
 import me.rerere.ai.provider.ProviderSetting
@@ -136,20 +137,14 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
                 modelId = settings.fastModelId,
                 providers = settings.providers,
                 onSelect = { vm.updateSettings(settings.copy(fastModelId = it.id)) },
+                reasoningLevel = settings.fastModelReasoningLevel,
+                onUpdateReasoningLevel = {
+                    vm.updateSettings(settings.copy(fastModelReasoningLevel = it))
+                },
             )
         }
         item {
-            ModelSettingItem(
-                title = stringResource(R.string.setting_model_page_title_model),
-                description = stringResource(R.string.setting_model_page_title_model_desc),
-                modelId = settings.titleModelId,
-                providers = settings.providers,
-                onSelect = { vm.updateSettings(settings.copy(titleModelId = it.id)) },
-                onClear = { vm.updateSettings(settings.copy(titleModelId = null)) },
-            )
-        }
-        item {
-            SuggestionModelSettingItem(
+            SuggestionSettingItem(
                 settings = settings,
                 vm = vm,
             )
@@ -554,7 +549,8 @@ private fun ModelSettingItem(
     modelId: Uuid?,
     providers: List<ProviderSetting>,
     onSelect: (Model) -> Unit,
-    onClear: (() -> Unit)? = null,
+    reasoningLevel: ReasoningLevel? = null,
+    onUpdateReasoningLevel: ((ReasoningLevel) -> Unit)? = null,
 ) {
     val state = rememberModelListState(
         modelId = modelId,

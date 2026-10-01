@@ -9,6 +9,7 @@ import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -58,6 +59,7 @@ import me.rerere.ai.ui.metadataAs
 import me.rerere.ai.ui.toMetadata
 import me.rerere.ai.util.KeyRoulette
 import me.rerere.ai.util.configureReferHeaders
+import me.rerere.ai.util.configureSessionHeaders
 import me.rerere.ai.util.encodeBase64
 import me.rerere.ai.util.json
 import me.rerere.ai.util.mergeCustomBody
@@ -206,6 +208,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             request = Request.Builder()
                 .url(url)
                 .headers(params.customHeaders.toHeaders())
+                .configureSessionHeaders(url.toString(), params.sessionId)
                 .post(
                     json.encodeToString(requestBody).toRequestBody("application/json".toMediaType())
                 )
@@ -253,6 +256,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             request = Request.Builder()
                 .url(url)
                 .headers(params.customHeaders.toHeaders())
+                .configureSessionHeaders(url.toString(), params.sessionId)
                 .post(
                     json.encodeToString(requestBody).toRequestBody("application/json".toMediaType())
                 )
@@ -886,6 +890,30 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                 }
             })
         }
+
+    private fun UIMessagePart.ServerTool.toGoogleServerToolParts(): List<JsonObject> {
+        val metadata = metadataAs<ServerToolMetadata>()
+        val protocol = metadata?.protocol
+        if (protocol != null && protocol != ServerToolProtocol.GOOGLE_GENERATE_CONTENT) {
+            return emptyList()
+        }
+
+        return buildList {
+            metadata?.call?.let(::add)
+            metadata?.result?.let(::add)
+        }
+    }
+
+    private fun JsonObject.toGoogleThoughtMetadata() =
+        this["thoughtSignature"]?.jsonPrimitive?.contentOrNull?.let {
+            GoogleThoughtMetadata(thoughtSignature = it).toMetadata()
+        }
+
+    private fun mergeGoogleMetadata(first: JsonObject?, second: JsonObject?): JsonObject? = when {
+        first == null -> second
+        second == null -> first
+        else -> JsonObject(first + second)
+    }
 
     private fun parseUsageMeta(jsonObject: JsonObject?): TokenUsage? {
         if (jsonObject == null) {

@@ -1,0 +1,55 @@
+diff a/app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspacePage.kt b/app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspacePage.kt	(rejected hunks)
+@@ -222,38 +215,21 @@ private fun WorkspaceCard(
+                         overflow = TextOverflow.Ellipsis,
+                     )
+                 }
+-                Box {
+-                    IconButton(onClick = { menuExpanded = true }) {
+-                        Icon(HugeIcons.MoreVertical, contentDescription = null)
+-                    }
+-                    DropdownMenu(
+-                        expanded = menuExpanded,
+-                        onDismissRequest = { menuExpanded = false },
+-                    ) {
+-                        DropdownMenuItem(
+-                            text = { Text(stringResource(R.string.common_rename)) },
+-                            leadingIcon = { Icon(HugeIcons.Edit01, contentDescription = null) },
+-                            onClick = {
+-                                menuExpanded = false
+-                                onRename()
+-                            },
+-                        )
+-                        DropdownMenuItem(
+-                            text = { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) },
+-                            leadingIcon = {
+-                                Icon(
+-                                    imageVector = HugeIcons.Delete01,
+-                                    contentDescription = null,
+-                                    tint = MaterialTheme.colorScheme.error,
+-                                )
+-                            },
+-                            onClick = {
+-                                menuExpanded = false
+-                                onDelete()
+-                            },
+-                        )
+-                    }
+-                }
++                ItemActionMenu(
++                    actions = listOf(
++                        ItemAction(
++                            text = stringResource(R.string.common_rename),
++                            icon = HugeIcons.PencilEdit01,
++                            onClick = onRename,
++                        ),
++                        ItemAction(
++                            text = stringResource(R.string.common_delete),
++                            icon = HugeIcons.Delete01,
++                            destructive = true,
++                            onClick = onDelete,
++                        ),
++                    )
++                )
+             }
+         }
+     }

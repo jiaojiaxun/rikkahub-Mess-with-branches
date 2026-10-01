@@ -1,0 +1,27 @@
+diff a/app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantPromptPage.kt b/app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantPromptPage.kt	(rejected hunks)
+@@ -636,16 +629,16 @@ private fun AssistantRegexCard(
+                     },
+                     modifier = Modifier.padding(start = 8.dp)
+                 )
+-                IconButton(
+-                    onClick = {
+-                        expanded = !expanded
+-                    }
+-                ) {
+-                    Icon(
+-                        imageVector = if (expanded) HugeIcons.ArrowUp01 else HugeIcons.ArrowDown01,
+-                        contentDescription = null
++                ItemActionMenu(
++                    actions = listOf(
++                        ItemAction(
++                            text = stringResource(R.string.delete),
++                            icon = HugeIcons.Delete01,
++                            destructive = true,
++                            onClick = { showDeleteDialog = true },
++                        ),
+                     )
+-                }
++                )
+             }
+ 
+             if (expanded) {

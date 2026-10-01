@@ -1,0 +1,23 @@
+diff a/app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessageTools.kt b/app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessageTools.kt	(rejected hunks)
+@@ -124,7 +124,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
+     var showResult by remember { mutableStateOf(false) }
+     var showDenyDialog by remember { mutableStateOf(false) }
+     var expanded by remember { mutableStateOf(true) }
+-    val isPending = tool.approvalState is ToolApprovalState.Pending
++    val isPending = tool.isPending
+     val isDenied = tool.approvalState is ToolApprovalState.Denied
+     val images = tool.output.filterIsInstance<UIMessagePart.Image>()
+ 
+@@ -188,11 +188,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
+         } else {
+             null
+         },
+-        onClick = if (context.content != null || isPending || images.isNotEmpty()) {
+-            { showResult = true }
+-        } else {
+-            null
+-        },
++        onClick = { showResult = true },
+         content = if (hasExtraContent) {
+             {
+                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

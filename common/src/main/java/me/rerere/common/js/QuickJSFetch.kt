@@ -1,9 +1,12 @@
 package me.rerere.common.js
 
-import com.whl.quickjs.wrapper.JSCallFunction
-import com.whl.quickjs.wrapper.QuickJSContext
+import com.dokar.quickjs.QuickJs
+import com.dokar.quickjs.binding.function
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -31,8 +34,8 @@ private data class HttpResponseDto(
     val body: String,
 )
 
-// fetch() returns a Response object synchronously (not a Promise)
-// because this QuickJS wrapper doesn't support microtask scheduling.
+// Keep fetch() synchronous for compatibility with existing custom search scripts.
+// Both direct use and `await fetch(...)` work with this Response object.
 private const val FETCH_POLYFILL = """
 globalThis.fetch = function(url, options) {
     options = options || {};

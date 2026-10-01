@@ -1,0 +1,37 @@
+diff a/app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsVM.kt b/app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/skills/SkillsVM.kt	(rejected hunks)
+@@ -104,21 +104,22 @@ class SkillsVM(
+                     return@launch
+                 }
+ 
+-                val skillMdContent = downloadText(skillMdEntry.second) ?: run {
++                val skillMdBytes = downloadBytes(skillMdEntry.second) ?: run {
+                     withContext(Dispatchers.Main) { onResult(false, "下载 SKILL.md 失败，请检查链接或网络") }
+                     return@launch
+                 }
+ 
+-                val frontmatter = SkillFrontmatterParser.parse(skillMdContent)
++                val frontmatter = SkillFrontmatterParser.parse(skillMdBytes.toString(Charsets.UTF_8))
+                 val name = frontmatter["name"]
+                 if (name.isNullOrBlank()) {
+                     withContext(Dispatchers.Main) { onResult(false, "SKILL.md 格式错误：缺少 name 字段") }
+                     return@launch
+                 }
+ 
+-                val fileContents = LinkedHashMap<String, String>()
++                // 按字节下载保存，避免图片等二进制附属文件被当作 UTF-8 文本解码而损坏
++                val fileContents = LinkedHashMap<String, ByteArray>()
+                 for ((relativePath, downloadUrl) in files) {
+-                    val content = downloadText(downloadUrl)
++                    val content = if (relativePath == "SKILL.md") skillMdBytes else downloadBytes(downloadUrl)
+                     if (content == null) {
+                         withContext(Dispatchers.Main) { onResult(false, "下载文件失败：$relativePath") }
+                         return@launch
+@@ -126,7 +127,7 @@ class SkillsVM(
+                     fileContents[relativePath] = content
+                 }
+ 
+-                val saved = skillManager.saveSkillFilesAtomically(name, fileContents)
++                val saved = skillManager.saveSkillFileBytesAtomically(name, fileContents)
+                 if (!saved) {
+                     withContext(Dispatchers.Main) { onResult(false, "保存失败") }
+                     return@launch

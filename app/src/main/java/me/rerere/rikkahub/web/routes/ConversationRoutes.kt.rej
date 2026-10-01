@@ -1,0 +1,13 @@
+diff a/app/src/main/java/me/rerere/rikkahub/web/routes/ConversationRoutes.kt b/app/src/main/java/me/rerere/rikkahub/web/routes/ConversationRoutes.kt	(rejected hunks)
+@@ -239,10 +236,7 @@ fun Route.conversationRoutes(
+                 throw BadRequestException("Assistant not found")
+             }
+ 
+-            val conversation = conversationRepo.getConversationById(uuid)
+-                ?: throw NotFoundException("Conversation not found")
+-
+-            chatService.saveConversation(uuid, conversation.copy(assistantId = targetAssistantId))
++            chatService.moveConversationToAssistant(uuid, targetAssistantId)
+             call.respond(HttpStatusCode.OK, mapOf("status" to "updated"))
+         }
+ 

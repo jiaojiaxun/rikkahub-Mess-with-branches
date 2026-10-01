@@ -1,0 +1,9 @@
+diff a/app/src/main/java/me/rerere/rikkahub/data/files/FilesManager.kt b/app/src/main/java/me/rerere/rikkahub/data/files/FilesManager.kt	(rejected hunks)
+@@ -489,6 +513,7 @@ data class SyncResult(
+ object FileFolders {
+     const val UPLOAD = "upload"
+     const val SKILLS = "skills"
++    const val BUILTIN_SKILLS = "builtin_skills"
+     const val FONTS = "fonts"
+     const val TOOL_OUTPUTS = "tool_outputs"
+ }

@@ -59,11 +59,15 @@ class ChatInputState {
                 originalParts.forEachIndexed { index, part ->
                     when {
                         index == editedTextIndex -> {
-                            merged.add(UIMessagePart.Text(text))
+                            if (text.isNotBlank()) {
+                                merged.add(UIMessagePart.Text(text))
+                            }
                         }
 
                         part is UIMessagePart.Text -> {
-                            merged.add(part)
+                            if (part.text.isNotBlank()) {
+                                merged.add(part)
+                            }
                         }
 
                         else -> {

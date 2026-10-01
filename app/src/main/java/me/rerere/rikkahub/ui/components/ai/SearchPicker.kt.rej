@@ -1,0 +1,117 @@
+diff a/app/src/main/java/me/rerere/rikkahub/ui/components/ai/SearchPicker.kt b/app/src/main/java/me/rerere/rikkahub/ui/components/ai/SearchPicker.kt	(rejected hunks)
+@@ -392,84 +336,48 @@ private fun SearchProviderPicker(
+     onUpdateSearchService: (Int) -> Unit,
+     onBack: () -> Unit,
+ ) {
++    val services = settings.searchServices
+     Column(
+         modifier = Modifier
+             .fillMaxWidth()
+             .fillMaxHeight(0.7f)
++            .padding(horizontal = 16.dp),
+     ) {
+-        Row(
+-            modifier = Modifier
+-                .fillMaxWidth()
+-                .padding(horizontal = 8.dp),
+-            verticalAlignment = Alignment.CenterVertically,
+-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+-        ) {
+-            IconButton(onClick = onBack) {
+-                Icon(HugeIcons.ArrowLeft01, contentDescription = null)
+-            }
+-            Text(
+-                text = stringResource(R.string.search_picker_select_provider),
+-                style = MaterialTheme.typography.titleLarge,
+-                fontWeight = FontWeight.Bold
+-            )
+-        }
+-        LazyVerticalGrid(
++        SheetHeader(
++            title = stringResource(R.string.search_picker_select_provider),
++            navigationIcon = {
++                IconButton(onClick = onBack) {
++                    Icon(HugeIcons.ArrowLeft01, contentDescription = null)
++                }
++            },
++        )
++        LazyColumn(
+             modifier = Modifier
+                 .fillMaxSize()
+-                .padding(16.dp),
+-            columns = GridCells.Adaptive(150.dp),
+-            verticalArrangement = Arrangement.spacedBy(16.dp),
+-            horizontalArrangement = Arrangement.spacedBy(16.dp),
++                .selectableGroup(),
++            contentPadding = PaddingValues(bottom = 16.dp),
++            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+         ) {
+-            itemsIndexed(settings.searchServices) { index, service ->
+-                val containerColor = animateColorAsState(
+-                    if (settings.searchServiceSelected == index) {
+-                        MaterialTheme.colorScheme.primaryContainer
+-                    } else {
+-                        MaterialTheme.colorScheme.surface
+-                    }
+-                )
+-                val textColor = animateColorAsState(
+-                    if (settings.searchServiceSelected == index) {
+-                        MaterialTheme.colorScheme.onPrimaryContainer
+-                    } else {
+-                        MaterialTheme.colorScheme.onSurface
+-                    }
+-                )
+-                Card(
+-                    colors = CardDefaults.cardColors(
+-                        containerColor = containerColor.value,
+-                        contentColor = textColor.value,
+-                    ),
+-                    onClick = {
+-                        onUpdateSearchService(index)
+-                    },
+-                    shape = MaterialTheme.shapes.large
+-                ) {
+-                    Row(
+-                        modifier = Modifier
+-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+-                            .fillMaxWidth(),
+-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+-                        verticalAlignment = Alignment.CenterVertically,
+-                    ) {
++            itemsIndexed(services) { index, service ->
++                val selected = settings.searchServiceSelected == index
++                SegmentedListItem(
++                    selected = selected,
++                    onClick = { onUpdateSearchService(index) },
++                    shapes = ListItemDefaults.segmentedShapes(index = index, count = services.size),
++                    leadingContent = {
+                         AutoAIIcon(
+                             name = service.displayName,
+-                            modifier = Modifier.size(24.dp)
++                            modifier = Modifier.size(24.dp),
+                         )
+-                        Column(
+-                            modifier = Modifier.weight(1f),
+-                        ) {
+-                            Text(
+-                                text = service.displayName,
+-                                style = MaterialTheme.typography.titleMedium,
+-                            )
+-                            SearchAbilityTagLine(
+-                                options = service,
+-                                modifier = Modifier
+-                            )
+-                        }
+-                    }
++                    },
++                    supportingContent = {
++                        SearchAbilityTagLine(options = service)
++                    },
++                    trailingContent = {
++                        RadioButton(selected = selected, onClick = null)
++                    },
++                ) {
++                    Text(service.displayName)
+                 }
+             }
+         }

@@ -1,0 +1,35 @@
+diff a/ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleStreamDecoder.kt b/ai/src/main/java/me/rerere/ai/provider/providers/google/GoogleStreamDecoder.kt	(rejected hunks)
+@@ -61,23 +64,28 @@ internal class GoogleStreamDecoder(
+ 
+     private fun parseMessage(content: JsonObject, groundingMetadata: JsonObject?): UIMessage = UIMessage(
+         role = MessageRole.ASSISTANT,
+-        parts = content["parts"]?.jsonArray?.map { parsePart(it.jsonObject) }.orEmpty(),
++        parts = content["parts"]?.jsonArray?.mapIndexed { index, part ->
++            parsePart(part.jsonObject, index)
++        }.orEmpty(),
+         annotations = parseAnnotations(groundingMetadata),
+     )
+ 
+-    private fun parsePart(part: JsonObject): UIMessagePart = when {
++    private fun parsePart(part: JsonObject, index: Int): UIMessagePart = when {
+         part.containsKey("text") -> {
+             val text = part["text"]?.jsonPrimitive?.contentOrNull ?: ""
++            val metadata = part.toGoogleThoughtMetadata()
+             if (part["thought"]?.jsonPrimitive?.booleanOrNull == true) {
+-                UIMessagePart.Reasoning(text, Clock.System.now(), null)
++                UIMessagePart.Reasoning(text, Clock.System.now(), null, metadata)
+             } else {
+-                UIMessagePart.Text(text)
++                UIMessagePart.Text(text, metadata)
+             }
+         }
+         part.containsKey("functionCall") -> {
+             val functionCall = part["functionCall"]!!.jsonObject
++            val toolCallId = functionCall["id"]?.jsonPrimitive?.contentOrNull
++                ?: "$responseId:tool-${++toolSequence}"
+             UIMessagePart.Tool(
+-                toolCallId = "$responseId:tool-${++toolSequence}",
++                toolCallId = toolCallId,
+                 toolName = functionCall["name"]?.jsonPrimitive?.contentOrNull ?: "",
+                 input = functionCall["args"]?.let(json::encodeToString) ?: "",
+                 output = emptyList(),

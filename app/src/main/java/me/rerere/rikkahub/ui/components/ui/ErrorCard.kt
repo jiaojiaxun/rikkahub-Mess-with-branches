@@ -226,7 +226,7 @@ fun ErrorCard(
                                     },
                                 )
                             ) {
-                                append(checkTitleModelSettings)
+                                append(checkFastModelSettings)
                             }
                         },
                         style = MaterialTheme.typography.bodySmall,

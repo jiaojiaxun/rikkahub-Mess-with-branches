@@ -321,7 +321,7 @@ class SkillsVM(
         result: MutableList<Pair<String, String>>,
     ): Boolean {
         val apiUrl = "https://api.github.com/repos/$owner/$repo/contents/$dirPath?ref=$branch"
-        val json = downloadText(apiUrl) ?: return false
+        val json = downloadBytes(apiUrl)?.toString(Charsets.UTF_8) ?: return false
         val array = JSONArray(json)
         for (i in 0 until array.length()) {
             val item = array.getJSONObject(i)
@@ -365,14 +365,18 @@ class SkillsVM(
         return GitHubRepoInfo(owner, repo, branch, subPath)
     }
 
-    private fun downloadText(url: String): String? {
+    private fun downloadBytes(url: String): ByteArray? {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = 10_000
         connection.readTimeout = 30_000
         connection.setRequestProperty("Accept", "application/vnd.github+json")
         return try {
-            if (connection.responseCode == 200) connection.inputStream.bufferedReader().readText()
-            else null
+            val code = connection.responseCode
+            // 未登录的 GitHub API 每小时仅 60 次，超限时给出明确提示而不是笼统的"读取失败"
+            if ((code == 403 || code == 429) && connection.getHeaderField("X-RateLimit-Remaining") == "0") {
+                error("GitHub API 请求次数已达上限，请稍后再试")
+            }
+            if (code == 200) connection.inputStream.use { it.readBytes() } else null
         } finally {
             connection.disconnect()
         }

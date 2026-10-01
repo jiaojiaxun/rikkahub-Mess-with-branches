@@ -256,7 +256,7 @@
   <string name="chat_message_tool_search_web">Поиск в интернете: %1$s</string>
   <string name="chat_message_tool_submit">Отправить</string>
   <string name="chat_page_cancel">Отмена</string>
-  <string name="chat_page_check_title_model_settings">Проверьте настройки модели заголовков</string>
+  <string name="chat_page_check_fast_model_settings">Проверьте настройки быстрой модели</string>
   <string name="chat_page_clear_all_errors">Очистить всё</string>
   <string name="chat_page_compress_additional_prompt">Дополнительные инструкции (по желанию)</string>
   <string name="chat_page_compress_additional_prompt_hint">Укажите, что сохранить или на чём сосредоточиться</string>
@@ -536,7 +536,7 @@
   <string name="reasoning_picker_title">Настроить глубину мышления модели</string>
   <string name="reasoning_xhigh">Очень высокий</string>
   <string name="regenerate">Сгенерировать заново</string>
-  <string name="regenerate_confirm_message">Вы уверены, что хотите перегенерировать это сообщение?</string>
+  <string name="regenerate_confirm_message">Вы уверены, что хотите заново сгенерировать это сообщение? Все сообщения ниже этого будут удалены.</string>
   <string name="render_with_webview">Отображать в WebView</string>
   <string name="rikkahub_provider_description">Официальный бесплатный AI-сервис, использующий средства спонсоров для предоставления новым пользователям бесплатных моделей в качестве резерва; API-ключ не требуется. Действуют строгие ограничения по частоте запросов. Если у вас есть собственный провайдер, используйте его по возможности.</string>
   <string name="safe_mode_assistants">Помощники</string>
@@ -762,7 +762,7 @@
   <string name="setting_page_built_in_tools_search_desc">Включить интеграцию с Google Поиском</string>
   <string name="setting_page_built_in_tools_url_context">Контекст URL</string>
   <string name="setting_page_built_in_tools_url_context_desc">Включить обработку содержимого по URL</string>
-  <string name="setting_page_chat_storage">Хранилище чатов</string>
+  <string name="setting_page_chat_storage">Управление хранилищем</string>
   <string name="setting_page_chat_storage_desc">%1$d файлов, %2$.2f МБ</string>
   <string name="setting_page_code_display_settings">Отображение кода</string>
   <string name="setting_page_color_mode">Цветовая схема</string>
@@ -1563,7 +1563,7 @@
   <string name="setting_display_page_tts_read_outside_brackets_title">TTS не читает текст в скобках</string>
   <string name="setting_display_page_tts_read_outside_brackets_desc">Если включено, TTS не будет читать содержимое в скобках</string>
   <string name="assistant_page_context_message_limit">Лимит контекстных сообщений</string>
-  <string name="assistant_page_context_message_limit_desc">Ограничивает количество последних сообщений, отправляемых модели. Когда лимит превышен, контекст сокращается примерно вдвое за один шаг, вместо удаления одного сообщения за каждый оборот, благодаря чему префикс запроса остаётся стабильным, и кэширование промптов продолжает работать на протяжении многих оборотов.</string>
+  <string name="assistant_page_context_message_limit_desc">Ограничивает количество последних сообщений, отправляемых модели.</string>
   <string name="assistant_page_context_message_limit_count">Лимит сообщений контекста: %d</string>
   <string name="assistant_page_context_message_limit_unlimited">Неограниченные сообщения контекста</string>
   <string name="assistant_page_context_message_limit_warning">Ограничение контекста аннулирует кэш промпта каждый раз, когда контекст усекается. Больший лимит усекает реже; безлимитный не усекает никогда и сохраняет кэш полностью нетронутым.</string>

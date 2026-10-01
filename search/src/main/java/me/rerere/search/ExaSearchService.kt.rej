@@ -1,0 +1,53 @@
+diff a/search/src/main/java/me/rerere/search/ExaSearchService.kt b/search/src/main/java/me/rerere/search/ExaSearchService.kt	(rejected hunks)
+@@ -26,6 +29,10 @@ import okhttp3.Request
+ import okhttp3.RequestBody.Companion.toRequestBody
+ 
+ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
++    private const val MAX_EVIDENCE_TEXT_CHARACTERS = 8_000
++    private const val MAX_EVIDENCE_HIGHLIGHT_CHARACTERS = 1_200
++    private const val MIN_MAX_AGE_HOURS = -1
++    private const val MAX_MAX_AGE_HOURS = 720
+     override val name: String = "Exa"
+ 
+     @Composable
+@@ -105,18 +126,7 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
+                     error("Failed to decode response: $bodyRaw")
+                 }.getOrThrow()
+ 
+-                return@withContext Result.success(
+-                    SearchResult(
+-                        answer = response.output?.content,
+-                        items = response.results.map {
+-                            SearchResultItem(
+-                                title = it.title,
+-                                url = it.url,
+-                                text = it.text ?: ""
+-                            )
+-                        },
+-                        images = response.results.mapNotNull { it.image?.takeIf { url -> url.isNotBlank() } },
+-                    ))
++                return@withContext Result.success(mapSearchResult(response))
+             } else {
+                 println(response.body.string())
+                 error("response failed #${response.code}")
+@@ -156,19 +160,7 @@ object ExaSearchService : SearchService<SearchServiceOptions.ExaOptions> {
+                     error("Failed to decode response: $bodyRaw")
+                 }.getOrThrow()
+ 
+-                return@withContext Result.success(
+-                    ScrapedResult(
+-                        urls = data.results.map {
+-                            ScrapedResultUrl(
+-                                url = it.url,
+-                                content = it.text ?: "",
+-                                metadata = ScrapedResultMetadata(
+-                                    title = it.title,
+-                                )
+-                            )
+-                        }
+-                    )
+-                )
++                return@withContext Result.success(mapScrapedResult(data))
+             } else {
+                 println(response.body.string())
+                 error("response failed #${response.code}")

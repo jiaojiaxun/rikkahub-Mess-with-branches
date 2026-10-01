@@ -118,6 +118,7 @@ fun CodeHighlightText(
     Text(
         modifier = modifier,
         text = annotatedString,
+        style = LocalTextStyle.current.copy(fontFeatureSettings = "'calt' 0, 'liga' 0, 'clig' 0"),
         fontSize = fontSize,
         fontFamily = fontFamily,
         fontStyle = fontStyle,

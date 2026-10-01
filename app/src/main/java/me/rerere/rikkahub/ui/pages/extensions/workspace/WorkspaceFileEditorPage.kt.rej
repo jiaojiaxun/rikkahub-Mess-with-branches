@@ -1,0 +1,28 @@
+diff a/app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceFileEditorPage.kt b/app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceFileEditorPage.kt	(rejected hunks)
+@@ -53,8 +56,13 @@ fun WorkspaceFileEditorPage(
+     val scope = rememberCoroutineScope()
+     val editable = area == WorkspaceStorageArea.FILES
+     val fileName = path.substringAfterLast('/').ifBlank { path }
++    val extension = fileName.substringAfterLast('.', "").lowercase()
++    val supportsPreview = extension in setOf("html", "htm", "svg")
++    var showPreview by rememberSaveable(id, area, path) { mutableStateOf(supportsPreview) }
+ 
+-    val textState = rememberTextFieldState()
++    // 不能用 rememberTextFieldState: 它会把全文存进 saved state Bundle, 大文件切后台时触发 TransactionTooLargeException (#1953).
++    // 内容本就由下方 LaunchedEffect 从磁盘加载, 无需 saveable.
++    val textState = remember(id, area, path) { TextFieldState() }
+     var loading by remember { mutableStateOf(true) }
+     var loadError by remember { mutableStateOf<String?>(null) }
+     var saving by remember { mutableStateOf(false) }
+@@ -85,6 +93,11 @@ fun WorkspaceFileEditorPage(
+                 },
+                 navigationIcon = { BackButton() },
+                 actions = {
++                    if (supportsPreview && !loading && loadError == null) {
++                        TextButton(onClick = { showPreview = !showPreview }) {
++                            Text(if (showPreview) "源码" else "预览")
++                        }
++                    }
+                     if (editable && !loading && loadError == null) {
+                         TextButton(
+                             onClick = {

@@ -1,0 +1,47 @@
+diff a/ai/src/main/java/me/rerere/ai/registry/ModelRegistry.kt b/ai/src/main/java/me/rerere/ai/registry/ModelRegistry.kt	(rejected hunks)
+@@ -288,6 +294,12 @@ object ModelRegistry {
+         toolReasoningAbility()
+     }
+ 
++    private val DEEPSEEK_FLASH = defineModel {
++        tokens("deepseek", "flash")
++        visionInput()
++        toolReasoningAbility()
++    }
++
+     private val DEEPSEEK_V4_FLASH = defineModel {
+         tokens("deepseek", "v", "4", "flash")
+         toolReasoningAbility()
+@@ -301,6 +313,13 @@ object ModelRegistry {
+         contextLength(1.m)
+     }
+ 
++    private val DEEPSEEK_V4_1_FLASH = defineModel {
++        tokens("deepseek", "v", "4", "1", "flash")
++        visionInput()
++        toolReasoningAbility()
++        contextLength(1.m)
++    }
++
+     private val DEEPSEEK_V4_PRO = defineModel {
+         tokens("deepseek", "v", "4", "pro")
+         toolReasoningAbility()
+@@ -550,7 +581,6 @@ object ModelRegistry {
+ 
+     private val HY4 = defineModel {
+         tokens("hy", "4")
+-        visionInput()
+         toolReasoningAbility()
+     }
+ 
+@@ -617,8 +648,10 @@ object ModelRegistry {
+         DEEPSEEK_CHAT,
+         DEEPSEEK_R1_MODEL,
+         DEEPSEEK_REASONER,
++        DEEPSEEK_FLASH,
+         DEEPSEEK_V4_FLASH,
+         DEEPSEEK_V4_FLASH_VISION_EXP,
++        DEEPSEEK_V4_1_FLASH,
+         DEEPSEEK_V4_PRO,
+         DEEPSEEK_V3_1,
+         DEEPSEEK_V3_2,

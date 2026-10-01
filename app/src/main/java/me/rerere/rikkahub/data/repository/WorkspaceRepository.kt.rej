@@ -1,0 +1,30 @@
+diff a/app/src/main/java/me/rerere/rikkahub/data/repository/WorkspaceRepository.kt b/app/src/main/java/me/rerere/rikkahub/data/repository/WorkspaceRepository.kt	(rejected hunks)
+@@ -218,6 +222,16 @@ class WorkspaceRepository(
+         manager.fileSize(workspace.root, path, area)
+     }
+ 
++    suspend fun resolveFile(
++        id: String,
++        area: WorkspaceStorageArea,
++        path: String,
++    ) = withContext(Dispatchers.IO) {
++        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
++        manager.ensureWorkspace(workspace.root)
++        manager.resolveFile(workspace.root, path, area)
++    }
++
+     suspend fun exportFile(
+         id: String,
+         area: WorkspaceStorageArea,
+@@ -284,7 +298,10 @@ class WorkspaceRepository(
+         // runInterruptible 让协程取消转化为线程中断，从而打断阻塞的 Process.waitFor 并杀掉进程
+         return runInterruptible(Dispatchers.IO) {
+             manager.ensureWorkspace(workspace.root)
+-            manager.executeCommand(workspace.root, command, cwd, timeoutMillis, stdin)
++            manager.executeCommand(
++                workspace.root, command, cwd, timeoutMillis, stdin,
++                shellCompatibilityMode = workspace.shellCompatibilityMode,
++            )
+         }
+     }
+ 

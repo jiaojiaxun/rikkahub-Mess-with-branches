@@ -154,8 +154,11 @@ class SkillManager(
 
     suspend fun deleteSkill(name: String): Boolean = withContext(Dispatchers.IO) {
         val skillDir = resolveSkillDir(name) ?: return@withContext false
+        // 目录不存在时 deleteRecursively 也返回 true，需提前拦截，避免误清理内置技能的启用状态
+        if (!skillDir.exists()) return@withContext false
         val deleted = skillDir.deleteRecursively()
-        if (deleted) {
+        // 删除的是覆盖内置技能的同名用户技能时，内置技能会重新生效，保留启用状态
+        if (deleted && listBuiltinSkills().none { it.name == name }) {
             settingsStore.update { settings ->
                 settings.copy(
                     assistants = settings.assistants.map { assistant ->
@@ -218,16 +221,20 @@ class SkillManager(
     fun saveSkillFile(skillName: String, relativePath: String, content: String): Boolean {
         val skillDir = resolveSkillDir(skillName) ?: return false
         val target = SkillPaths.resolveSkillFile(skillDir, relativePath) ?: return false
-        target.parentFile?.mkdirs()
-        target.writeText(content)
-        return true
-    }
-
-    fun saveSkillFilesAtomically(skillName: String, files: Map<String, String>): Boolean {
-        return saveSkillFileBytesAtomically(
-            skillName = skillName,
-            files = files.mapValues { it.value.toByteArray() },
-        )
+        val parent = target.parentFile ?: return false
+        // 先写同目录临时文件再 rename 覆盖，避免写到一半失败时损坏原文件；
+        // IO 异常（如 mkdirs 失败导致 FileNotFoundException）转为返回 false，不向调用方抛出
+        val tempFile = parent.resolve(".${target.name}.tmp")
+        return try {
+            if (!parent.exists() && !parent.mkdirs()) return false
+            tempFile.writeText(content)
+            tempFile.renameTo(target)
+        } catch (e: Exception) {
+            Log.w(TAG, "saveSkillFile: Failed to save $skillName/$relativePath", e)
+            false
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
+        }
     }
 
     fun saveSkillFileBytesAtomically(skillName: String, files: Map<String, ByteArray>): Boolean {
@@ -460,7 +467,7 @@ class SkillManager(
         return null
     }
 
-    private fun parseSkillFile(skillFile: File, skillDir: File): SkillMetadata? {
+    private fun parseSkillFile(skillFile: File, skillDir: File, builtin: Boolean = false): SkillMetadata? {
         return runCatching {
             val content = skillFile.readText()
             val frontmatter = SkillFrontmatterParser.parse(content)

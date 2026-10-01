@@ -12,6 +12,9 @@ import me.rerere.rikkahub.data.files.SkillManager
 import me.rerere.rikkahub.data.files.SkillMetadata
 import me.rerere.rikkahub.data.files.SkillPaths
 
+// 与 Agent Skills 规范的 description 上限一致
+private const val MAX_SKILL_DESCRIPTION_LENGTH = 1024
+
 fun createSkillTools(
     enabledSkills: Set<String>,
     allSkills: List<SkillMetadata>,
@@ -199,4 +202,15 @@ fun createSkillTools(
             }
         )
     )
+}
+
+private fun String.escapeXml(): String = buildString(length) {
+    for (c in this@escapeXml) {
+        when (c) {
+            '&' -> append("&amp;")
+            '<' -> append("&lt;")
+            '>' -> append("&gt;")
+            else -> append(c)
+        }
+    }
 }

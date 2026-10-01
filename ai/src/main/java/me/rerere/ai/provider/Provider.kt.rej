@@ -1,0 +1,10 @@
+diff a/ai/src/main/java/me/rerere/ai/provider/Provider.kt b/ai/src/main/java/me/rerere/ai/provider/Provider.kt	(rejected hunks)
+@@ -73,7 +74,7 @@ data class TextGenerationParams(
+     val reasoningLevel: ReasoningLevel = ReasoningLevel.OFF,
+     val customHeaders: List<CustomHeader> = emptyList(),
+     val customBody: List<CustomBody> = emptyList(),
+-    val sessionId: String? = null,
++    val sessionId: String? = Uuid.random().toString(),
+ )
+ 
+ @Serializable

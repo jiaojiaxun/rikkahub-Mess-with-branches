@@ -1,0 +1,34 @@
+diff a/app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt b/app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt	(rejected hunks)
+@@ -283,6 +286,12 @@ class ConversationRepository(
+         return conversationDAO.countAll()
+     }
+ 
++    suspend fun countConversationsByAssistant(): Map<Uuid, Int> {
++        return conversationDAO.countByAssistant().mapNotNull { row ->
++            runCatching { Uuid.parse(row.assistantId) }.getOrNull()?.let { it to row.count }
++        }.toMap()
++    }
++
+     suspend fun insertConversation(conversation: Conversation) {
+         database.withTransaction {
+             conversationDAO.insert(
+@@ -396,13 +406,17 @@ class ConversationRepository(
+             }
+     }
+ 
+-    suspend fun togglePinStatus(conversationId: Uuid) {
++    suspend fun updatePinStatus(conversationId: Uuid, isPinned: Boolean) {
+         conversationDAO.updatePinStatus(
+             id = conversationId.toString(),
+-            isPinned = !(getConversationById(conversationId)?.isPinned ?: false)
++            isPinned = isPinned,
+         )
+     }
+ 
++    suspend fun updateConversationAssistant(conversationId: Uuid, assistantId: Uuid) {
++        conversationDAO.updateAssistantId(conversationId.toString(), assistantId.toString())
++    }
++
+     /**
+      * 单列更新会话的文件夹归属，folderId 为 null 表示移出文件夹（未归类）。
+      */

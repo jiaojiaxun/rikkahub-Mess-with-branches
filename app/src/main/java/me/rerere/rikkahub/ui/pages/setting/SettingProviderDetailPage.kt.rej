@@ -1,0 +1,165 @@
+diff a/app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderDetailPage.kt b/app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderDetailPage.kt	(rejected hunks)
+@@ -1249,100 +1242,80 @@ private fun ModelCard(
+         }
+     }
+ 
+-    SwipeToDismissBox(
+-        state = swipeToDismissBoxState,
+-        backgroundContent = {
+-            Row(
+-                modifier = Modifier
+-                    .fillMaxSize()
+-                    .padding(8.dp),
+-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+-                verticalAlignment = Alignment.CenterVertically
++    OutlinedCard(
++        onClick = { dialogState.open(model.copy()) },
++        modifier = modifier,
++    ) {
++        Row(
++            modifier = Modifier
++                .fillMaxWidth()
++                .padding(horizontal = 16.dp, vertical = 8.dp),
++            horizontalArrangement = Arrangement.spacedBy(16.dp),
++            verticalAlignment = Alignment.CenterVertically,
++        ) {
++            Surface(
++                color = MaterialTheme.colorScheme.secondaryContainer,
++                shape = MaterialTheme.shapes.small,
+             ) {
+-                IconButton(
+-                    onClick = {
+-                        scope.launch {
+-                            swipeToDismissBoxState.reset()
+-                        }
+-                    }
+-                ) {
+-                    Icon(HugeIcons.Cancel01, null)
+-                }
+-                FilledIconButton(
+-                    onClick = {
+-                        scope.launch {
+-                            onDelete()
+-                            swipeToDismissBoxState.reset()
+-                        }
+-                    }
+-                ) {
+-                    Icon(
+-                        HugeIcons.Delete01,
+-                        contentDescription = stringResource(R.string.chat_page_delete)
+-                    )
+-                }
++                AutoAIIcon(
++                    name = model.modelId,
++                    modifier = Modifier.size(36.dp),
++                )
+             }
+-        },
+-        enableDismissFromStartToEnd = false,
+-        gesturesEnabled = true,
+-        modifier = modifier
+-    ) {
+-        OutlinedCard {
+-            Row(
+-                modifier = Modifier
+-                    .fillMaxWidth()
+-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+-                verticalAlignment = Alignment.CenterVertically,
++            Column(
++                modifier = Modifier.weight(1f),
++                verticalArrangement = Arrangement.spacedBy(4.dp),
+             ) {
+-                Surface(
+-                    color = MaterialTheme.colorScheme.secondaryContainer,
+-                    shape = MaterialTheme.shapes.small,
+-                ) {
+-                    AutoAIIcon(
+-                        name = model.modelId,
+-                        modifier = Modifier.size(36.dp),
+-                    )
+-                }
+-                Column(
+-                    modifier = Modifier.weight(1f),
++                Text(
++                    text = model.displayName,
++                    style = MaterialTheme.typography.titleSmall,
++                    maxLines = 2,
++                    overflow = TextOverflow.Ellipsis,
++                )
++                FlowRow(
++                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                     verticalArrangement = Arrangement.spacedBy(4.dp),
+                 ) {
+-                    Text(
+-                        text = model.displayName,
+-                        style = MaterialTheme.typography.titleSmall,
+-                        maxLines = 2,
+-                        overflow = TextOverflow.Ellipsis,
+-                    )
+-                    FlowRow(
+-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+-                    ) {
+-                        if (model.providerOverwrite != null) {
+-                            Tag(type = TagType.INFO) {
+-                                Text(
+-                                    model.providerOverwrite?.javaClass?.simpleName ?: model.providerOverwrite?.name
+-                                    ?: "ProviderOverwrite"
+-                                )
+-                            }
++                    if (model.providerOverwrite != null) {
++                        Tag(type = TagType.INFO) {
++                            Text(
++                                model.providerOverwrite?.javaClass?.simpleName ?: model.providerOverwrite?.name
++                                ?: "ProviderOverwrite"
++                            )
+                         }
+-                        ModelTypeTag(model = model)
+-                        ModelModalityTag(model = model)
+-                        ModelAbilityTag(model = model)
+                     }
+-                }
+-
+-                // Edit button
+-                IconButton(
+-                    onClick = {
+-                        dialogState.open(model.copy())
+-                    }
+-                ) {
+-                    Icon(HugeIcons.Tools, "Edit")
++                    ModelTypeTag(model = model)
++                    ModelModalityTag(model = model)
++                    ModelAbilityTag(model = model)
+                 }
+             }
++
++            ItemActionMenu(
++                actions = listOf(
++                    ItemAction(
++                        text = stringResource(R.string.delete),
++                        icon = HugeIcons.Delete01,
++                        destructive = true,
++                        onClick = { showDeleteDialog = true },
++                    ),
++                )
++            )
+         }
+     }
++
++    RikkaConfirmDialog(
++        show = showDeleteDialog,
++        title = stringResource(R.string.confirm_delete),
++        confirmText = stringResource(R.string.delete),
++        dismissText = stringResource(R.string.cancel),
++        onConfirm = {
++            showDeleteDialog = false
++            onDelete()
++        },
++        onDismiss = { showDeleteDialog = false },
++    ) {
++        Text(stringResource(R.string.common_delete_confirm_message, model.displayName))
++    }
+ }
+ 
+ @Composable

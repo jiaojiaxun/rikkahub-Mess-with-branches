@@ -7,7 +7,10 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,6 +71,7 @@ import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import androidx.compose.ui.res.stringResource
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.nav.BackButton
+import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.ImagePreviewDialog
 import me.rerere.rikkahub.ui.components.ui.RikkaConfirmDialog
 import me.rerere.rikkahub.ui.context.LocalNavController
@@ -339,58 +343,38 @@ private fun WorkspaceToolApprovalCard(
     onToolApprovalChange: (String, Boolean) -> Unit,
 ) {
     val overrides = workspace?.toolApprovalOverrides().orEmpty()
+    val tools = workspaceToolApprovalItems()
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CustomColors.cardColorsOnSurfaceContainer,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
+    CardGroup(
+        title = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = stringResource(R.string.workspace_detail_tool_approval),
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                Text(stringResource(R.string.workspace_detail_tool_approval))
                 Text(
                     text = stringResource(R.string.workspace_detail_tool_approval_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            workspaceToolApprovalItems().forEach { (toolName, label) ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = toolName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+        },
+    ) {
+        tools.forEach { (toolName, label) ->
+            item(
+                headlineContent = { Text(label) },
+                supportingContent = {
+                    Text(
+                        text = toolName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                trailingContent = {
                     Switch(
                         checked = resolveWorkspaceToolApproval(toolName, overrides),
                         onCheckedChange = { onToolApprovalChange(toolName, it) },
                         enabled = workspace != null,
                     )
-                }
-            }
+                },
+            )
         }
     }
 }
@@ -458,6 +442,34 @@ private fun WorkspaceFilesPage(
                 canGoUp = state.path.isNotBlank(),
                 onGoUp = onGoUp,
             )
+        }
+
+        if (selecting || state.exporting) item {
+            Column {
+                if (selecting) Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = {
+                            selecting = false
+                            selectedPaths = emptySet()
+                        },
+                    ) { Text("取消多选") }
+                    TextButton(onClick = {
+                        selectedPaths = if (selectedFiles.size == files.size) emptySet() else files.map { it.path }.toSet()
+                    }) { Text(if (files.isNotEmpty() && selectedFiles.size == files.size) "取消全选" else "全选") }
+                    TextButton(
+                        onClick = { onBatchExport(selectedFiles) },
+                        enabled = selectedFiles.isNotEmpty() && !state.exporting,
+                    ) { Text("导出 (${selectedFiles.size})") }
+                }
+                if (state.exporting) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Text("正在导出 ${state.exportCompleted}/${state.exportTotal}")
+                }
+            }
         }
 
         state.error?.let { error ->
