@@ -75,6 +75,11 @@ jobs:
         if: hashFiles('scripts/patch_batch5.py') != ''
         run: python3 scripts/patch_batch5.py
 
+      # Batch 6: pure official backup export.
+      - name: Patch batch 6 fixes
+        if: hashFiles('scripts/patch_batch6.py') != ''
+        run: python3 scripts/patch_batch6.py
+
       - name: Compile Kotlin (release)
         id: compile
         continue-on-error: true

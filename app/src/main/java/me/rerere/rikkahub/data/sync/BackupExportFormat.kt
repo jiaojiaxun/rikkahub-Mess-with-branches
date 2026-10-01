@@ -1,6 +1,6 @@
 package me.rerere.rikkahub.data.sync
 
-/** The two local export targets exposed by the backup page. */
+/** The local export targets exposed by the backup page. */
 enum class BackupExportFormat {
     /**
      * Everything this build has. The archive is a superset of [OFFICIAL]: its root holds the
@@ -10,17 +10,28 @@ enum class BackupExportFormat {
      */
     FULL,
 
-    /** RikkaHub 2.4.14-compatible database/files layout only. */
+    /**
+     * RikkaHub 2.4.14-compatible layout (shown as "兼容导出（宽松）"). Fork-only fields inside
+     * otherwise official data are kept; the official app ignores them.
+     */
     OFFICIAL,
+
+    /**
+     * Same pipeline as [OFFICIAL], then everything RikkaHub 2.4.14 does not know is removed
+     * (tables, columns, settings keys, provider / tool / message part types). See
+     * [me.rerere.rikkahub.data.sync.webdav.OfficialPurifier].
+     */
+    PURE_OFFICIAL,
 }
 
 /**
- * Both names start with `backup_`: RikkaHub 2.4.14 lists only `backup_*.zip` on WebDAV / S3,
+ * All names start with `backup_`: RikkaHub 2.4.14 lists only `backup_*.zip` on WebDAV / S3,
  * so any other prefix makes the backup invisible to the official app.
  */
 fun BackupExportFormat.fileName(timestamp: String): String = when (this) {
     BackupExportFormat.FULL -> "backup_${timestamp}_agent.zip"
     BackupExportFormat.OFFICIAL -> "backup_${timestamp}_official.zip"
+    BackupExportFormat.PURE_OFFICIAL -> "backup_${timestamp}_pure.zip"
 }
 
 /** Folder inside a FULL archive for data the official app cannot read. */
