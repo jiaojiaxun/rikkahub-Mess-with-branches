@@ -13,6 +13,12 @@ data class TokenUsage(
     val cost: Double? = null,
 )
 
+/**
+ * Merges partial usage reports of ONE request (e.g. Claude reports input tokens on
+ * message_start and output tokens on message_delta): a field the new report leaves at 0
+ * keeps the earlier value. Do not use this across separate requests (tool steps); a 0 there
+ * is a real value, not a missing one.
+ */
 fun TokenUsage?.merge(other: TokenUsage): TokenUsage {
     val promptTokens = if (other.promptTokens > 0) {
         other.promptTokens
@@ -39,3 +45,7 @@ fun TokenUsage?.merge(other: TokenUsage): TokenUsage {
         cost = cost,
     )
 }
+
+/** Sum of two provider-reported costs; null only when neither side reported one. */
+fun sumCost(a: Double?, b: Double?): Double? =
+    if (a == null && b == null) null else (a ?: 0.0) + (b ?: 0.0)

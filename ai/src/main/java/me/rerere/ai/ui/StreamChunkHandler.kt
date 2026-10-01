@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.core.merge
+import me.rerere.ai.core.sumCost
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.TextGenerationResult
 import me.rerere.ai.util.json
@@ -24,32 +25,10 @@ import kotlin.time.Clock
  * 消息，第一个事件会自动创建一条空的助手消息。收到 [StreamChunk.Finish] 后，会标记消息完成
  * 并清除内部状态。
  *
- * ## 工作过程
+ * - `Usage`：按本条流（一次请求）合并 Token 用量；费用跨步骤累加。
  *
- * 1. 接收一个 [StreamChunk]，检查消息列表非空。
- * 2. 如果列表末尾不是助手消息，创建一条带有当前 [model] id 的空助手消息。
- * 3. 根据事件类型更新助手消息：
- *    - `TextStart/Delta/End`：创建、追加并结束文本 part。
- *    - `ReasoningStart/Delta/End`：创建、追加并标记推理 part 的完成时间。
- *    - `ToolCallStart/Delta/End`：按调用 id 创建工具 part，并逐步拼接工具名和输入参数。
- *    - `ServerToolStart/InputDelta/InputEnd/End`：追踪服务端工具的 JSON 输入、结果和状态。
- *    - `ImageStart/Delta/End`：创建图片 part，并逐步追加 Base64 数据。
- *    - `ImageSnapshot`：用最新的完整 Base64 快照替换同 id 图片的旧数据。
- *    - `Annotations`：追加并去重消息注解。
- *    - `Usage`：将本次用量合并到消息已有的 Token 用量中。
- *    - `Finish`：设置消息完成时间，结束尚未关闭的推理 part，并清空事件索引。
- * 4. 使用 [UIMessage.copy] 生成更新后的助手消息，将其替换到列表末尾并返回新列表。
- *
- * 一段文本流的典型调用顺序如下：
- *
- * ```
- * TextStart(id) -> TextDelta(id, ...) -> TextDelta(id, ...) -> TextEnd(id) -> Finish
- * ```
- *
- * [StreamChunk.Finish] 只代表响应流正常结束，并不保证一定到达。网络错误、协议解析失败或上层取消
- * Flow 时，流可能直接异常结束。此时已经合并的内容仍然保留，但消息的 `finishedAt` 可能为空，尚未
- * 收到 `ReasoningEnd` 的推理 part 也不会由本类自动结束。调用方应在 Flow 的完成或异常处理中执行
- * 必要的 UI 收尾，并丢弃当前 handler；不要将它复用于下一条响应流。
+ * [StreamChunk.Finish] 只代表响应流正常结束，并不保证一定到达。调用方应在 Flow 的完成或异常
+ * 处理中执行必要的 UI 收尾，并丢弃当前 handler；不要将它复用于下一条响应流。
  *
  * 该类保存着一次响应流的合并状态，不是无状态转换器。每条并发响应流都必须使用独立实例，且
  * 事件应按 Provider 产生的顺序交给同一实例处理。
@@ -60,6 +39,11 @@ class StreamChunkHandler(private val model: Model? = null) {
     private val reasoningPartIndexes = mutableMapOf<String, Int>()
     private val imagePartIndexes = mutableMapOf<String, Int>()
     private val serverToolInputBuffers = mutableMapOf<String, StringBuilder>()
+
+    // Usage reported by THIS stream (one request step) so far, and the cost the message
+    // already carried from earlier steps when this stream reported its first usage.
+    private var streamUsage: TokenUsage? = null
+    private var stepBaseCost: Double? = null
 
     /**
      * 将一个 [chunk] 合并进消息列表末尾的助手消息，并返回新的消息列表。
@@ -284,7 +268,15 @@ class StreamChunkHandler(private val model: Model? = null) {
 
             is StreamChunk.ImageEnd -> this.also { imagePartIndexes.remove(chunk.id) }
             is StreamChunk.Annotations -> copy(annotations = (annotations + chunk.annotations).distinct())
-            is StreamChunk.Usage -> copy(usage = usage.merge(chunk.usage))
+            is StreamChunk.Usage -> {
+                // Per stream (= one request step): partial reports inside the stream merge, but
+                // the previous step's figures must not leak in (merge keeps old values when the
+                // new one is 0 -> stale cache hit rate). Cost is summed over the whole reply.
+                if (streamUsage == null) stepBaseCost = usage?.cost
+                val merged = streamUsage.merge(chunk.usage)
+                streamUsage = merged
+                copy(usage = merged.copy(cost = sumCost(stepBaseCost, merged.cost)))
+            }
             is StreamChunk.Finish -> copy(
                 finishedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
             ).finishReasoning().also {
@@ -293,6 +285,8 @@ class StreamChunkHandler(private val model: Model? = null) {
                 reasoningPartIndexes.clear()
                 imagePartIndexes.clear()
                 serverToolInputBuffers.clear()
+                streamUsage = null
+                stepBaseCost = null
             }
         }
     }
@@ -315,6 +309,22 @@ private fun mergeMetadata(old: JsonObject?, new: JsonObject?): JsonObject? = whe
     else -> JsonObject(old + new)
 }
 
+/**
+ * Usage of the message after one more non-streamed request step. The new step's report
+ * replaces the token figures (a 0 there is real, not missing); when the step reported no
+ * tokens at all the previous figures stay. Cost is summed over steps.
+ */
+private fun nextStepUsage(previous: TokenUsage?, step: TokenUsage?): TokenUsage? {
+    if (step == null) return previous
+    val reported = step.promptTokens > 0 || step.completionTokens > 0
+    val base = if (reported) {
+        step.copy(totalTokens = step.promptTokens + step.completionTokens)
+    } else {
+        previous ?: step
+    }
+    return base.copy(cost = sumCost(previous?.cost, step.cost))
+}
+
 fun List<UIMessage>.handleTextGenerationResult(
     result: TextGenerationResult,
     model: Model? = null,
@@ -330,7 +340,7 @@ fun List<UIMessage>.handleTextGenerationResult(
     } else {
         dropLast(1) + last().appendMessage(incoming).copy(
             modelId = model?.id ?: last().modelId,
-            usage = last().usage.merge(result.usage ?: TokenUsage()),
+            usage = nextStepUsage(last().usage, result.usage),
             finishedAt = incoming.finishedAt,
         ).finishReasoning()
     }
