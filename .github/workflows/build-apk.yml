@@ -70,6 +70,11 @@ jobs:
         if: hashFiles('scripts/patch_batch4.py') != ''
         run: python3 scripts/patch_batch4.py
 
+      # Batch 5: generate_image local tool + its assistant switch.
+      - name: Patch batch 5 fixes
+        if: hashFiles('scripts/patch_batch5.py') != ''
+        run: python3 scripts/patch_batch5.py
+
       - name: Compile Kotlin (release)
         id: compile
         continue-on-error: true

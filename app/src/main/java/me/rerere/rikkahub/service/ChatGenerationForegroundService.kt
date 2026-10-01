@@ -15,12 +15,15 @@ import androidx.core.content.ContextCompat
 import me.rerere.rikkahub.CHAT_LIVE_UPDATE_NOTIFICATION_CHANNEL_ID
 import me.rerere.rikkahub.R
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 private const val TAG = "ChatGenerationFgs"
 
 /**
  * Keeps an interactive generation alive after the UI is backgrounded. It owns no generation
  * state; [ChatService] starts it before a request begins and stops it after the final task ends.
+ * Other long-running work (image generation) holds it through [acquireExternal]; the service
+ * runs while chat wants it OR any external hold is active.
  */
 class ChatGenerationForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
@@ -31,7 +34,7 @@ class ChatGenerationForegroundService : Service() {
         // A stop request can race a subsequent Send. The shared desired-state flag makes a
         // delayed stale stop a no-op instead of tearing down the foreground service for the
         // newer generation.
-        if (!shouldRun.get()) {
+        if (!wanted()) {
             readiness.markUnavailable()
             stopForeground(STOP_FOREGROUND_REMOVE)
             releaseWakeLock()
@@ -55,7 +58,7 @@ class ChatGenerationForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        if (shouldRun.get()) readiness.markUnavailable()
+        if (wanted()) readiness.markUnavailable()
         releaseWakeLock()
         super.onDestroy()
     }
@@ -127,10 +130,40 @@ class ChatGenerationForegroundService : Service() {
         private const val NOTIFICATION_ID = 2002
         private const val STARTUP_TIMEOUT_MS = 5_000L
         private val shouldRun = AtomicBoolean(false)
+        private val externalHolds = AtomicInteger(0)
         private val readiness = ForegroundServiceReadiness()
+
+        private fun wanted(): Boolean = shouldRun.get() || externalHolds.get() > 0
 
         fun start(context: Context) {
             shouldRun.set(true)
+            requestRunning(context)
+        }
+
+        suspend fun awaitReady(): Boolean = readiness.awaitReady(STARTUP_TIMEOUT_MS)
+
+        fun stop(context: Context) {
+            shouldRun.set(false)
+            reconcile(context)
+        }
+
+        /**
+         * Keeps the service running for non-chat work. Returns an idempotent release callback;
+         * chat calling [stop] does not end the service while a hold is active.
+         */
+        fun acquireExternal(context: Context): () -> Unit {
+            externalHolds.incrementAndGet()
+            requestRunning(context)
+            val released = AtomicBoolean(false)
+            return {
+                if (released.compareAndSet(false, true)) {
+                    externalHolds.decrementAndGet()
+                    reconcile(context)
+                }
+            }
+        }
+
+        private fun requestRunning(context: Context) {
             readiness.requestStart()
             runCatching {
                 ContextCompat.startForegroundService(
@@ -145,10 +178,8 @@ class ChatGenerationForegroundService : Service() {
             }
         }
 
-        suspend fun awaitReady(): Boolean = readiness.awaitReady(STARTUP_TIMEOUT_MS)
-
-        fun stop(context: Context) {
-            shouldRun.set(false)
+        private fun reconcile(context: Context) {
+            if (wanted()) return
             readiness.requestStop()
             val serviceIntent = Intent(context, ChatGenerationForegroundService::class.java).apply {
                 action = ACTION_RECONCILE
@@ -159,7 +190,7 @@ class ChatGenerationForegroundService : Service() {
                 context.applicationContext.startService(serviceIntent)
             }.recoverCatching {
                 // If the platform refuses a normal background start, there is no active work
-                // left according to the tracker, so a direct stop is safe as a last resort.
+                // left, so a direct stop is safe as a last resort.
                 context.applicationContext.stopService(serviceIntent)
             }.onFailure { Log.w(TAG, "Unable to stop chat-generation foreground service", it) }
         }

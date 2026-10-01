@@ -3,6 +3,7 @@ package me.rerere.rikkahub.di
 import kotlinx.serialization.json.Json
 import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.data.ai.AILoggingManager
+import me.rerere.rikkahub.data.ai.ImageGenerationService
 import me.rerere.rikkahub.data.ai.tools.LocalTools
 import me.rerere.rikkahub.data.ai.tools.local.BiometricResultBuffer
 import me.rerere.rikkahub.data.ai.tools.local.CameraResultBuffer
@@ -86,6 +87,18 @@ val appModule = module {
 
     single {
         AppScope()
+    }
+
+    // Background image generation (image page + generate_image tool).
+    single {
+        ImageGenerationService(
+            context = get(),
+            appScope = get(),
+            settingsStore = get(),
+            providerManager = get(),
+            genMediaRepository = get(),
+            filesManager = get(),
+        )
     }
 
     single<EmojiData> {
