@@ -8,6 +8,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ModelRegistryTest {
+    private val visionInput = listOf(Modality.TEXT, Modality.IMAGE)
+    private val toolReasoning = listOf(ModelAbility.TOOL, ModelAbility.REASONING)
+
     @Test
     fun testGPT5() {
         assertTrue(ModelRegistry.GPT_5.match("gpt-5"))
@@ -19,6 +22,13 @@ class ModelRegistryTest {
         assertFalse(ModelRegistry.GPT_5.match("gpt-4o"))
         assertFalse(ModelRegistry.GPT_5.match("gpt-5.0"))
         assertFalse(ModelRegistry.GPT_5.match("gpt-6"))
+    }
+
+    // upstream 2.4.17 c73f8972
+    @Test
+    fun testGPT6() {
+        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("gpt-6"))
+        assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("gpt-6"))
     }
 
     @Test
@@ -82,28 +92,14 @@ class ModelRegistryTest {
 
     @Test
     fun testGlm5AndMinimaxM25() {
-        assertEquals(
-            listOf(Modality.TEXT),
-            ModelRegistry.MODEL_INPUT_MODALITIES.getData("glm-5")
-        )
-        assertEquals(
-            listOf(Modality.TEXT),
-            ModelRegistry.MODEL_INPUT_MODALITIES.getData("minimax-m2.5")
-        )
-        assertEquals(
-            listOf(ModelAbility.TOOL, ModelAbility.REASONING),
-            ModelRegistry.MODEL_ABILITIES.getData("glm-5")
-        )
-        assertEquals(
-            listOf(ModelAbility.TOOL, ModelAbility.REASONING),
-            ModelRegistry.MODEL_ABILITIES.getData("minimax-m2.5")
-        )
+        assertEquals(listOf(Modality.TEXT), ModelRegistry.MODEL_INPUT_MODALITIES.getData("glm-5"))
+        assertEquals(listOf(Modality.TEXT), ModelRegistry.MODEL_INPUT_MODALITIES.getData("minimax-m2.5"))
+        assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("glm-5"))
+        assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("minimax-m2.5"))
     }
 
     @Test
     fun testMuseSparkAndGlimmer() {
-        val visionInput = listOf(Modality.TEXT, Modality.IMAGE)
-        val toolReasoning = listOf(ModelAbility.TOOL, ModelAbility.REASONING)
         assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("muse-spark"))
         assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("muse-spark-1.2"))
         assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("muse-glimmer"))
@@ -112,16 +108,26 @@ class ModelRegistryTest {
         assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("muse-glimmer-30b"))
     }
 
+    // upstream 2.5.3 c3d6867c
+    @Test
+    fun testStep5() {
+        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("step-5"))
+        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("step-5-preview"))
+        assertEquals(toolReasoning, ModelRegistry.MODEL_ABILITIES.getData("step-5"))
+        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("step-3"))
+    }
+
     @Test
     fun testDeepseekV4() {
         val reasonerAbilities = ModelRegistry.MODEL_ABILITIES.getData("deepseek-reasoner")
-        assertEquals(
-            reasonerAbilities,
-            ModelRegistry.MODEL_ABILITIES.getData("deepseek-v4-flash")
-        )
-        assertEquals(
-            reasonerAbilities,
-            ModelRegistry.MODEL_ABILITIES.getData("deepseek-v4-pro")
-        )
+        assertEquals(reasonerAbilities, ModelRegistry.MODEL_ABILITIES.getData("deepseek-v4-flash"))
+        assertEquals(reasonerAbilities, ModelRegistry.MODEL_ABILITIES.getData("deepseek-v4-pro"))
+    }
+
+    // fork fix 7738bf2: V4 flash/pro route to V4.1-Flash, which has native vision.
+    @Test
+    fun testDeepseekV4Vision() {
+        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("deepseek-v4-flash"))
+        assertEquals(visionInput, ModelRegistry.MODEL_INPUT_MODALITIES.getData("deepseek-v4-pro"))
     }
 }

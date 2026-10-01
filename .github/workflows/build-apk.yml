@@ -2,7 +2,7 @@ name: Build APK (dual-mode chat)
 
 on:
   push:
-    branches: [feat/chat-dual-mode-html, 'port/**']
+    branches: [feat/chat-dual-mode-html, 'port/**', 'fix/**']
   workflow_dispatch:
 
 jobs:
@@ -50,8 +50,11 @@ jobs:
       - name: Patch ChatPage.kt (embed html layer)
         run: python3 scripts/patch_chat_page_html.py
 
-      # --continue: keep compiling independent modules after the first failure so one
-      # run surfaces every module's Kotlin errors as annotations.
+      # Batch 1: approval buttons, native-exit button, responsesPath, reasoning OFF, strings.
+      - name: Patch batch 1 fixes
+        if: hashFiles('scripts/patch_batch1.py') != ''
+        run: python3 scripts/patch_batch1.py
+
       - name: Compile Kotlin (release)
         id: compile
         continue-on-error: true
@@ -84,6 +87,24 @@ jobs:
         if: steps.build.outcome == 'failure'
         run: python3 scripts/report_build_errors.py build.log
 
+      # Non-blocking: results show up as annotations; a red test does not withhold the APK.
+      - name: Unit tests (ModelRegistryTest)
+        id: tests
+        if: steps.compile.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set +e
+          ./gradlew :ai:testDebugUnitTest --tests 'me.rerere.ai.registry.ModelRegistryTest' --no-daemon > test.log 2>&1
+          code=$?
+          tail -n 30 test.log
+          if [ "$code" -ne 0 ]; then
+            python3 scripts/report_build_errors.py test.log || true
+            grep -E "ModelRegistryTest > .* FAILED|AssertionError|expected:<" test.log | head -n 20 | sed 's/^/::warning title=ModelRegistryTest::/'
+          else
+            echo "::notice title=ModelRegistryTest::all tests passed"
+          fi
+          exit $code
+
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -92,6 +113,7 @@ jobs:
           path: |
             compile.log
             build.log
+            test.log
           if-no-files-found: ignore
 
       - name: Fail when a build step failed
