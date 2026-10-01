@@ -69,7 +69,7 @@ class S3Sync(
     suspend fun listBackupFiles(config: S3Config): List<S3BackupItem> = withContext(Dispatchers.IO) {
         getS3Client(config).listObjects(prefix = "rikkahub_backups/", maxKeys = 1000).getOrThrow()
             .objects
-            .filter { it.key.startsWith("rikkahub_backups/backup_") && it.key.endsWith(".zip") }
+            .filter { it.key.startsWith("rikkahub_backups/") && isBackupArchiveName(it.key.substringAfterLast('/')) }
             .map { obj ->
                 S3BackupItem(
                     key = obj.key,
