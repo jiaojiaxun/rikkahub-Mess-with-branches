@@ -5,11 +5,12 @@ Why: ModelList keyed produceState() on the whole ProviderSetting object, so ever
 add/delete/reorder of a model re-keyed it and re-issued listModels() over the network.
 The fetch now keys on (id, baseUrl, apiKey) and reads/writes SettingVM's catalog cache.
 
+Anchors are matched with ALL whitespace removed from both sides (see match_flat), because
+reflowing the upstream file - e.g. a newline between `Unit` and `)` - broke two earlier
+versions of this script even though the code was unchanged.
+
 Convention matches the other batches: anchored, idempotent, loud (::error + exit 1).
-Anchors are whitespace-tolerant: the upstream sources wrap parameters across several
-lines, which is what broke run #43.
 """
-import re
 import sys
 from pathlib import Path
 
@@ -23,20 +24,41 @@ def fail(msg):
     FAILURES.append(msg)
 
 
-def tolerant(text):
-    """Regex for `text` where every whitespace run matches any (possibly empty) whitespace."""
-    parts = re.split(r"\s+", text.strip())
-    return r"\s*".join(re.escape(p) for p in parts)
+def flatten(text):
+    """Return (text_without_whitespace, original_index_of_each_kept_char)."""
+    kept = []
+    indexes = []
+    for index, char in enumerate(text):
+        if not char.isspace():
+            kept.append(char)
+            indexes.append(index)
+    return "".join(kept), indexes
+
+
+def match_flat(src, pattern):
+    """Locate `pattern` in `src`, ignoring all whitespace. Returns (start, end) or None."""
+    flat_src, indexes = flatten(src)
+    flat_pattern, _ = flatten(pattern)
+    if not flat_pattern:
+        return None
+    positions = flat_src.count(flat_pattern)
+    if positions != 1:
+        return ("count", positions)
+    start_flat = flat_src.find(flat_pattern)
+    end_flat = start_flat + len(flat_pattern) - 1
+    return (indexes[start_flat], indexes[end_flat] + 1)
 
 
 def replace_once(src, pattern, replacement, label):
-    pat = re.compile(tolerant(pattern))
-    matches = list(pat.finditer(src))
-    if len(matches) != 1:
-        fail(f"{label}: expected 1 match, found {len(matches)}")
+    found = match_flat(src, pattern)
+    if found is None:
+        fail(f"{label}: empty anchor")
         return None
-    m = matches[0]
-    return src[: m.start()] + replacement + src[m.end():]
+    if isinstance(found[0], str):
+        fail(f"{label}: expected 1 match, found {found[1]}")
+        return None
+    start, end = found
+    return src[:start] + replacement + src[end:]
 
 
 HELPER_AND_PAGE = """    /** Stable identity of the endpoint a model catalog was fetched from. */
@@ -69,11 +91,13 @@ HELPER_AND_PAGE = """    /** Stable identity of the endpoint a model catalog was
         )
     }"""
 
-PAGE_OLD = """@Composable private fun SettingProviderModelPage(provider: ProviderSetting, onEdit: (ProviderSetting) -> Unit) {
+PAGE_OLD = """@Composable
+private fun SettingProviderModelPage(provider: ProviderSetting, onEdit: (ProviderSetting) -> Unit) {
     ModelList(providerSetting = provider, onUpdateProvider = onEdit)
 }"""
 
-MODEL_LIST_HEAD_OLD = """@Composable private fun ModelList(providerSetting: ProviderSetting, onUpdateProvider: (ProviderSetting) -> Unit) {
+MODEL_LIST_HEAD_OLD = """@Composable
+private fun ModelList(providerSetting: ProviderSetting, onUpdateProvider: (ProviderSetting) -> Unit) {
     val providerManager = koinInject<ProviderManager>()
     val toaster = LocalToaster.current
     val modelLoad by produceState(ModelListLoadState(), providerSetting) {"""
@@ -117,10 +141,10 @@ def main():
     original = src
 
     for old, new, label in (
-        (PAGE_OLD, HELPER_AND_PAGE, "SettingProviderModelPage"),
-        (MODEL_LIST_HEAD_OLD, MODEL_LIST_HEAD_NEW, "ModelList head"),
-        (FETCH_OLD, FETCH_NEW, "listModels call"),
         (FAILURE_OLD, FAILURE_NEW, "failure branch"),
+        (FETCH_OLD, FETCH_NEW, "listModels call"),
+        (MODEL_LIST_HEAD_OLD, MODEL_LIST_HEAD_NEW, "ModelList head"),
+        (PAGE_OLD, HELPER_AND_PAGE, "SettingProviderModelPage"),
     ):
         src = replace_once(src, old, new, label)
         if src is None:
