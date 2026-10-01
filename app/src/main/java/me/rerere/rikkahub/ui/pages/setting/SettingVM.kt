@@ -2,6 +2,7 @@ package me.rerere.rikkahub.ui.pages.setting
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -33,5 +34,23 @@ class SettingVM(
         appScope.launch {
             settingsStore.update(transform)
         }
+    }
+
+    /**
+     * Catalogs fetched with Provider.listModels(), keyed by a stable provider key
+     * (id + baseUrl + apiKey). Model add/remove/reorder must not re-request the list, so
+     * the fetch site looks here before hitting the network. Null means "not fetched".
+     */
+    private val fetchedModelCatalogs = MutableStateFlow<Map<String, List<me.rerere.ai.provider.Model>>>(emptyMap())
+
+    fun cachedModelCatalog(key: String): List<me.rerere.ai.provider.Model>? =
+        fetchedModelCatalogs.value[key]
+
+    fun putModelCatalog(key: String, models: List<me.rerere.ai.provider.Model>) {
+        fetchedModelCatalogs.value = fetchedModelCatalogs.value + (key to models)
+    }
+
+    fun clearModelCatalog(key: String) {
+        fetchedModelCatalogs.value = fetchedModelCatalogs.value - key
     }
 }
