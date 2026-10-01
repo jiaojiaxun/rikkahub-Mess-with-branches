@@ -4,24 +4,32 @@ import android.annotation.SuppressLint
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
@@ -61,6 +69,33 @@ internal fun parseBridgeEvent(json: String): Pair<String, JsonObject>? {
     return type to obj
 }
 
+/**
+ * Layout state shared between the skin layer and the native chat list.
+ *
+ * [reservedTopDp] is the height of the skin's header band (below the native top bar).
+ * ChatList adds it to its top padding so native messages never scroll over the skin
+ * header. [active] is true while a skin is rendered; native secondary text uses it to
+ * switch to a readable style ([rhReadableOnSkin]).
+ */
+object ChatHtmlLayout {
+    val reservedTopDp: MutableState<Int> = mutableStateOf(0)
+    val active: MutableState<Boolean> = mutableStateOf(false)
+}
+
+/**
+ * Gives native secondary text (stats line, loading status) a translucent pill while an
+ * HTML skin is behind it, so it stays readable whatever the skin colors are.
+ */
+@Composable
+fun Modifier.rhReadableOnSkin(): Modifier {
+    if (!ChatHtmlLayout.active.value) return this
+    val bg = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+    return this
+        .clip(RoundedCornerShape(8.dp))
+        .background(bg)
+        .padding(horizontal = 6.dp, vertical = 2.dp)
+}
+
 /** Height reserved for the native TopAppBar, excluding the status bar. */
 private const val TOP_BAR_DP = 64
 
@@ -83,9 +118,10 @@ private fun Color.toCssHex(): String = String.format("#%06X", 0xFFFFFF and toArg
 /**
  * Full-bleed HTML layer for the chat page (dual-mode UI, HTML side).
  *
- * The native top bar and input bar overlay the skin, so every skin gets a prelude
- * ([injectSkinPrelude]): safe-area CSS variables + body padding, a fixer that moves fixed
- * widgets out from under the native bars, and a contrast fixer for buttons/links.
+ * Layout contract: the skin may own a header band (below the native top bar) and small
+ * edge widgets. The header height is declared with <meta name="rh-header-height"> or
+ * measured from the skin's in-flow content, and the native list starts below it. The
+ * message area gets a translucent scrim so native bubbles and text stay readable.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -102,12 +138,23 @@ fun ChatHtmlLayer(
         runCatching { skinFile.readText() }.getOrNull()
     } ?: return
 
+    // Leaving composition (html mode off, skin removed) restores the native layout.
+    DisposableEffect(Unit) {
+        ChatHtmlLayout.active.value = true
+        onDispose {
+            ChatHtmlLayout.active.value = false
+            ChatHtmlLayout.reservedTopDp.value = 0
+        }
+    }
+
     val density = LocalDensity.current
     val safeTop = (WindowInsets.statusBars.getTop(density) / density.density).toInt() + TOP_BAR_DP
     val safeBottom = (WindowInsets.navigationBars.getBottom(density) / density.density).toInt() + INPUT_BAR_DP
     val latestSafe = remember { IntArray(2) }
     latestSafe[0] = safeTop
     latestSafe[1] = safeBottom
+    // A header taller than 40% of the screen would leave no room for the conversation.
+    val maxHeaderDp = (LocalConfiguration.current.screenHeightDp * 0.4f).toInt()
 
     val scheme = MaterialTheme.colorScheme
     val theme = SkinTheme(
@@ -124,20 +171,29 @@ fun ChatHtmlLayer(
     val bridge = remember { ChatHtmlBridge() }
     var webview by remember { mutableStateOf<WebView?>(null) }
 
-    LaunchedEffect(webview) {
+    LaunchedEffect(webview, maxHeaderDp) {
         while (true) {
             bridge.poll()?.let { raw ->
-                parseBridgeEvent(raw)?.let { (type, payload) -> onBridgeEvent(type, payload) }
+                parseBridgeEvent(raw)?.let { (type, payload) ->
+                    if (type == "rh_layout") {
+                        // Internal prelude event, never forwarded to the page callback.
+                        val header = (payload["header"] as? JsonPrimitive)?.contentOrNull
+                            ?.toDoubleOrNull()?.toInt() ?: 0
+                        ChatHtmlLayout.reservedTopDp.value = header.coerceIn(0, maxHeaderDp)
+                    } else {
+                        onBridgeEvent(type, payload)
+                    }
+                }
             }
             delay(50)
         }
     }
 
-    // Push inset changes (rotation, nav mode switch) into the loaded page.
     LaunchedEffect(webview, safeTop, safeBottom) {
         webview?.evaluateJavascript(safeAreaScript(safeTop, safeBottom), null)
     }
 
+    val reservedTop = ChatHtmlLayout.reservedTopDp.value
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
@@ -165,13 +221,20 @@ fun ChatHtmlLayer(
                 }
             },
             update = { view ->
-                // (Re)load when the skin file, its content or the theme changed.
                 val key = html.hashCode()
                 if (view.tag != key) {
                     view.tag = key
                     loadSkin(view, html)
                 }
             },
+        )
+        // Scrim over the message area only: the header band stays vivid, native bubbles and
+        // text below it keep their contrast. No pointer input, so taps still reach the skin.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = (safeTop + reservedTop).dp)
+                .background(scheme.background.copy(alpha = 0.5f))
         )
     }
 }
@@ -230,7 +293,7 @@ body{box-sizing:border-box;padding-top:var(--rh-safe-top);padding-bottom:var(--r
 // No dollar sign anywhere in this script: it is a Kotlin raw string.
 private val SKIN_PRELUDE_JS = """
 (function(){
-var S={top:__TOP__,bottom:__BOTTOM__};
+var S={top:__TOP__,bottom:__BOTTOM__,header:-1};
 function parse(c){var m=/rgba?\(([^)]+)\)/.exec(c||'');if(!m)return null;var p=m[1].split(',').map(parseFloat);return {r:p[0],g:p[1],b:p[2],a:p.length>3?p[3]:1};}
 function ch(v){v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);}
 function lum(c){return 0.2126*ch(c.r)+0.7152*ch(c.g)+0.0722*ch(c.b);}
@@ -250,8 +313,17 @@ if(off(el,'rhSafe'))return;var cs=getComputedStyle(el);if(cs.position!=='fixed'&
 var r=el.getBoundingClientRect();if(!r.width||!r.height||r.height>vh*0.6)return;
 if(r.bottom>vh-S.bottom&&r.top>vh*0.4){el.style.setProperty('bottom',(S.bottom+8)+'px','important');el.style.setProperty('top','auto','important');}
 else if(r.top<S.top&&r.bottom<vh*0.6){el.style.setProperty('top',(S.top+8)+'px','important');el.style.setProperty('bottom','auto','important');}});}
-var t=null;function run(){clearTimeout(t);t=setTimeout(function(){try{fixFixed();}catch(e){}try{fixContrast();}catch(e){}},120);}
-window.__rhSetSafeArea=function(top,bottom){S.top=top;S.bottom=bottom;var st=document.documentElement.style;st.setProperty('--rh-safe-top',top+'px');st.setProperty('--rh-safe-bottom',bottom+'px');run();};
+function headerHeight(){var m=document.querySelector('meta[name=rh-header-height]');
+if(m){var v=parseInt(m.getAttribute('content'),10);return isNaN(v)?0:Math.max(0,v);}
+var h=0,kids=document.body?document.body.children:[];for(var i=0;i<kids.length;i++){var el=kids[i];
+if(el.tagName==='SCRIPT'||el.tagName==='STYLE')continue;var cs=getComputedStyle(el);
+if(cs.position==='fixed'||cs.position==='absolute'||cs.display==='none')continue;
+var r=el.getBoundingClientRect();if(r.height>0){var b=r.bottom+window.scrollY;if(b>h)h=b;}}
+return Math.max(0,Math.round(h-S.top));}
+function reportLayout(){var h=headerHeight();if(h===S.header)return;S.header=h;
+try{AndroidChatBridge.postMessage(JSON.stringify({type:'rh_layout',header:h}));}catch(e){}}
+var t=null;function run(){clearTimeout(t);t=setTimeout(function(){try{fixFixed();}catch(e){}try{fixContrast();}catch(e){}try{reportLayout();}catch(e){}},120);}
+window.__rhSetSafeArea=function(top,bottom){S.top=top;S.bottom=bottom;S.header=-1;var st=document.documentElement.style;st.setProperty('--rh-safe-top',top+'px');st.setProperty('--rh-safe-bottom',bottom+'px');run();};
 window.__rhTheme={dark:__DARK__};
 document.addEventListener('DOMContentLoaded',function(){run();try{new MutationObserver(run).observe(document.body,{childList:true,subtree:true});}catch(e){}});
 window.addEventListener('load',run);window.addEventListener('resize',run);

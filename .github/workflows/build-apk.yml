@@ -55,6 +55,11 @@ jobs:
         if: hashFiles('scripts/patch_batch1.py') != ''
         run: python3 scripts/patch_batch1.py
 
+      # Batch 2: real TPS, stream-follow scroll, skin header reservation, skin layout rules.
+      - name: Patch batch 2 fixes
+        if: hashFiles('scripts/patch_batch2.py') != ''
+        run: python3 scripts/patch_batch2.py
+
       - name: Compile Kotlin (release)
         id: compile
         continue-on-error: true

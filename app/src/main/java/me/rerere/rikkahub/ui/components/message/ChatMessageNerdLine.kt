@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.annotation.VisibleForTesting
 import kotlinx.datetime.toJavaLocalDateTime
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Clock02
 import me.rerere.hugeicons.stroke.CoinsDollar
@@ -31,6 +32,8 @@ import me.rerere.hugeicons.stroke.Zap
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.data.model.ModelContextLengthResolver
+import me.rerere.rikkahub.ui.pages.chat.ChatHtmlLayout
+import me.rerere.rikkahub.ui.pages.chat.rhReadableOnSkin
 import org.koin.compose.koinInject
 import me.rerere.rikkahub.utils.formatNumber
 import me.rerere.rikkahub.utils.toFixed
@@ -50,20 +53,23 @@ fun ChatMessageNerdLine(
 ) {
     val settings = LocalSettings.current.displaySetting
     val contextResolver = koinInject<ModelContextLengthResolver>()
-    val resolvedContextLength by produceState<Int?>(
+    val resolvedContextLength by produceState(
         initialValue = contextLength?.takeIf { it > 0 },
         key1 = modelIdentifier,
         key2 = contextLength,
     ) {
         value = contextResolver.resolve(modelIdentifier ?: message.modelId?.toString(), contextLength)
     }
-
-    ProvideTextStyle(MaterialTheme.typography.labelSmall.copy(color = color)) {
-        CompositionLocalProvider(LocalContentColor provides color) {
+    // Over an HTML skin the 50%-alpha secondary color is unreadable: use a solid color on
+    // a pill background instead.
+    val onSkin = ChatHtmlLayout.active.value
+    val textColor = if (onSkin) MaterialTheme.colorScheme.onSurfaceVariant else color
+    ProvideTextStyle(MaterialTheme.typography.labelSmall.copy(color = textColor)) {
+        CompositionLocalProvider(LocalContentColor provides textColor) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 itemVerticalAlignment = Alignment.CenterVertically,
-                modifier = modifier.padding(horizontal = 4.dp),
+                modifier = modifier.padding(horizontal = 4.dp).rhReadableOnSkin(),
             ) {
                 val usage = message.usage
                 val contextUsed = usage?.promptTokens?.takeIf { it > 0 } ?: estimatedContextTokens
@@ -75,7 +81,7 @@ fun ChatMessageNerdLine(
                             Icon(
                                 imageVector = HugeIcons.Upload02,
                                 contentDescription = "上下文",
-                                tint = color,
+                                tint = textColor,
                                 modifier = Modifier.size(12.dp),
                             )
                         },
@@ -97,18 +103,15 @@ fun ChatMessageNerdLine(
                             Icon(
                                 imageVector = HugeIcons.Upload02,
                                 contentDescription = stringResource(R.string.accessibility_input_tokens),
-                                tint = color,
+                                tint = textColor,
                                 modifier = Modifier.size(12.dp)
                             )
                         },
                         content = {
                             Text(text = "${usage.promptTokens.formatNumber()} tokens")
                             // Cache split. promptTokens counts hits and misses together on
-                            // every provider that reports a cached figure (DeepSeek's
-                            // prompt_cache_hit_tokens, OpenAI's cached_tokens, Anthropic's
-                            // cache_read), so the miss side and the rate are derivable here
-                            // without any extra request. Requested in issue #23: a total alone
-                            // cannot tell the user whether their prompt prefix is stable.
+                            // every provider that reports a cached figure, so the miss side and
+                            // the rate are derivable here without any extra request (issue #23).
                             if (usage.cachedTokens > 0 && usage.promptTokens > 0) {
                                 val hit = usage.cachedTokens.coerceAtMost(usage.promptTokens)
                                 val miss = usage.promptTokens - hit
@@ -120,6 +123,7 @@ fun ChatMessageNerdLine(
                             }
                         }
                     )
+
                     // Output tokens
                     StatsItem(
                         icon = {
@@ -133,6 +137,7 @@ fun ChatMessageNerdLine(
                             Text(text = "${usage.completionTokens.formatNumber()} tokens")
                         }
                     )
+
                     // Cost (USD) — shown when the provider reports it (e.g. OpenRouter usage.cost)
                     val cost = usage.cost
                     if (cost != null && cost > 0.0) {
@@ -141,7 +146,7 @@ fun ChatMessageNerdLine(
                                 Icon(
                                     imageVector = HugeIcons.CoinsDollar,
                                     contentDescription = stringResource(R.string.accessibility_cost),
-                                    tint = color,
+                                    tint = textColor,
                                     modifier = Modifier.size(12.dp)
                                 )
                             },
@@ -150,14 +155,25 @@ fun ChatMessageNerdLine(
                             }
                         )
                     }
-                    // TPS
-                    if (message.finishedAt != null) {
-                        val duration = Duration.between(
+
+                    // rh-batch2:tps - speed = output tokens of the last step / time that step
+                    // actually spent streaming output (first -> last chunk). The total
+                    // createdAt -> finishedAt span includes time-to-first-token, tool runs and
+                    // approval waits, while TokenUsage.merge keeps only the last step's
+                    // completion tokens, so dividing by it badly under-reports the speed.
+                    val totalMs = message.finishedAt?.let {
+                        Duration.between(
                             message.createdAt.toJavaLocalDateTime(),
-                            message.finishedAt!!.toJavaLocalDateTime()
-                        )
-                        val tps = usage.completionTokens.toFloat() / duration.toMillis() * 1000
-                        val seconds = (duration.toMillis() / 1000f).toFixed(1)
+                            it.toJavaLocalDateTime()
+                        ).toMillis()
+                    }
+                    val speedMs = tpsWindowMillis(
+                        generationMillis = message.generationMillis,
+                        totalMillis = totalMs,
+                        hasTools = message.parts.any { it is UIMessagePart.Tool },
+                    )
+                    if (speedMs != null && usage.completionTokens > 0) {
+                        val tps = usage.completionTokens.toFloat() / speedMs * 1000f
                         StatsItem(
                             icon = {
                                 Icon(
@@ -170,7 +186,8 @@ fun ChatMessageNerdLine(
                                 Text(text = "${tps.toFixed(1)} tok/s")
                             }
                         )
-
+                    }
+                    if (totalMs != null && totalMs > 0) {
                         StatsItem(
                             icon = {
                                 Icon(
@@ -180,15 +197,28 @@ fun ChatMessageNerdLine(
                                 )
                             },
                             content = {
-                                Text(text = "${seconds}s")
+                                Text(text = "${(totalMs / 1000f).toFixed(1)}s")
                             }
                         )
-                    }
-                                    }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * Time window (ms) the speed is computed over, or null when no meaningful speed exists.
+ * Measured streaming time wins; the whole-message span is only a fallback for messages
+ * without tool calls (older messages saved before generationMillis existed), because with
+ * tools it mixes several requests and the waits between them.
+ */
+@VisibleForTesting
+internal fun tpsWindowMillis(generationMillis: Long?, totalMillis: Long?, hasTools: Boolean): Long? = when {
+    generationMillis != null && generationMillis > 0 -> generationMillis
+    !hasTools && totalMillis != null && totalMillis > 0 -> totalMillis
+    else -> null
+}
 
 // Generation cost is often a tiny fraction of a cent, so a fixed decimal count would show
 // "$0.0000". Render up to 6 decimals and trim trailing zeros (e.g. "$0.0123", "$0.000045").
