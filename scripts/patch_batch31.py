@@ -10,11 +10,11 @@ def fail(path, msg):
 
 
 # ============================================================
-# 子代理接线 v2（#95 修复）
-# #95 失败根因（annotations 实证）：v1 的 archive 选项行锚点是「列对齐空格」
-# 逐字匹配——手工对齐的空格数与源码不一致（count=0）。
-# v2 修复：①封闭类锚点改正则（容忍任意空格）；②插入行改单空格格式，
-# batch33 的后续锚点同步用单空格版（自己写的，格式确定）。
+# 子代理接线 v3（#96 修复）
+# #96 失败根因：patch_chat_ui_tools.py（先于 batch* 运行）已在 archive 行尾
+# 插入 ChatUi/AppControl——archive 行后不再是闭括号，v2 的「archive+}」正则断了。
+# v3 修复：完全照抄 patch_chat_ui_tools.py 已验证可行的模式——匹配行本身
+# （不含后续行），插入点在行尾 m.end()。插入顺序无要求（sealed class 内序无关）。
 # ============================================================
 
 # ---------- 1) LocalTools.kt ----------
@@ -22,19 +22,20 @@ P1 = "app/src/main/java/me/rerere/rikkahub/data/ai/tools/LocalTools.kt"
 t1 = (ROOT / P1).read_text(encoding="utf-8")
 
 if "LocalToolOption.SubAgents" not in t1:
-    # 1a. 封闭类加 SubAgents 选项（正则锚，容忍任意列对齐空格）
+    # 1a. 封闭类加 SubAgents 选项（照抄 patch_chat_ui_tools.py 的 ENUM_RE 模式）
     ARCHIVE_RE = re.compile(
-        r'(?P<line>[ \t]*@Serializable[ \t]+@SerialName\("archive"\)[^\n]*\n)'
-        r'(?P<close>[ \t]*\}[ \t]*\n)'
+        r'(?P<indent>[ \t]*)@Serializable[ \t]+@SerialName\("archive"\)[ \t]+'
+        r'data object Archive[ \t]*:[ \t]*LocalToolOption\(\)'
     )
     m = ARCHIVE_RE.search(t1)
     if not m:
-        fail(P1, "archive option line (regex) not found")
-    subagents_block = (
-        "    // Sub-agents (batch31): subagent_dispatch / get / list / cancel\n"
-        '    @Serializable @SerialName("sub_agents") data object SubAgents : LocalToolOption()\n'
-    )
-    t1 = t1[: m.end("line")] + subagents_block + t1[m.end("line"):]
+        fail(P1, "archive option line (ENUM_RE) not found")
+    ind = m.group("indent")
+    subagents_line = (
+        '\n{ind}// Sub-agents (batch31): subagent_dispatch / get / list / cancel'
+        '\n{ind}@Serializable @SerialName("sub_agents") data object SubAgents : LocalToolOption()'
+    ).format(ind=ind)
+    t1 = t1[: m.end()] + subagents_line + t1[m.end():]
 
     # 1b. 构造器加 engine/registry 参数（注释行锚点，无对齐空格风险）
     A = (
@@ -82,16 +83,16 @@ if "LocalToolOption.SubAgents" not in t1:
     t1 = t1.replace(A, B, 1)
 
     (ROOT / P1).write_text(t1, encoding="utf-8")
-    print("batch31 v2: LocalTools option + ctor + getTools wired (regex anchor)")
+    print("batch31 v3: LocalTools option + ctor + getTools wired (ENUM_RE pattern)")
 else:
-    print("batch31 v2: LocalTools already patched")
+    print("batch31 v3: LocalTools already patched")
 
 # ---------- 2) AppModule.kt 构造参数 ----------
 P2 = "app/src/main/java/me/rerere/rikkahub/di/AppModule.kt"
 t2 = (ROOT / P2).read_text(encoding="utf-8")
 
 if "subAgentEngine = get()" in t2:
-    print("batch31 v2: AppModule ctor already patched")
+    print("batch31 v3: AppModule ctor already patched")
 else:
     A = (
         "            storageVolumeGrantStore = get(),\n"
@@ -112,4 +113,4 @@ else:
     t2 = t2.replace(A, B, 1)
 
     (ROOT / P2).write_text(t2, encoding="utf-8")
-    print("batch31 v2: AppModule LocalTools ctor args added")
+    print("batch31 v3: AppModule LocalTools ctor args added")

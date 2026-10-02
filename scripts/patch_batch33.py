@@ -11,10 +11,10 @@ def fail(path, msg):
 
 
 # ============================================================
-# 定时任务接线 v2（#95 修复）
-# v1 失败：batch31 的 archive 锚点空格数不匹配（count=0）导致整个 patch 步骤挂。
-# v2：sub_agents 选项行锚点改为「正则」，匹配 batch31 v2 插入的单空格格式行。
-# 其余锚点（注释行/代码块）逐字实测无对齐风险，保持不变。
+# 定时任务接线 v3（#96 修复）
+# v2 失败：sub_agents 锚点正则没错，但 batch31 v2 在它之前就挂了。
+# v3：sub_agents 行锚点照抄 patch_chat_ui_tools.py 的 ENUM_RE 模式
+# （匹配行本身，插入点在行尾 m.end()），与 batch31 v3 插入格式一致。
 # ============================================================
 
 # ---------- 1) app/build.gradle.kts：WorkManager 依赖 ----------
@@ -125,19 +125,21 @@ P4 = "app/src/main/java/me/rerere/rikkahub/data/ai/tools/LocalTools.kt"
 t4 = (ROOT / P4).read_text(encoding="utf-8")
 
 if "LocalToolOption.CronJobs" not in t4:
-    # 4a. 封闭类加 CronJobs 选项（正则锚，匹配 batch31 v2 插入的单空格 sub_agents 行）
+    # 4a. 封闭类加 CronJobs 选项（照抄 ENUM_RE 模式匹配 sub_agents 行，插在行尾）
     SUB_AGENTS_RE = re.compile(
-        r'(?P<line>[ \t]*@Serializable[ \t]+@SerialName\("sub_agents"\)[ \t]+data[ \t]+object[ \t]+SubAgents[ \t]*:[ \t]*LocalToolOption\(\)[ \t]*\n)'
+        r'(?P<indent>[ \t]*)@Serializable[ \t]+@SerialName\("sub_agents"\)[ \t]+'
+        r'data object SubAgents[ \t]*:[ \t]*LocalToolOption\(\)'
     )
     m = SUB_AGENTS_RE.search(t4)
     if not m:
-        fail(P4, "sub_agents option line (regex) not found — batch31 must run first")
-    cronjobs_block = (
-        "    // Scheduled jobs (batch33): schedule_job / list_jobs / delete_job / pause_job /\n"
-        "    // resume_job / trigger_job_now / job_history\n"
-        '    @Serializable @SerialName("cron_jobs") data object CronJobs : LocalToolOption()\n'
-    )
-    t4 = t4[: m.end("line")] + cronjobs_block + t4[m.end("line"):]
+        fail(P4, "sub_agents option line (ENUM_RE) not found — batch31 must run first")
+    ind = m.group("indent")
+    cronjobs_line = (
+        '\n{ind}// Scheduled jobs (batch33): schedule_job / list_jobs / delete_job / pause_job /'
+        '\n{ind}// resume_job / trigger_job_now / job_history'
+        '\n{ind}@Serializable @SerialName("cron_jobs") data object CronJobs : LocalToolOption()'
+    ).format(ind=ind)
+    t4 = t4[: m.end()] + cronjobs_line + t4[m.end():]
 
     # 4b. getTools 挂 7 工具（CostGuards 块锚点，逐字实测）
     A = (
@@ -171,7 +173,7 @@ if "LocalToolOption.CronJobs" not in t4:
     t4 = t4.replace(A, B, 1)
 
     (ROOT / P4).write_text(t4, encoding="utf-8")
-    print("batch33 v2: LocalTools option + cron tools wired")
+    print("batch33 v3: LocalTools option + cron tools wired")
 else:
     print("batch33: LocalTools already patched")
 
