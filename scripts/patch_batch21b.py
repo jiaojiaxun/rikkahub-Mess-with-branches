@@ -12,8 +12,11 @@ else:
 # --- rh-batch21b: R8 keep rules (minify stays on, obfuscation stays off) ---
 # QuickJS JNI: native code looks up Java callbacks (Console impl, module loaders)
 # by exact name; shrinking/optimizing them away breaks eval_javascript at runtime.
+# NOTE the real package is com.whl.quickjs.WRAPPER.* (see LocalTools.kt imports);
+# referencing the wrong package here makes R8 hard-fail with Missing class
+# (v1 bug, run #84: assembleRelease died while compileReleaseKotlin passed).
 -keep class com.whl.quickjs.** { *; }
--keep class * implements com.whl.quickjs.QuickJSContext$Console { *; }
+-keep class * implements com.whl.quickjs.wrapper.QuickJSContext$Console { *; }
 
 # Pebble templates resolve members reflectively at render time.
 -keep class io.pebbletemplates.** { *; }
@@ -43,4 +46,4 @@ else:
 -keep class me.rerere.ai.core.** { *; }
 """
     (ROOT / PATH).write_text(text.rstrip() + "\n" + ADD, encoding="utf-8")
-    print("batch21b: R8 keep rules appended (QuickJS JNI, Pebble, kotlinx.serialization, enums, settings/data models)")
+    print("batch21b v2: R8 keep rules (QuickJS Console package fixed to com.whl.quickjs.wrapper)")
