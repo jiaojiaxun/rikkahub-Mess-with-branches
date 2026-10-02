@@ -168,14 +168,14 @@ import me.rerere.ai.ui.UIMessagePart""",
 
 chat_edits = [
     (
-        """            generationHandler.generateText(
-                settings = settings,
-                model = model,""",
-        """            // rh-batch15: filled after the actual tools list is assembled below.
-            val requestOverheadTokens = java.util.concurrent.atomic.AtomicLong(0L)
-            generationHandler.generateText(
-                settings = settings,
-                model = model,""",
+        """        val generationResult = runCatching {""",
+        """        // rh-batch15: system-prompt + tool-schema overhead, measured from the actually
+        // assembled tool list inside the generation call below. Declared at function scope
+        // (before runCatching) so the context-limit recovery path after the block can read
+        // the same figure — that path exists precisely because provider overhead exceeded
+        // the local estimate.
+        val requestOverheadTokens = java.util.concurrent.atomic.AtomicLong(0L)
+        val generationResult = runCatching {""",
         "request overhead holder",
     ),
     (
