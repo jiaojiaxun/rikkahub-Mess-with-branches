@@ -38,62 +38,25 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      - name: Patch LocalTools.kt (chat_ui + app_control groups)
-        run: python3 scripts/patch_chat_ui_tools.py
-
-      - name: Patch AssistantLocalToolPage.kt (settings switches)
-        run: python3 scripts/patch_local_tool_page.py
-
-      - name: Patch RikkaHubApp.kt (skin store init)
-        run: python3 scripts/patch_skin_store_init.py
-
-      - name: Patch ChatPage.kt (embed html layer)
-        run: python3 scripts/patch_chat_page_html.py
-
-      # Batch 1: approval buttons, native-exit button, responsesPath, reasoning OFF, strings.
-      - name: Patch batch 1 fixes
-        if: hashFiles('scripts/patch_batch1.py') != ''
-        run: python3 scripts/patch_batch1.py
-
-      # Batch 2: real TPS, stream-follow scroll, skin header reservation, skin layout rules.
-      - name: Patch batch 2 fixes
-        if: hashFiles('scripts/patch_batch2.py') != ''
-        run: python3 scripts/patch_batch2.py
-
-      # Batch 3: WebDAV list, live compaction output, long user message folding, strings.
-      - name: Patch batch 3 fixes
-        if: hashFiles('scripts/patch_batch3.py') != ''
-        run: python3 scripts/patch_batch3.py
-
-      # Batch 4: FULL backups restore the fork's own database/settings; safer entry aliases.
-      - name: Patch batch 4 fixes
-        if: hashFiles('scripts/patch_batch4.py') != ''
-        run: python3 scripts/patch_batch4.py
-
-      # Batch 5: generate_image local tool + its assistant switch.
-      - name: Patch batch 5 fixes
-        if: hashFiles('scripts/patch_batch5.py') != ''
-        run: python3 scripts/patch_batch5.py
-
-      # Batch 6: pure official backup export.
-      - name: Patch batch 6 fixes
-        if: hashFiles('scripts/patch_batch6.py') != ''
-        run: python3 scripts/patch_batch6.py
-
-      # Batch 7: model catalog fetched once per provider, not per model edit.
-      - name: Patch batch 7 fixes
-        if: hashFiles('scripts/patch_batch7.py') != ''
-        run: python3 scripts/patch_batch7.py
-
-      # Batch 8: truncate-only compaction mode + automatic-compaction cooldown.
-      - name: Patch batch 8 fixes
-        if: hashFiles('scripts/patch_batch8.py') != ''
-        run: python3 scripts/patch_batch8.py
-
-      # Batch 9: WebDAV restore closes the picker sheet so the download progress is visible.
-      - name: Patch batch 9 fixes
-        if: hashFiles('scripts/patch_batch9.py') != ''
-        run: python3 scripts/patch_batch9.py
+      # Every source patch is an anchored, idempotent python script that fails loudly
+      # (::error + exit 1) when an anchor has moved. They run in a deterministic order:
+      # the named feature scripts first, then patch_batchN.py sorted numerically.
+      # Adding scripts/patch_batch11.py needs no workflow change.
+      - name: Apply source patches
+        run: |
+          set -euo pipefail
+          for f in \
+            scripts/patch_chat_ui_tools.py \
+            scripts/patch_local_tool_page.py \
+            scripts/patch_skin_store_init.py \
+            scripts/patch_chat_page_html.py \
+            $(ls scripts/patch_batch*.py 2>/dev/null | sort -V)
+          do
+            if [ -f "$f" ]; then
+              echo "== applying $f"
+              python3 "$f"
+            fi
+          done
 
       - name: Compile Kotlin (release)
         id: compile
@@ -146,7 +109,7 @@ jobs:
           exit $code
 
       # Non-blocking: usage / cost / cache accounting, the context-budget estimator and the
-      # model-context-length allowlist.
+      # model-context-length resolver (incl. the newly added Claude 5.5 / Gemini 4 rules).
       - name: Unit tests (usage accounting + context budget + context length)
         id: stats_tests
         if: steps.compile.outcome == 'success'
