@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       # Two git submodules (material3/material-color-utilities, llama-cpp/native/llama.cpp)
       # are not fetched by default; without them every build fails inside Gradle.
@@ -153,3 +153,14 @@ jobs:
           name: rikkahub-dual-mode-chat
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      # Release asset: anonymous download URL, usable by download_file on the phone.
+      # Workflow artifacts require a GitHub login to fetch.
+      - name: Upload APK to Release
+        if: steps.build.outcome == 'success'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: fix-batch1-run${{ github.run_number }}
+          name: fix/batch1 build (run ${{ github.run_number }})
+          prerelease: true
+          files: app/build/outputs/apk/release/*.apk
