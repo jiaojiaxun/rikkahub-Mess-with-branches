@@ -17,10 +17,13 @@ Two problems were reported together:
    the cooldown on purpose - it is the path that has to work even when an earlier pass did
    not shrink the context enough.
 
+The compress dialog is hosted by ui/components/ai/FilesPicker.kt (it owns
+showCompressDialog / onCompressContext). That file takes no view model - it injects its
+dependencies with Koin - so the truncate action is wired through koinInject() there.
+
 Anchors are matched with ALL whitespace removed (see match_flat), so reflowing the source
 must not break this patch. Anchored, idempotent, loud (::error + exit 1).
 """
-import re
 import sys
 from pathlib import Path
 
@@ -28,7 +31,7 @@ FAILURES = []
 CHAT_SERVICE = Path("app/src/main/java/me/rerere/rikkahub/service/ChatService.kt")
 CHAT_VM = Path("app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt")
 DIALOG = Path("app/src/main/java/me/rerere/rikkahub/ui/components/ai/CompressContextDialog.kt")
-UI_ROOT = Path("app/src/main/java/me/rerere/rikkahub/ui")
+FILES_PICKER = Path("app/src/main/java/me/rerere/rikkahub/ui/components/ai/FilesPicker.kt")
 MARKER = "rh-batch8"
 
 
@@ -80,6 +83,25 @@ def load(path, label):
         fail(f"{label}: file not found ({path})", str(path))
         return None
     return path.read_text(encoding="utf-8")
+
+
+def patch_file(path, label, edits, marker=None):
+    src = load(path, label)
+    if src is None:
+        return
+    if marker is not None and marker in src:
+        print(f"already patched: {path}", flush=True)
+        return
+    original = src
+    for old, new, edit_label in edits:
+        src = replace_once(src, old, new, f"{label}/{edit_label}", str(path))
+        if src is None:
+            return
+    if src == original:
+        fail(f"{label}: nothing changed", str(path))
+        return
+    path.write_text(src, encoding="utf-8")
+    print(f"patched: {path}", flush=True)
 
 
 # --------------------------------------------------------------------------------------
@@ -193,9 +215,7 @@ TRUNCATE_FUNCS = '''    /**
      * pass keeps re-requesting the same payload or comes back unusable.
      *
      * The stored compaction (if any) describes messages that no longer exist, so it is cleared
-     * in the same critical section, before the truncated snapshot is saved. Both writes recover
-     * the same way as the rest of this class: the compaction row is independent of the
-     * conversation row, and a failed save leaves the in-memory session untouched.
+     * in the same critical section, before the truncated snapshot is saved.
      *
      * Returns the number of dropped message nodes. Throws when there is nothing to drop, so the
      * caller never silently "succeeds" without doing anything.
@@ -237,8 +257,8 @@ TRUNCATE_FUNCS = '''    /**
 
     /**
      * Keeps the manual truncation off the chat screen's coroutine, mirroring
-     * [compressConversationAsync]: deleting a large history touches every message node and
-     * must not be cancelled by the user navigating away.
+     * [compressConversationAsync]: deleting a long history rewrites every surviving message node
+     * and must not be cancelled by the user navigating away.
      */
     fun truncateConversationToRecentAsync(
         conversationId: Uuid,
@@ -395,92 +415,80 @@ DIALOG_CONFIRM_NEW = """currentJob = if (truncateOnly) {
 
 
 # --------------------------------------------------------------------------------------
-# Call sites of CompressContextDialog(...)
+# FilesPicker.kt - the real host of CompressContextDialog
 # --------------------------------------------------------------------------------------
 
-TRUNCATE_ARG_TEMPLATE = """
-{ind}onTruncate = {{ keepRecentMessages ->
-{ind}    vm.handleTruncateContext(keepRecentMessages)
-{ind}}},
+PICKER_IMPORT_OLD = "import me.rerere.rikkahub.data.repository.WorkspaceRepository"
+
+PICKER_IMPORT_NEW = """import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.service.ChatService"""
+
+PICKER_INJECT_OLD = "val workspaceRepository: WorkspaceRepository = koinInject()"
+
+PICKER_INJECT_NEW = """val workspaceRepository: WorkspaceRepository = koinInject()
+    // rh-batch8:truncate-only - FilesPicker has no view model, so the "delete instead of
+    // summarise" action is resolved straight from Koin (same container ChatVM uses).
+    val chatService: ChatService = koinInject()"""
+
+PICKER_CALL = "CompressContextDialog("
+
+PICKER_ARG = """{newline}{indent}// rh-batch8:truncate-only - no model request, just drop the older messages.
+{indent}onTruncate = {{ keepRecentMessages ->
+{indent}    chatService.truncateConversationToRecentAsync(
+{indent}        conversationId = conversation.id,
+{indent}        keepRecentMessages = keepRecentMessages,
+{indent}    )
+{indent}}},
 """
 
 
-def patch_dialog_call_sites():
-    targets = []
-    for path in sorted(UI_ROOT.rglob("*.kt")):
-        try:
-            src = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        if "CompressContextDialog(" in src:
-            targets.append(path)
-    if not targets:
-        fail("no CompressContextDialog call site found under ui/", str(UI_ROOT))
-        return
-
-    for path in targets:
-        src = path.read_text(encoding="utf-8")
-        if "onTruncate" in src:
-            print(f"already patched: {path}", flush=True)
-            continue
-        if "vm." not in src:
-            fail(
-                "call site does not reference a `vm` view model; "
-                "cannot wire onTruncate automatically",
-                str(path),
-            )
-            continue
-        call = "CompressContextDialog("
-        idx = src.find(call)
-        depth = 0
-        end = -1
-        for i in range(idx + len(call) - 1, len(src)):
-            char = src[i]
-            if char == "(":
-                depth += 1
-            elif char == ")":
-                depth -= 1
-                if depth == 0:
-                    end = i
-                    break
-        if end < 0:
-            fail("unbalanced CompressContextDialog( call", str(path))
-            continue
-        line_start = src.rfind("\n", 0, idx) + 1
-        match = re.match(r"[ \t]*", src[line_start:])
-        base = match.group(0) if match else ""
-        # Arguments of the call sit one level deeper than the call keyword itself.
-        indent = base + " " * 4
-        arg = TRUNCATE_ARG_TEMPLATE.format(ind=indent)
-        insertion = idx + len(call)
-        src = src[:insertion] + arg + src[insertion:]
-        path.write_text(src, encoding="utf-8")
-        print(f"patched dialog call site: {path}", flush=True)
-
-
-def patch_file(path, label, edits):
-    src = load(path, label)
+def patch_picker_call_site():
+    src = load(FILES_PICKER, "FilesPicker")
     if src is None:
         return
-    original = src
-    for old, new, edit_label in edits:
-        src = replace_once(src, old, new, f"{label}/{edit_label}", str(path))
-        if src is None:
-            return
-    if src == original:
-        fail(f"{label}: nothing changed", str(path))
+    if "onTruncate" in src:
+        print(f"already patched: {FILES_PICKER}", flush=True)
         return
-    path.write_text(src, encoding="utf-8")
-    print(f"patched: {path}", flush=True)
+    if PICKER_CALL not in src:
+        fail(f"{PICKER_CALL} call site not found", str(FILES_PICKER))
+        return
+
+    start = src.find(PICKER_CALL)
+    depth = 0
+    end = -1
+    for i in range(start + len(PICKER_CALL) - 1, len(src)):
+        char = src[i]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    if end < 0:
+        fail("unbalanced CompressContextDialog( call", str(FILES_PICKER))
+        return
+
+    line_start = src.rfind("\n", 0, start) + 1
+    indent = src[line_start:start]
+    # First argument sits one level deeper than the call keyword.
+    arg_indent = indent + " " * 4
+    insertion = start + len(PICKER_CALL)
+    arg = PICKER_ARG.format(newline="\n", indent=arg_indent)
+    src = src[:insertion] + arg + src[insertion:]
+
+    if "onTruncate" not in src:
+        fail("onTruncate argument was not inserted", str(FILES_PICKER))
+        return
+    FILES_PICKER.write_text(src, encoding="utf-8")
+    print(f"patched dialog call site: {FILES_PICKER}", flush=True)
 
 
 def main():
-    src = load(CHAT_SERVICE, "ChatService")
-    if src is not None and MARKER in src:
-        print("ChatService already patched, skipping", flush=True)
-    elif src is not None:
-        original = src
-        for old, new, label in (
+    patch_file(
+        CHAT_SERVICE,
+        "ChatService",
+        [
             (COOLDOWN_CONST_OLD, COOLDOWN_CONST_NEW, "cooldown constant"),
             (COOLDOWN_FIELD_OLD, COOLDOWN_FIELD_NEW, "cooldown field"),
             (CLEANUP_OLD, CLEANUP_NEW, "cleanup()"),
@@ -489,21 +497,15 @@ def main():
             (COOLDOWN_GATE_OLD, COOLDOWN_GATE_NEW, "cooldown gate"),
             (COOLDOWN_STAMP_OLD, COOLDOWN_STAMP_NEW, "cooldown stamp"),
             (TRUNCATE_ANCHOR, TRUNCATE_FUNCS, "truncate-only functions"),
-        ):
-            src = replace_once(src, old, new, f"ChatService/{label}", str(CHAT_SERVICE))
-            if src is None:
-                break
-        if src is not None:
-            if src == original:
-                fail("ChatService: nothing changed", str(CHAT_SERVICE))
-            else:
-                CHAT_SERVICE.write_text(src, encoding="utf-8")
-                print(f"patched: {CHAT_SERVICE}", flush=True)
+        ],
+        marker=MARKER,
+    )
 
     patch_file(
         CHAT_VM,
         "ChatVM",
         [(VM_OLD, VM_NEW, "handleTruncateContext")],
+        marker="handleTruncateContext",
     )
 
     patch_file(
@@ -517,9 +519,20 @@ def main():
             (DIALOG_TAIL_OLD, DIALOG_TAIL_NEW, "body tail"),
             (DIALOG_CONFIRM_OLD, DIALOG_CONFIRM_NEW, "confirm button"),
         ],
+        marker="truncateOnly",
     )
 
-    patch_dialog_call_sites()
+    patch_file(
+        FILES_PICKER,
+        "FilesPicker",
+        [
+            (PICKER_IMPORT_OLD, PICKER_IMPORT_NEW, "ChatService import"),
+            (PICKER_INJECT_OLD, PICKER_INJECT_NEW, "ChatService injection"),
+        ],
+        marker="chatService",
+    )
+
+    patch_picker_call_site()
 
     if FAILURES:
         print("batch8 patch failures:\n  " + "\n  ".join(FAILURES), flush=True)
