@@ -12,23 +12,25 @@ def fail(msg):
     raise SystemExit(1)
 
 
-# 锚点（此前已读过该区域，分支源码中唯一）：
+# 锚点（分支源码唯一，#84/#85 patch 步骤均验证过命中）：
 OLD = """    val lastMessageNodeId = conversation.messageNodes.lastOrNull()?.id
     val estimatedContextTokens = remember(conversation.messageNodes) {
         ContextBudgetPlanner.estimateInputTokens(conversation.currentMessages).takeIf { it > 0 }
     }
 """
 
-# 注意：虽然分支源码里是这样，但 batch2 patch 可能已改过此区域。先检查 patch 后状态：
-# 估算在 UI recompose 路径上，流式期间 messageNodes 每块都变 → remember 键失效 → 全量重扫。
-# 修法：加载中（流式）时直接复用上次值（key 加 loadingState 而非 messageNodes），
-# 生成结束后再精确算一次。
+# v2 修复（对抗性审查 P1-2）：v1 只在 loading 边沿重算——空闲时删消息/编辑/
+# 分支都不触发，指示器永久显示陈旧 token 数（功能回归）。v2 键同时含
+# messageNodes：空闲时任何消息变化立即精确重算；流式中 effect 每块重启但
+# body 直接跳过（零计算），估算冻结在生成前的值，生成结束再精算一次。
+# 初始值同步计算（remember 内），首帧不闪 null。
 NEW = """    val lastMessageNodeId = conversation.messageNodes.lastOrNull()?.id
-    // 任务12：流式期间 messageNodes 每个块都变，remember(messageNodes) 会每块全量
-    // 重扫 ContextBudgetPlanner.estimateInputTokens。改为：流式中（loading）冻结旧值，
-    // 键用「loading 边沿 + 非流式快照」，生成结束/空闲时才重新精确估算。
-    var estimatedContextTokens by remember { mutableStateOf<Int?>(null) }
-    LaunchedEffect(loading) {
+    // 任务12 v2：流式期间（loading=true）冻结估算，空闲时对任何消息变化
+    // （发送/删除/编辑/分支）都重算——v1 只认 loading 边沿是回归。
+    var estimatedContextTokens by remember {
+        mutableStateOf(ContextBudgetPlanner.estimateInputTokens(conversation.currentMessages).takeIf { it > 0 })
+    }
+    LaunchedEffect(conversation.messageNodes, loading) {
         if (!loading) {
             estimatedContextTokens = ContextBudgetPlanner.estimateInputTokens(
                 conversationUpdated.currentMessages
@@ -48,6 +50,5 @@ else:
     ctx = repr(text[max(0, idx - 300): idx + 500]) if idx >= 0 else "NOT FOUND"
     fail(f"anchor missing; context: {ctx}")
 
-# mutableStateOf/getValue/setValue/LaunchedEffect 的 import 已存在于文件头（此前读过）
 (ROOT / PATH).write_text(text, encoding="utf-8")
-print("batch21c: context estimate frozen during streaming, recomputed on completion")
+print("batch21c v2: estimate frozen while streaming, exact on any idle change")

@@ -20,7 +20,8 @@ data class CronJob(
 )
 
 /**
- * Cron表达式解析器（仅支持5位标准格式）
+ * Cron表达式解析器（仅支持5位标准格式；日与周字段遵循 Vixie 语义：
+ * 两者都受限时取 OR——如 `0 0 1 * 1` 表示每月1号**或**每周一）
  */
 object CronParser {
 
@@ -41,6 +42,10 @@ object CronParser {
             val monthPattern = parseField(parts[3], 1, 12) ?: return null
             val weekdayPattern = parseField(parts[4], 0, 6) ?: return null
 
+            // Vixie cron：日与周是否「受限」（未写全量）。两者都受限时按 OR 匹配。
+            val dayRestricted = dayPattern != (1..31).toSet()
+            val weekdayRestricted = weekdayPattern != (0..6).toSet()
+
             // 从下一分钟开始找
             var time = fromTime + 60_000 - (fromTime % 60_000)
             val calendar = java.util.Calendar.getInstance()
@@ -54,11 +59,18 @@ object CronParser {
                 val month = calendar.get(java.util.Calendar.MONTH) + 1
                 val weekday = calendar.get(java.util.Calendar.DAY_OF_WEEK) - 1  // Calendar: 1=周日, Cron: 0=周日
 
+                // 标准 Vixie 语义：日和周都受限时取 OR（每月1号或每周一），
+                // 只有其一受限时按 AND（未受限字段本就匹配所有值）。
+                val dayMatches = if (dayRestricted && weekdayRestricted) {
+                    day in dayPattern || weekday in weekdayPattern
+                } else {
+                    day in dayPattern && weekday in weekdayPattern
+                }
+
                 if (minute in minutePattern &&
                     hour in hourPattern &&
-                    day in dayPattern &&
-                    month in monthPattern &&
-                    weekday in weekdayPattern
+                    dayMatches &&
+                    month in monthPattern
                 ) {
                     return time
                 }
@@ -72,7 +84,7 @@ object CronParser {
 
     /**
      * 解析单个cron字段，返回匹配的值集合
-     * 支持：* , - / 四种语法
+     * 支持：* , - / 四种语法（N/step 表示从 N 到字段上限每 step 步，如分 5/10 = 5,15,25,...）
      */
     private fun parseField(field: String, min: Int, max: Int): Set<Int>? {
         val result = mutableSetOf<Int>()
@@ -82,15 +94,18 @@ object CronParser {
         for (seg in segments) {
             val rangePart: String
             val stepPart: String
+            val hasStep: Boolean
 
             if ("/" in seg) {
                 val parts = seg.split("/")
                 if (parts.size != 2) return null
                 rangePart = parts[0]
                 stepPart = parts[1]
+                hasStep = true
             } else {
                 rangePart = seg
                 stepPart = "1"
+                hasStep = false
             }
 
             val step = stepPart.toIntOrNull() ?: return null
@@ -109,7 +124,8 @@ object CronParser {
             } else {
                 val value = rangePart.toIntOrNull() ?: return null
                 if (value < min || value > max) return null
-                range = value..value
+                // 标准 cron：N/step = 从 N 到字段上限每 step 步；不带 step 才是单值
+                range = if (hasStep) value..max else value..value
             }
 
             // 按步长采样

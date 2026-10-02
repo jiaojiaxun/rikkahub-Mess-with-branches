@@ -5,25 +5,24 @@ PATH = "app/proguard-rules.pro"
 
 text = (ROOT / PATH).read_text(encoding="utf-8")
 
-if "-keep class com.whl.quickjs" in text:
-    print("batch21b: proguard keep rules already present")
-else:
-    ADD = """
-# --- rh-batch21b: R8 keep rules (minify stays on, obfuscation stays off) ---
-# QuickJS JNI: native code looks up Java callbacks (Console impl, module loaders)
-# by exact name; shrinking/optimizing them away breaks eval_javascript at runtime.
-# NOTE the real package is com.whl.quickjs.WRAPPER.* (see LocalTools.kt imports);
-# referencing the wrong package here makes R8 hard-fail with Missing class
-# (v1 bug, run #84: assembleRelease died while compileReleaseKotlin passed).
+if "rh-batch21b" in text:
+    print("batch21b v3: already applied")
+    raise SystemExit(0)
+
+# v3 教训（#84/#85 annotations 实证）：v1/v2 的
+#   -keep class io.pebbletemplates.** { *; }
+# 把 Pebble 整库（含 CaffeineTagCache）拉进 R8 root set，而 caffeine 不在
+# release classpath → "Missing class com.github.benmanes.caffeine.cache.Cache"
+# 硬失败。#78（无 21b）R8 通过证明 Pebble 无需 keep（相关类本来就会被剪掉）。
+# v3 原则：只保留 JNI/反射/序列化确需的最小规则，禁止整库通配 keep——
+# 那既让压缩失效（用户要求只压缩不混淆），又把不可达的缺失引用变成硬错误。
+ADD = """
+# --- rh-batch21b v3: minimal R8 keep rules (minify on, obfuscation off via -dontobfuscate) ---
+# QuickJS JNI: native code resolves Java callbacks by exact name.
 -keep class com.whl.quickjs.** { *; }
--keep class * implements com.whl.quickjs.wrapper.QuickJSContext$Console { *; }
 
-# Pebble templates resolve members reflectively at render time.
--keep class io.pebbletemplates.** { *; }
-
-# kotlinx.serialization: generated serializers are looked up reflectively; enum
-# values are serialized by name via valueOf().
--keepattributes RuntimeVisibleAnnotations,AnnotationDefault
+# kotlinx.serialization: generated serializers + enum valueOf are reflective.
+-keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
 -keepclassmembers class * extends java.lang.Enum {
     public static **[] values();
     public static ** valueOf(java.lang.String);
@@ -36,14 +35,12 @@ else:
     kotlinx.serialization.KSerializer serializer(...);
 }
 
-# Datastore Settings schema: polymorphic type discriminators are written by
-# class-name; renaming/relocating a settings class breaks loading old backups.
--keep class me.rerere.rikkahub.data.datastore.** { *; }
--keep class me.rerere.rikkahub.data.model.** { *; }
-
-# AI module message/part models cross the :ai/:app serialization boundary.
--keep class me.rerere.ai.ui.** { *; }
--keep class me.rerere.ai.core.** { *; }
+# Pebble's optional Caffeine cache backend is NOT on the release classpath; its
+# classes are tree-shaken when unreachable. Never keep io.pebbletemplates.**
+# wholesale - that made R8 resolve the missing Caffeine refs and hard-fail
+# (runs #84/#85). The dontwarn below is insurance only.
+-dontwarn com.github.benmanes.caffeine.**
 """
-    (ROOT / PATH).write_text(text.rstrip() + "\n" + ADD, encoding="utf-8")
-    print("batch21b v2: R8 keep rules (QuickJS Console package fixed to com.whl.quickjs.wrapper)")
+
+(ROOT / PATH).write_text(text.rstrip() + "\n" + ADD, encoding="utf-8")
+print("batch21b v3: minimal R8 keeps (removed wholesale pebble/datastore/model/ai keeps)")
