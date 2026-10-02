@@ -11,12 +11,10 @@ def fail(path, msg):
 
 
 # ============================================================
-# 定时任务接线（batch33）
-# 新文件已随本提交入库：data/cron/CronJobStore.kt、service/CronJobScheduler.kt、
-# service/CronJobWorker.kt、service/CronBootReceiver.kt、data/ai/tools/CronTools.kt
-# 本脚本接线：WorkManager 依赖 + Manifest（权限/Receiver）+ AppModule DI +
-# LocalToolOption.CronJobs + LocalTools.getTools 挂 7 工具 + 本地工具页开关。
-# 锚点说明：sub_agents 选项行由 batch31 插入（同批推送，缺失则本脚本大声失败）。
+# 定时任务接线 v2（#95 修复）
+# v1 失败：batch31 的 archive 锚点空格数不匹配（count=0）导致整个 patch 步骤挂。
+# v2：sub_agents 选项行锚点改为「正则」，匹配 batch31 v2 插入的单空格格式行。
+# 其余锚点（注释行/代码块）逐字实测无对齐风险，保持不变。
 # ============================================================
 
 # ---------- 1) app/build.gradle.kts：WorkManager 依赖 ----------
@@ -52,7 +50,6 @@ t2 = (ROOT / P2).read_text(encoding="utf-8")
 if "CronBootReceiver" in t2:
     print("batch33: manifest already patched")
 else:
-    # 2a. RECEIVE_BOOT_COMPLETED 权限（锚点：NFC 权限行）
     A = '  <uses-permission android:name="android.permission.NFC" />\n'
     B = (
         '  <uses-permission android:name="android.permission.NFC" />\n'
@@ -63,7 +60,6 @@ else:
         fail(P2, f"NFC permission anchor count={t2.count(A)}")
     t2 = t2.replace(A, B, 1)
 
-    # 2b. Boot receiver（锚点：SafeModeActivity 块后）
     A = (
         "    <activity\n"
         "      android:name=\".ui.activity.SafeModeActivity\"\n"
@@ -129,19 +125,21 @@ P4 = "app/src/main/java/me/rerere/rikkahub/data/ai/tools/LocalTools.kt"
 t4 = (ROOT / P4).read_text(encoding="utf-8")
 
 if "LocalToolOption.CronJobs" not in t4:
-    # 4a. 封闭类加 CronJobs 选项（锚点：batch31 插入的 sub_agents 行）
-    A = '    @Serializable @SerialName("sub_agents")           data object SubAgents            : LocalToolOption()\n'
-    B = (
-        '    @Serializable @SerialName("sub_agents")           data object SubAgents            : LocalToolOption()\n'
+    # 4a. 封闭类加 CronJobs 选项（正则锚，匹配 batch31 v2 插入的单空格 sub_agents 行）
+    SUB_AGENTS_RE = re.compile(
+        r'(?P<line>[ \t]*@Serializable[ \t]+@SerialName\("sub_agents"\)[ \t]+data[ \t]+object[ \t]+SubAgents[ \t]*:[ \t]*LocalToolOption\(\)[ \t]*\n)'
+    )
+    m = SUB_AGENTS_RE.search(t4)
+    if not m:
+        fail(P4, "sub_agents option line (regex) not found — batch31 must run first")
+    cronjobs_block = (
         "    // Scheduled jobs (batch33): schedule_job / list_jobs / delete_job / pause_job /\n"
         "    // resume_job / trigger_job_now / job_history\n"
-        '    @Serializable @SerialName("cron_jobs")            data object CronJobs             : LocalToolOption()\n'
+        '    @Serializable @SerialName("cron_jobs") data object CronJobs : LocalToolOption()\n'
     )
-    if t4.count(A) != 1:
-        fail(P4, f"sub_agents option anchor count={t4.count(A)}")
-    t4 = t4.replace(A, B, 1)
+    t4 = t4[: m.end("line")] + cronjobs_block + t4[m.end("line"):]
 
-    # 4b. getTools 挂 7 工具（锚点：CostGuards 块）
+    # 4b. getTools 挂 7 工具（CostGuards 块锚点，逐字实测）
     A = (
         "        if (options.contains(LocalToolOption.CostGuards)) {\n"
         "            tools.add(me.rerere.rikkahub.costguards.checkTokenUsageTool(settingsStore, conversationRepo))\n"
@@ -173,7 +171,7 @@ if "LocalToolOption.CronJobs" not in t4:
     t4 = t4.replace(A, B, 1)
 
     (ROOT / P4).write_text(t4, encoding="utf-8")
-    print("batch33: LocalTools option + cron tools wired")
+    print("batch33 v2: LocalTools option + cron tools wired")
 else:
     print("batch33: LocalTools already patched")
 

@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path.cwd()
 
@@ -9,13 +10,11 @@ def fail(path, msg):
 
 
 # ============================================================
-# 子代理接线（LocalTools + AppModule 构造参数）
-# 锚点全部来自 fix/batch1 实测源码：
-# - LocalToolOption 封闭类结尾：archive 行 + '}'
-# - LocalTools 构造器：okHttpClient 参数 + ') {'
-# - getTools CostGuards 块（逐字实测）
-# - AppModule LocalTools single 的 okHttpClient = get() 尾部
-# 引擎/注册表通过构造器注入（不用运行时 Koin 查找），惰性 ChatService 已在引擎内处理环。
+# 子代理接线 v2（#95 修复）
+# #95 失败根因（annotations 实证）：v1 的 archive 选项行锚点是「列对齐空格」
+# 逐字匹配——手工对齐的空格数与源码不一致（count=0）。
+# v2 修复：①封闭类锚点改正则（容忍任意空格）；②插入行改单空格格式，
+# batch33 的后续锚点同步用单空格版（自己写的，格式确定）。
 # ============================================================
 
 # ---------- 1) LocalTools.kt ----------
@@ -23,22 +22,21 @@ P1 = "app/src/main/java/me/rerere/rikkahub/data/ai/tools/LocalTools.kt"
 t1 = (ROOT / P1).read_text(encoding="utf-8")
 
 if "LocalToolOption.SubAgents" not in t1:
-    # 1a. 封闭类加 SubAgents 选项
-    A = (
-        '    @Serializable @SerialName("archive")              data object Archive              : LocalToolOption()\n'
-        "}\n"
+    # 1a. 封闭类加 SubAgents 选项（正则锚，容忍任意列对齐空格）
+    ARCHIVE_RE = re.compile(
+        r'(?P<line>[ \t]*@Serializable[ \t]+@SerialName\("archive"\)[^\n]*\n)'
+        r'(?P<close>[ \t]*\}[ \t]*\n)'
     )
-    B = (
-        '    @Serializable @SerialName("archive")              data object Archive              : LocalToolOption()\n'
+    m = ARCHIVE_RE.search(t1)
+    if not m:
+        fail(P1, "archive option line (regex) not found")
+    subagents_block = (
         "    // Sub-agents (batch31): subagent_dispatch / get / list / cancel\n"
-        '    @Serializable @SerialName("sub_agents")           data object SubAgents            : LocalToolOption()\n'
-        "}\n"
+        '    @Serializable @SerialName("sub_agents") data object SubAgents : LocalToolOption()\n'
     )
-    if t1.count(A) != 1:
-        fail(P1, f"option-class anchor count={t1.count(A)}")
-    t1 = t1.replace(A, B, 1)
+    t1 = t1[: m.end("line")] + subagents_block + t1[m.end("line"):]
 
-    # 1b. 构造器加 engine/registry 参数
+    # 1b. 构造器加 engine/registry 参数（注释行锚点，无对齐空格风险）
     A = (
         "    // Shared OkHttp singleton (NetworkChangeMonitor-registered) — backs the web_fetch tool.\n"
         "    private val okHttpClient: okhttp3.OkHttpClient,\n"
@@ -56,7 +54,7 @@ if "LocalToolOption.SubAgents" not in t1:
         fail(P1, f"ctor anchor count={t1.count(A)}")
     t1 = t1.replace(A, B, 1)
 
-    # 1c. getTools 挂四个工具（CostGuards 块后）
+    # 1c. getTools 挂四个工具（CostGuards 块锚点，逐字实测无对齐风险）
     A = (
         "        if (options.contains(LocalToolOption.CostGuards)) {\n"
         "            tools.add(me.rerere.rikkahub.costguards.checkTokenUsageTool(settingsStore, conversationRepo))\n"
@@ -84,16 +82,16 @@ if "LocalToolOption.SubAgents" not in t1:
     t1 = t1.replace(A, B, 1)
 
     (ROOT / P1).write_text(t1, encoding="utf-8")
-    print("batch31: LocalTools option + ctor + getTools wired")
+    print("batch31 v2: LocalTools option + ctor + getTools wired (regex anchor)")
 else:
-    print("batch31: LocalTools already patched")
+    print("batch31 v2: LocalTools already patched")
 
 # ---------- 2) AppModule.kt 构造参数 ----------
 P2 = "app/src/main/java/me/rerere/rikkahub/di/AppModule.kt"
 t2 = (ROOT / P2).read_text(encoding="utf-8")
 
 if "subAgentEngine = get()" in t2:
-    print("batch31: AppModule ctor already patched")
+    print("batch31 v2: AppModule ctor already patched")
 else:
     A = (
         "            storageVolumeGrantStore = get(),\n"
@@ -114,4 +112,4 @@ else:
     t2 = t2.replace(A, B, 1)
 
     (ROOT / P2).write_text(t2, encoding="utf-8")
-    print("batch31: AppModule LocalTools ctor args added")
+    print("batch31 v2: AppModule LocalTools ctor args added")
