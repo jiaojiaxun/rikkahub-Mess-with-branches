@@ -2,6 +2,7 @@ package me.rerere.rikkahub.subagent
 
 import android.util.Log
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -12,6 +13,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.getCurrentChatModel
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.service.ChatService
@@ -20,18 +22,19 @@ import kotlin.uuid.Uuid
 private const val TAG = "SubAgentEngine"
 
 /**
- * 子代理引擎（移植自 AAAelina/rikkahub-agent，fork 适配）。
+ * 子代理引擎（移植自 AAAelina/rikkahub-agent，fork 适配版 v2）。
  *
- * fork 适配点（相对原版）：
- * 1. 砍 AgentRunRepository 台账（fork 无此层），运行记录只存内存 Registry。
- * 2. 砍 HeadlessConversations/CommandOrigin/submitUserMessageTracked（fork 的
- *    ChatService 无此 API），改用 fork 的 public API：insertConversation →
- *    initializeConversation → sendMessage → generationDoneFlow(conversationId)。
- * 3. 砍 ExecutionProfileRegistry 下沉 ChatService 的链路——fork 的 GenerationHandler
- *    不消费 profile，所以 v1 里 profile 只用于冻结参数并把 effectiveSystemPrompt
- *    作为子对话的 customSystemPrompt 写入（fork 的 Conversation 有该字段）。
- * 4. 递归防护：v1 用「运行中的子代理不能再 dispatch」在工具层拦截（见 SubAgentTools
- *    的 isHeadless 检查缺省实现——fork 无 HeadlessConversations，用注册表近似）。
+ * 相对第一版的修复：
+ * 1. 修复非法 Kotlin 标签语法（`} dispatchRecovery@ {` → 正常 `else`）。
+ * 2. Assistant 字段名实称为 systemPrompt（不是 prompt）。
+ * 3. ChatService 惰性解析改用 koin-core GlobalContext（不依赖 koin-java 工件）。
+ * 4. 工具面不再硬编码集合——子对话复用父助手，自然继承其工具开关；
+ *    callerToolNames 传空集表示「不做请求级工具过滤」。
+ *
+ * fork 适配（相对 AAAelina 原版）：无 AgentRunRepository 台账、无
+ * HeadlessConversations/submitUserMessageTracked，改用 public API：
+ * insertConversation → initializeConversation → sendMessage →
+ * generationDoneFlow（先订阅后发送，避免 SharedFlow 无重放导致快完成丢事件）。
  */
 class SubAgentEngine(
     private val registry: SubAgentRegistry,
@@ -39,17 +42,18 @@ class SubAgentEngine(
     private val settingsStore: SettingsStore,
     private val appScope: AppScope,
 ) {
+    // 惰性解析打断 DI 环：ChatService → LocalTools → SubAgentEngine → ChatService。
     private val chatService: ChatService by lazy {
-        org.koin.java.KoinJavaComponent.getKoin().get<ChatService>()
+        org.koin.core.context.GlobalContext.get().get<ChatService>()
     }
+
+    /** 引擎创建的对话集合（递归防护）。 */
+    private val subAgentConversationIds = java.util.concurrent.ConcurrentHashMap.newKeySet<Uuid>()
 
     sealed class DispatchResult {
         data class Ok(val run: SubAgentRun) : DispatchResult()
         data class Reject(val error: String, val detail: String) : DispatchResult()
     }
-
-    /** fork 近似：当前调用链是否已在子代理里（用「子对话注册表」判断）。 */
-    private val subAgentConversationIds = java.util.concurrent.ConcurrentHashMap.newKeySet<Uuid>()
 
     suspend fun dispatch(
         parentAssistantId: Uuid,
@@ -78,29 +82,27 @@ class SubAgentEngine(
             )
 
         val runId = Uuid.random().toString()
-        val parentEffectiveModelId = parentAssistant.chatModelId ?: settings.chatModelId
+        val parentEffectiveModelId = parentAssistant.chatModelId
+            ?: settings.getCurrentChatModel()?.id
+            ?: return@withContext DispatchResult.Reject(
+                "no_model_available",
+                "no model is available for the child run",
+            )
         val availableModelIds = settings.providers
             .asSequence()
             .filter { it.enabled }
             .flatMap { it.models.asSequence() }
             .map { it.id }
             .toSet()
-        // fork 适配：无 ToolNameSnapshot，用「父助手开启的本地工具名集合」近似
-        val callerToolNames = parentAssistant.let { assistant ->
-            setOf(
-                "search_web", "web_fetch", "workspace_read_file", "workspace_write_file",
-                "workspace_edit_file", "workspace_create_folder", "workspace_read_folder",
-            ).filter { it.isNotBlank() }.toSet()
-        }
 
         val profile = when (val resolution = resolveSubAgentExecutionProfile(
             runId = runId,
             request = cleaned,
             parentEffectiveModelId = parentEffectiveModelId,
-            assistantDefaultModelId = null, // fork 的 Assistant 无 subAgentModelId 字段
-            assistantSystemPrompt = parentAssistant.prompt,
+            assistantDefaultModelId = null,
+            assistantSystemPrompt = parentAssistant.systemPrompt,
             availableModelIds = availableModelIds,
-            callerToolNames = callerToolNames,
+            callerToolNames = emptySet(),
         )) {
             is SubAgentExecutionProfileResolution.Resolved -> resolution.profile
             is SubAgentExecutionProfileResolution.Rejected ->
@@ -146,8 +148,8 @@ class SubAgentEngine(
 
         if (cleaned.runInBackground) {
             DispatchResult.Ok(registry.get(runId) ?: initialRun)
-        } dispatchRecovery@ {
-            // 前台：join 到终态
+        } else {
+            // 前台：阻塞到终态
             executionJob.join()
             DispatchResult.Ok(registry.get(runId) ?: initialRun)
         }
@@ -167,11 +169,20 @@ class SubAgentEngine(
             newConversation = true,
         ).copy(
             title = "[Sub-agent] ${request.label?.take(40) ?: request.task.take(40)}",
-            // fork 适配：fork 的 Conversation 有 customSystemPrompt 字段，子代理的
-            // 有效提示词直接写进去（GenerationHandler 会拼接它）
+            // fork 适配：Conversation.customSystemPrompt 承载子代理有效提示词，
+            // chatModelId 承载有效模型；子对话复用父助手 → 工具开关自然继承。
             customSystemPrompt = profile.effectiveSystemPrompt,
             chatModelId = profile.effectiveModelId,
         )
+
+        // 先订阅后发送：generationDoneFlow 是无重放的 SharedFlow，
+        // 若发送后才订阅，快速完成的生成可能丢掉完成事件导致白等到超时。
+        val done = CompletableDeferred<Unit>()
+        val observer = appScope.launch {
+            chatService.generationDoneFlow.collect { id ->
+                if (id == conversation.id) done.complete(Unit)
+            }
+        }
 
         try {
             conversationRepo.insertConversation(conversation)
@@ -193,11 +204,10 @@ class SubAgentEngine(
                 true,
             )
 
-            // 等待完成：监听 generationDoneFlow 过滤本会话（铁律 5）
-            val outcome = withTimeoutOrNull(request.timeoutSeconds * 1000L) {
-                chatService.generationDoneFlow.first { it == conversation.id }
-            }
-            if (outcome == null) {
+            // v1 限制：超时只标记 run 为 TIMED_OUT，不取消底层生成（fork 的
+            // ChatService 没有对 UI 层外安全的按对话停止 API）。
+            val completed = withTimeoutOrNull(request.timeoutSeconds * 1000L) { done.await() }
+            if (completed == null) {
                 registry.terminalizeIfActive(runId, SubAgentStatus.TIMED_OUT, "exceeded ${request.timeoutSeconds}-second cap")
                 return
             }
@@ -222,6 +232,7 @@ class SubAgentEngine(
             registry.terminalizeIfActive(runId, SubAgentStatus.FAILED, failure.message ?: "execution_failed")
         } finally {
             subAgentConversationIds.remove(conversation.id)
+            observer.cancel()
         }
     }
 

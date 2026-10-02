@@ -1,16 +1,19 @@
 package me.rerere.rikkahub.subagent
 
-import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.InputSchema
 import me.rerere.ai.core.Tool
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.rikkahub.data.ai.tools.ToolInvocationContext
+import kotlin.uuid.Uuid
 
 private fun errEnv(error: String, detail: String): List<UIMessagePart> {
     val obj = buildJsonObject {
@@ -38,12 +41,17 @@ private fun encodeRun(run: SubAgentRun): kotlinx.serialization.json.JsonObject =
 }
 
 /**
- * 子代理工具（移植自 AAAelina，fork 适配版）。
- * subagent_dispatch：分发一个子代理运行；前台阻塞到终态，后台返回 PENDING。
- * subagent_get：查询单个运行；subagent_list：列出本助手的运行；
- * subagent_cancel：取消运行。全部读注册表（内存）。
+ * 子代理工具（fork 适配版 v2）。
+ * v2 修复：调用方身份直接取 ToolInvocationContext（LocalTools.getTools 已把
+ * invocationContext 传到工具构建层），删掉 v1 的 runBlocking 近似。
+ *
+ * subagent_dispatch：分发子代理；前台阻塞到终态，后台立即返回 PENDING。
+ * subagent_get / list / cancel：读内存注册表。
  */
-fun subagentDispatchTool(engine: SubAgentEngine): Tool = Tool(
+fun subagentDispatchTool(
+    engine: SubAgentEngine,
+    callerContext: ToolInvocationContext,
+): Tool = Tool(
     name = "subagent_dispatch",
     description = """
         Dispatch a focused sub-agent — a clean-context LLM run that returns a concise
@@ -73,6 +81,13 @@ fun subagentDispatchTool(engine: SubAgentEngine): Tool = Tool(
     },
     needsApproval = { true },
     execute = { args ->
+        val callerAssistantId = callerContext.callerAssistantId
+            ?: return@Tool errEnv("missing_caller", "caller assistant identity is required")
+        val parentAssistantId = runCatching { Uuid.parse(callerAssistantId) }.getOrNull()
+            ?: return@Tool errEnv("invalid_caller", "caller assistant id is not a valid UUID")
+        val parentConversationId = callerContext.callerConversationId
+            ?.let { runCatching { Uuid.parse(it) }.getOrNull() }
+
         val params = args.jsonObject
         val task = params["task"]?.jsonPrimitive?.contentOrNull
             ?: return@Tool errEnv("invalid_task", "task is required")
@@ -88,12 +103,7 @@ fun subagentDispatchTool(engine: SubAgentEngine): Tool = Tool(
                 ?: SubAgentDefaults.DEFAULT_MAX_TRIPS,
             label = params["label"]?.jsonPrimitive?.contentOrNull,
         )
-        val callerAssistantId = callerAssistantIdFromContext()
-        when (val res = engine.dispatch(
-            parentAssistantId = callerAssistantId.first,
-            parentConversationId = callerAssistantId.second,
-            request = request,
-        )) {
+        when (val res = engine.dispatch(parentAssistantId, parentConversationId, request)) {
             is SubAgentEngine.DispatchResult.Reject ->
                 return@Tool errEnv(res.error, res.detail)
             is SubAgentEngine.DispatchResult.Ok ->
@@ -101,29 +111,6 @@ fun subagentDispatchTool(engine: SubAgentEngine): Tool = Tool(
         }
     },
 )
-
-/**
- * fork 适配：fork 的 Tool.execute 无 ToolInvocationContext 传播（该上下文在
- * LocalTools 构建层），子代理工具拿不到调用方身份。近似：工具执行时从
- * Koin 拿 SettingsStore 读「当前选中助手」——分发者即当前助手。
- */
-private fun callerAssistantIdFromContext(): Pair<kotlin.uuid.Uuid, kotlin.uuid.Uuid?> {
-    val koin = org.koin.java.KoinJavaComponent.getKoin()
-    val settings = kotlinx.coroutines.runBlocking {
-        koin.get<me.rerere.rikkahub.data.datastore.SettingsStore>().settingsFlow
-            .first { !it.init }
-    }
-    val assistant = settings.assistants.firstOrNull { it.id == settings.assistantId }
-        ?: settings.assistants.firstOrNull()
-        ?: error("no assistant available")
-    val conversationId = kotlinx.coroutines.runBlocking {
-        runCatching {
-            koin.get<me.rerere.rikkahub.service.ChatService>()
-                .let { null } // ChatService 无「当前对话」概念，留空
-        }.getOrNull()
-    }
-    return assistant.id to null
-}
 
 fun subagentGetTool(registry: SubAgentRegistry, callerAssistantId: String): Tool = Tool(
     name = "subagent_get",
@@ -164,7 +151,7 @@ fun subagentListTool(registry: SubAgentRegistry, callerAssistantId: String): Too
     execute = { args ->
         val activeOnly = args.jsonObject["active_only"]?.jsonPrimitive?.booleanOrNull ?: false
         val runs = registry.listForAssistant(callerAssistantId, activeOnly)
-        val payload = kotlinx.serialization.json.buildJsonArray {
+        val payload = buildJsonArray {
             runs.forEach { run ->
                 add(encodeRun(run))
             }
