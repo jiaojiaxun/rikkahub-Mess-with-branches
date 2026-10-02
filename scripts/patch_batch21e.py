@@ -1,0 +1,79 @@
+import re
+from pathlib import Path
+
+ROOT = Path.cwd()
+PATH = "app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt"
+
+text = (ROOT / PATH).read_text(encoding="utf-8")
+
+
+def fail(msg):
+    print(f"::error file={PATH}::batch21e {msg[:1400]}")
+    raise SystemExit(1)
+
+
+# --- 1) 排队字段 + drain 逻辑：插在 inputState 声明后 ---
+ANCHOR1 = """    // 聊天输入状态 - 保存在 ViewModel 中避免 TransactionTooLargeException
+    val inputState = ChatInputState()
+"""
+
+INSERT1 = """    // 聊天输入状态 - 保存在 ViewModel 中避免 TransactionTooLargeException
+    val inputState = ChatInputState()
+
+    // 任务N4：消息排队发送（对齐上游 2.5.6 行为）——生成进行中时，新消息先入队，
+    // 当前生成结束后自动按序发送。队列仅存内存（VM 生命周期）。
+    private val pendingMessages = java.util.concurrent.ConcurrentLinkedQueue<List<me.rerere.ai.ui.UIMessagePart>>()
+    val pendingMessageCount: androidx.compose.runtime.State<Int> =
+        androidx.compose.runtime.mutableStateOf(0)
+
+    init {
+        // 监听生成完成事件：非空队列则弹出发送下一条
+        viewModelScope.launch {
+            generationDoneFlow.collect {
+                if (pendingMessages.isNotEmpty()) {
+                    val next = pendingMessages.poll() ?: return@collect
+                    (pendingMessageCount as androidx.compose.runtime.MutableState<Int>).value =
+                        pendingMessages.size
+                    chatService.sendMessage(_conversationId, next, true)
+                }
+            }
+        }
+    }
+"""
+
+if ANCHOR1 not in text:
+    fail("anchor1 (inputState decl) not found")
+text = text.replace(ANCHOR1, INSERT1, 1)
+
+# --- 2) handleMessageSend 改为排队感知 ---
+ANCHOR2 = """        fun handleMessageSend(content: List<UIMessagePart>,answer: Boolean = true) {
+        if (content.isEmptyInputMessage()) return
+        chatService.sendMessage(_conversationId, content, answer)
+    }
+"""
+
+NEW2 = """        fun handleMessageSend(content: List<UIMessagePart>,answer: Boolean = true) {
+        if (content.isEmptyInputMessage()) return
+        // 生成中：入队等待（仅触发生成的消息需要排队；answer=false 的插入直接执行）
+        if (answer && conversationJob.value?.isActive == true) {
+            pendingMessages.add(content)
+            (pendingMessageCount as androidx.compose.runtime.MutableState<Int>).value =
+                pendingMessages.size
+            return
+        }
+        chatService.sendMessage(_conversationId, content, answer)
+    }
+
+    /** 丢弃全部排队消息（用户在排队时点停止/清空）。 */
+    fun clearPendingMessages() {
+        pendingMessages.clear()
+        (pendingMessageCount as androidx.compose.runtime.MutableState<Int>).value = 0
+    }
+"""
+
+if ANCHOR2 not in text:
+    fail("anchor2 (handleMessageSend) not found")
+text = text.replace(ANCHOR2, NEW2, 1)
+
+(ROOT / PATH).write_text(text, encoding="utf-8")
+print("batch21e: message queueing while generating + auto-drain on completion")
