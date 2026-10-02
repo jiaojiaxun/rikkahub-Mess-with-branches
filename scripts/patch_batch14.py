@@ -29,6 +29,12 @@ existing trailing "(n)" before appending a new one. That is what this does:
     title yet, and blank is exactly what lets generateTitle name the fork normally. A title
     that is nothing but a suffix ("(1)") is also returned unchanged rather than becoming "(2)".
 
+REVISION (fixes CI #59): the original patch added `import me.rerere.rikkahub.data.model.
+nextForkTitle` by anchoring on `import me.rerere.rikkahub.data.model.Conversation` - but that
+line is a PREFIX of `...ConversationCompaction`, so it matched twice and the patcher correctly
+refused. No import is needed at all: the call site now uses the fully-qualified name, a style
+this file already uses (e.g. me.rerere.rikkahub.data.ai.tools.ToolApprovalAllowList.clearChat).
+
 Behaviour change worth noting: a fork of a titled conversation now keeps the lineage name
 instead of receiving a fresh AI title.
 
@@ -126,11 +132,9 @@ fun nextForkTitle(parentTitle: String): String {
 data class MessageNode(
     val id: Uuid = Uuid.random(),'''
 
-IMPORT_OLD = "import me.rerere.rikkahub.data.model.Conversation"
-
-IMPORT_NEW = """import me.rerere.rikkahub.data.model.Conversation
-import me.rerere.rikkahub.data.model.nextForkTitle"""
-
+# No import edit: reference the helper fully-qualified (see the REVISION note above). The
+# `import me.rerere.rikkahub.data.model.Conversation` anchor was ambiguous with
+# `...ConversationCompaction` and correctly failed CI #59.
 FORK_OLD = """        val forkConversation = Conversation(
             id = Uuid.random(),
             assistantId = currentConversation.assistantId,
@@ -143,7 +147,8 @@ FORK_NEW = """        val forkConversation = Conversation(
             // A blank title here made generateTitle treat the branch as a brand-new chat and
             // name it after its own first messages, erasing the lineage. nextForkTitle()
             // numbers it and strips any pre-existing suffix, so repeated forking cannot stack.
-            title = nextForkTitle(currentConversation.title),
+            // Fully qualified: adding an import here matched an ambiguous anchor (CI #59).
+            title = me.rerere.rikkahub.data.model.nextForkTitle(currentConversation.title),
             messageNodes = copiedNodes,"""
 
 TEST_BODY = '''package me.rerere.rikkahub.data.model
@@ -224,7 +229,7 @@ def main():
                 CONVERSATION.write_text(new, encoding="utf-8")
                 print("patched: " + str(CONVERSATION), flush=True)
 
-    # ---- ChatService.kt : use it when building the fork -------------------------------
+    # ---- ChatService.kt : use it when building the fork (no import edit - see REVISION) --
     if not CHAT_SERVICE.exists():
         fail("ChatService.kt not found", str(CHAT_SERVICE))
     else:
@@ -233,13 +238,7 @@ def main():
             print("already patched: " + str(CHAT_SERVICE), flush=True)
         else:
             original = src
-            for old, new, label in (
-                (IMPORT_OLD, IMPORT_NEW, "nextForkTitle import"),
-                (FORK_OLD, FORK_NEW, "fork title"),
-            ):
-                src = replace_once(src, old, new, label, str(CHAT_SERVICE))
-                if src is None:
-                    break
+            src = replace_once(src, FORK_OLD, FORK_NEW, "fork title", str(CHAT_SERVICE))
             if src is not None and src != original:
                 CHAT_SERVICE.write_text(src, encoding="utf-8")
                 print("patched: " + str(CHAT_SERVICE), flush=True)
