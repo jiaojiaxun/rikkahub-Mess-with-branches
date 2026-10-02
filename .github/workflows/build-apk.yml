@@ -90,6 +90,11 @@ jobs:
         if: hashFiles('scripts/patch_batch8.py') != ''
         run: python3 scripts/patch_batch8.py
 
+      # Batch 9: WebDAV restore closes the picker sheet so the download progress is visible.
+      - name: Patch batch 9 fixes
+        if: hashFiles('scripts/patch_batch9.py') != ''
+        run: python3 scripts/patch_batch9.py
+
       - name: Compile Kotlin (release)
         id: compile
         continue-on-error: true
