@@ -9,19 +9,13 @@ def fail(path, msg):
 
 
 # ============================================================
-# 工作区多选导出（任务池高优先级 #2）
-# 实测基础（fix/batch1 全文精读 WorkspaceDetailPage.kt 27.8KB +
-# WorkspaceDetailVM.kt 13.7KB）：
-# - 现有单文件导出: CreateDocument launcher + vm.exportFile(entry, os)
-# - 现有目录导出: OpenDocumentTree + vm.exportFolder(entry, tree) { uri -> resolver.openOutputStream(uri) }
-# - vm.exportFile/exportFolder 均为 fire-and-forget(viewModelScope.launch)，
-#   目录结果走 folderExportResult Flow 逐条 Toast，批量循环调用安全
-# - ExperimentalFoundationApi 已在 app/build.gradle.kts 全局 optIn，
-#   combinedClickable 无需注解
-# 本批新增：长按进入多选 -> Checkbox 勾选 -> 路径栏替换为多选操作栏
-# （全选/取消全选/导出选中）-> OpenDocumentTree 选目标目录 -> 逐项导出
-# （目录 vm.exportFolder 递归，文件 tree.createFile + vm.exportFile）。
-# 取消到 0 个选中自动退出多选；topBar 标题显示已选数，返回键退出。
+# 工作区多选导出（任务池高优先级 #2）v2 完整版
+# v2 修复：BackHandler 优先级。v1 把 selectionMode 的 BackHandler 插在
+# path 的 BackHandler 之前（代码顺序），Compose 的 OnBackPressedDispatcher
+# 是后进先出——后注册的（path goUp）会先消费返回事件，多选时在子目录里
+# 按返回会 goUp 而不是退出多选。修复：path BackHandler 的 enabled 加
+# && !selectionMode，多选时禁用它，让 selectionMode 的 BackHandler 生效。
+# CI 每次从干净 checkout 跑全部 patch，本文件为完整版（含 v1 全部逻辑）。
 # ============================================================
 
 # ---------- 1) strings.xml 末尾追加 ----------
@@ -48,8 +42,8 @@ else:
 P1 = "app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailPage.kt"
 t1 = (ROOT / P1).read_text(encoding="utf-8")
 
-if "selectionMode" in t1:
-    print("batch24: WorkspaceDetailPage already patched")
+if "&& !selectionMode" in t1:
+    print("batch24 v2: WorkspaceDetailPage already patched")
 else:
     # 2a. imports: combinedClickable / Checkbox / TextButton / Dispatchers / withContext
     A = "import androidx.compose.foundation.clickable\n"
@@ -101,7 +95,21 @@ else:
         fail(P1, f"exportTarget decl count={t1.count(A)}")
     t1 = t1.replace(A, B, 1)
 
-    # 2c. 多选导出 launcher（锚点：folderExportLauncher 块后，插到 BackHandler 前）
+    # rowsCount：与 FilesPage 同源推导
+    A = (
+        "    var selectionMode by remember { mutableStateOf(false) }\n"
+    )
+    B = (
+        "    var selectionMode by remember { mutableStateOf(false) }\n"
+        "    val rowsCount = remember(state.entries, state.expandedPaths, state.childrenCache) {\n"
+        "        flattenWorkspaceTree(state.entries, state.expandedPaths, state.childrenCache).size\n"
+        "    }\n"
+    )
+    if t1.count(A) != 1:
+        fail(P1, f"selectionMode decl count={t1.count(A)}")
+    t1 = t1.replace(A, B, 1)
+
+    # 2c. 多选导出 launcher + BackHandler（v2：path BackHandler enabled 加 && !selectionMode）
     A = "    BackHandler(enabled = pagerState.currentPage == 1 && state.path.isNotBlank()) {\n"
     B = (
         "    val multiExportLauncher = rememberLauncherForActivityResult(\n"
@@ -138,12 +146,13 @@ else:
         "        multiExportLauncher.launch(null)\n"
         "    }\n"
         "\n"
+        "    // v2: 多选时禁用 path BackHandler，避免它在多选中先消费返回（dispatcher 后进先出）\n"
         "    BackHandler(enabled = selectionMode) {\n"
         "        selectionMode = false\n"
         "        selectedPaths = emptySet()\n"
         "    }\n"
         "\n"
-        "    BackHandler(enabled = pagerState.currentPage == 1 && state.path.isNotBlank()) {\n"
+        "    BackHandler(enabled = pagerState.currentPage == 1 && state.path.isNotBlank() && !selectionMode) {\n"
     )
     if t1.count(A) != 1:
         fail(P1, f"BackHandler anchor count={t1.count(A)}")
@@ -176,21 +185,6 @@ else:
         fail(P1, f"title anchor count={t1.count(A)}")
     t1 = t1.replace(A, B, 1)
 
-    # rowsCount 需要和 FilesPage 同源的行数：用状态推导（展开集合+缓存压平）
-    # 直接在状态声明后补一行 val rowsCount
-    A = (
-        "    var selectionMode by remember { mutableStateOf(false) }\n"
-    )
-    B = (
-        "    var selectionMode by remember { mutableStateOf(false) }\n"
-        "    val rowsCount = remember(state.entries, state.expandedPaths, state.childrenCache) {\n"
-        "        flattenWorkspaceTree(state.entries, state.expandedPaths, state.childrenCache).size\n"
-        "    }\n"
-    )
-    if t1.count(A) != 1:
-        fail(P1, f"selectionMode decl count={t1.count(A)}")
-    t1 = t1.replace(A, B, 1)
-
     # 2e. topBar navigationIcon：多选时变退出按钮
     A = "                navigationIcon = { BackButton() },\n"
     B = (
@@ -211,7 +205,7 @@ else:
         fail(P1, f"navigationIcon anchor count={t1.count(A)}")
     t1 = t1.replace(A, B, 1)
 
-    # 2f. WorkspaceFilesPage 调用处补参数（锚点：contentPadding 行后）
+    # 2f. WorkspaceFilesPage 调用处补参数
     A = (
         "                1 -> WorkspaceFilesPage(\n"
         "                    state = state,\n"
@@ -375,7 +369,7 @@ else:
         fail(P1, f"Card clickable anchor count={t1.count(A)}")
     t1 = t1.replace(A, B, 1)
 
-    # 2l. Row 里插 Checkbox（锚点：Row padding + 第一个 if (entry.isDirectory)）
+    # 2l. Row 里插 Checkbox
     A = (
         "            verticalAlignment = Alignment.CenterVertically,\n"
         "        ) {\n"
@@ -443,4 +437,4 @@ else:
     t1 = t1.replace(A, B, 1)
 
     (ROOT / P1).write_text(t1, encoding="utf-8")
-    print("batch24: WorkspaceDetailPage multi-select export wired")
+    print("batch24 v2: multi-select export wired (BackHandler priority fixed)")
