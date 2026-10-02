@@ -14,33 +14,26 @@ def patch(path, replacements):
     target.write_text(text, encoding="utf-8")
 
 
-OLD_SCROLL = """            LaunchedEffect(state, conversationUpdated.messageNodes, loadingState) {
-                snapshotFlow { state.layoutInfo.visibleItemsInfo }.collect { visibleItemsInfo ->
-                    if (!state.isScrollInProgress && loadingState && visibleItemsInfo.isAtBottom()) {
-                        val latestGroupIndex = conversationUpdated.messageNodes
-                            .groupAutomaticCompactionMessages()
-                            .lastIndex
-                        if (latestGroupIndex >= 0) {
-                            state.requestScrollToItem(latestGroupIndex)
-                        }
-                    }
-                }
-            }"""
-
-NEW_SCROLL = """            LaunchedEffect(state, loadingState) {
-                snapshotFlow { state.layoutInfo.visibleItemsInfo }.collect { visibleItemsInfo ->
-                    if (!state.isScrollInProgress && loadingState && visibleItemsInfo.isAtBottom()) {
-                        // 滚到列表末尾的 ScrollBottomKey 占位项（会被钳制在底部）：流式增长
-                        // 时视口贴底跟随，不再把最后一个消息分组重置到视口顶部（原 bug：
-                        // 跳回回复开头 / LaunchedEffect 键随每流式块重启空转）
-                        state.requestScrollToItem(state.layoutInfo.totalItemsCount - 1)
-                    }
-                }
-            }"""
-
+# 用更短的唯一锚点：LaunchedEffect 的参数列表（conversationUpdated.messageNodes 只在这用）
 patch(
     "app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatList.kt",
-    [(OLD_SCROLL, NEW_SCROLL)],
+    [
+        (
+            "LaunchedEffect(state, conversationUpdated.messageNodes, loadingState)",
+            "LaunchedEffect(state, loadingState)",
+        ),
+        (
+            "val latestGroupIndex = conversationUpdated.messageNodes\n"
+            "                            .groupAutomaticCompactionMessages()\n"
+            "                            .lastIndex\n"
+            "                        if (latestGroupIndex >= 0) {\n"
+            "                            state.requestScrollToItem(latestGroupIndex)\n"
+            "                        }",
+            "// 滚到列表末尾（ScrollBottomKey 占位项，会被钳制在底部）：\n"
+            "                        // 流式增长时视口贴底跟随，不再跳回回复开头\n"
+            "                        state.requestScrollToItem(state.layoutInfo.totalItemsCount - 1)",
+        ),
+    ],
 )
 
 print("batch20: fix streaming auto-scroll spin + jump-to-reply-start")
