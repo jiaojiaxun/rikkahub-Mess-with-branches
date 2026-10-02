@@ -2,7 +2,7 @@ name: Build APK (dual-mode chat)
 
 on:
   push:
-    branches: [feat/chat-dual-mode-html, 'port/**', 'fix/**']
+    branches: [feat/chat-dual-mode-html, 'port/**', 'fix/**', 'feat/whale-girl-theme']
   workflow_dispatch:
 
 jobs:
@@ -37,6 +37,13 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts') }}
           restore-keys: |
             gradle-${{ runner.os }}-
+
+      # Vendored third-party sources (whale-girl renderer) are downloaded from a pinned
+      # upstream commit and package-rewritten here, before any patch script can anchor on
+      # them. Skipped automatically when the files are already vendored (idempotent).
+      - name: Vendor upstream sources
+        if: ${{ hashFiles('scripts/fetch_whale_renderer.py') != '' }}
+        run: python3 scripts/fetch_whale_renderer.py
 
       # Every source patch is an anchored, idempotent python script that fails loudly
       # (::error + exit 1) when an anchor has moved. They run in a deterministic order:
