@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path.cwd()
 
@@ -9,9 +10,7 @@ def fail(path, msg):
 
 
 # ============================================================
-# 子代理 DI 注册（v2 修正版）
-# v1 的错误：对 LocalTools.kt 做了两次 replace 导致 import 重复插入。
-# v2 只负责 AppModule 的 DI 注册；LocalTools 的接线全部移到 batch31。
+# 子代理 DI 注册（收敛版）
 # ============================================================
 
 P1 = "app/src/main/java/me/rerere/rikkahub/di/AppModule.kt"
@@ -20,28 +19,29 @@ t1 = (ROOT / P1).read_text(encoding="utf-8")
 if "SubAgentRegistry" in t1:
     print("batch30: AppModule already patched")
 else:
-    A = "import me.rerere.rikkahub.data.ai.tools.LocalTools\n"
-    B = (
-        "import me.rerere.rikkahub.data.ai.tools.LocalTools\n"
+    # 插入点：import 块之后
+    IMPORT_RE = re.compile(r"(?P<line>import[ \t]+me\.rerere\.rikkahub\.data\.ai\.tools\.LocalTools\n)")
+    m = IMPORT_RE.search(t1)
+    if not m:
+        fail(P1, "LocalTools import line not found")
+    ins = (
         "import me.rerere.rikkahub.subagent.SubAgentEngine\n"
         "import me.rerere.rikkahub.subagent.SubAgentRegistry\n"
     )
-    if t1.count(A) != 1:
-        fail(P1, f"import anchor count={t1.count(A)}")
-    t1 = t1.replace(A, B, 1)
+    t1 = t1[: m.end()] + ins + t1[m.end():]
 
-    A = (
-        "    single {\n"
-        "        AppScope()\n"
-        "    }\n"
+    # 插入点：AppScope single 块之后
+    SCOPE_RE = re.compile(
+        r"(?P<line>[ \t]*single[ \t]*\{[ \t]*\n"
+        r"[ \t]*AppScope\(\)[ \t]*\n"
+        r"[ \t]*\}[ \t]*\n)"
     )
-    B = (
-        "    single {\n"
-        "        AppScope()\n"
-        "    }\n"
+    m = SCOPE_RE.search(t1)
+    if not m:
+        fail(P1, "AppScope single block not found")
+    ins = (
         "\n"
-        "    // Sub-agents (batch30): in-memory registry + engine. ChatService is resolved\n"
-        "    // lazily inside the engine (GlobalContext) to break the DI cycle.\n"
+        "    // Sub-agents: in-memory registry + engine\n"
         "    single { SubAgentRegistry() }\n"
         "    single {\n"
         "        SubAgentEngine(\n"
@@ -52,9 +52,7 @@ else:
         "        )\n"
         "    }\n"
     )
-    if t1.count(A) != 1:
-        fail(P1, f"AppScope anchor count={t1.count(A)}")
-    t1 = t1.replace(A, B, 1)
+    t1 = t1[: m.end()] + ins + t1[m.end():]
 
     (ROOT / P1).write_text(t1, encoding="utf-8")
-    print("batch30 v2: AppModule DI registered")
+    print("batch30: AppModule DI registered")
