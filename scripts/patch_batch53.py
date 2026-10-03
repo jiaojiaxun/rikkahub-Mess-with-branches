@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-'''batch53 v3: 修 #158 死因——ChatList 加载行锚点四行少一段
+'''batch53 v4: 修 #159 死因——锚点要锚「CI 链式执行后的最终形态」
 
-#158 annotations: `batch53 loading row anchor not found`。
-真实文件（Range 17800-19800 实读）里 loading 块是：
+#158/#159 两轮死因（annotations 实证）：
+v2 锚点截断 + v3 用仓库原始形态——但 CI 上 batch53 执行时，
+ChatList.kt 已被 batch2（.rhReadableOnSkin()）+ batch3（外包 Column +
+CompactionStreamPreview）改写。真实形态是：
     if (loading) {
         item(LoadingIndicatorKey) {
+            // rh-batch3:compaction-preview
+            androidx.compose.foundation.layout.Column {
             Row(
-                modifier = Modifier.padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,   ← v2 锚点漏了这行
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-v2 的 OLD_4 只写到 `modifier = Modifier.padding(8.dp),` 就截断——
-`Row(` 后还有两行参数再接 `{`。v3 锚点补齐全部四行。
+                modifier = Modifier.padding(8.dp).rhReadableOnSkin(),
+                verticalAlignment = ...
+v4 锚点改用「Row( + rhReadableOnSkin 版 modifier 行」——即 batch2/3 改写后
+仍恒定存在的形态（batch2/3 是幂等的，每次 CI 都会先执行完再轮到 batch53）。
 
-其余与 v2 完全一致（DisplaySetting/ChatMessage 在 #158 已实证成功：
-annotations 显示 `DisplaySetting OK`、`ChatMessage OK`）。
-铁律执行：零反斜杠；幂等；自检双向。'''
+铁律新增第 13 条：锚点锚「前置 patch 链执行完的最终形态」——
+写锚点前先查字典序在前的所有 patch 脚本是否碰过目标文件的该区域。
+（字典序：patch_batch2 < patch_batch3 < patch_batch53.py）'''
 from pathlib import Path
 
 ROOT = Path.cwd()
@@ -28,7 +31,7 @@ def fail(path, msg):
 
 
 # ============================================================
-# 1. PreferencesStore.kt — DisplaySetting 加字段
+# 1. PreferencesStore.kt — DisplaySetting 加字段（#158/#159 实证 OK，原样）
 # ============================================================
 PS = 'app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt'
 t = (ROOT / PS).read_text(encoding='utf-8')
@@ -59,7 +62,7 @@ else:
     print('batch53: DisplaySetting already applied')
 
 # ============================================================
-# 2. ChatMessage.kt — 精简流式分支 + LiteStreamingText
+# 2. ChatMessage.kt — 精简流式分支（#158/#159 实证 OK，原样）
 # ============================================================
 CM = 'app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessage.kt'
 c = (ROOT / CM).read_text(encoding='utf-8')
@@ -126,22 +129,20 @@ else:
     print('batch53: ChatMessage already applied')
 
 # ============================================================
-# 3. ChatList.kt — 加载行轻量化（v3 修正锚点：完整四行）
+# 3. ChatList.kt — 加载行轻量化（v4: 锚点 = batch2/3 改写后的恒定形态）
 # ============================================================
 CL = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatList.kt'
 l = (ROOT / CL).read_text(encoding='utf-8')
 if 'rhLiteStreamLoading' not in l:
+    # batch2 在加载行 modifier 加了 .rhReadableOnSkin()（幂等，每次 CI 先执行）
+    # → 真实恒定形态是 rhReadableOnSkin 版本的 modifier 行
     OLD_4 = (
-        '            if (loading) {' + NL +
-        '                item(LoadingIndicatorKey) {' + NL +
         '                    Row(' + NL +
-        '                        modifier = Modifier.padding(8.dp),' + NL +
+        '                        modifier = Modifier.padding(8.dp).rhReadableOnSkin(),' + NL +
         '                        verticalAlignment = Alignment.CenterVertically,' + NL +
         '                        horizontalArrangement = Arrangement.spacedBy(8.dp),'
     )
     NEW_4 = (
-        '            if (loading) {' + NL +
-        '                item(LoadingIndicatorKey) {' + NL +
         '                    // rhLiteStreamLoading (batch53): 精简模式下去掉动画加载指示器' + NL +
         '                    if (settings.displaySetting.liteStreamRender) {' + NL +
         '                        Text(' + NL +
@@ -152,21 +153,48 @@ if 'rhLiteStreamLoading' not in l:
         '                        )' + NL +
         '                    } else' + NL +
         '                    Row(' + NL +
-        '                        modifier = Modifier.padding(8.dp),' + NL +
+        '                        modifier = Modifier.padding(8.dp).rhReadableOnSkin(),' + NL +
         '                        verticalAlignment = Alignment.CenterVertically,' + NL +
         '                        horizontalArrangement = Arrangement.spacedBy(8.dp),'
     )
     if OLD_4 not in l:
-        fail(CL, 'loading row anchor not found (v3 4-line form)')
-    if l.count(OLD_4) != 1:
-        fail(CL, 'loading row anchor not unique: ' + str(l.count(OLD_4)))
-    l = l.replace(OLD_4, NEW_4, 1)
+        # 兜底：万一 batch2 的皮肤修饰不在（形态分支），试无修饰版
+        OLD_4B = (
+            '                    Row(' + NL +
+            '                        modifier = Modifier.padding(8.dp),' + NL +
+            '                        verticalAlignment = Alignment.CenterVertically,' + NL +
+            '                        horizontalArrangement = Arrangement.spacedBy(8.dp),'
+        )
+        NEW_4B = (
+            '                    // rhLiteStreamLoading (batch53): 精简模式下去掉动画加载指示器' + NL +
+            '                    if (settings.displaySetting.liteStreamRender) {' + NL +
+            '                        Text(' + NL +
+            '                            text = "...",' + NL +
+            '                            style = MaterialTheme.typography.labelLarge,' + NL +
+            '                            color = MaterialTheme.colorScheme.onSurfaceVariant,' + NL +
+            '                            modifier = Modifier.padding(8.dp),' + NL +
+            '                        )' + NL +
+            '                    } else' + NL +
+            '                    Row(' + NL +
+            '                        modifier = Modifier.padding(8.dp),' + NL +
+            '                        verticalAlignment = Alignment.CenterVertically,' + NL +
+            '                        horizontalArrangement = Arrangement.spacedBy(8.dp),'
+        )
+        if OLD_4B in l:
+            l = l.replace(OLD_4B, NEW_4B, 1)
+            print('batch53: ChatList OK (fallback plain form)')
+        else:
+            fail(CL, 'loading row anchor not found (neither rhReadableOnSkin nor plain form)')
+    else:
+        if l.count(OLD_4) != 1:
+            fail(CL, 'loading row anchor not unique: ' + str(l.count(OLD_4)))
+        l = l.replace(OLD_4, NEW_4, 1)
+        print('batch53: ChatList OK (rhReadableOnSkin form)')
     for need in ['rhLiteStreamLoading', 'liteStreamRender']:
         if need not in l:
             fail(CL, 'selfcheck missing: ' + need)
     (ROOT / CL).write_text(l, encoding='utf-8')
-    print('batch53: ChatList OK')
 else:
     print('batch53: ChatList already applied')
 
-print('batch53 v3: OK')
+print('batch53 v4: OK')
