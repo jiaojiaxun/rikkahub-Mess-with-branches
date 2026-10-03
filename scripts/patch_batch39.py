@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""batch39 v3: 修子代理死代码（修 #124/#125 锚点连续失败）
+"""batch39 v4: 修 subagent 死代码（修 #124/#125/#126 连续失败）
 
-#124 逐字锚点失败、#125 正则锚点也失败 → 说明我对该行的格式假设有误
-（可能空格不是 U+0020，或行尾有不可见字符）。
+演进：
+  v1 (#124) 逐字锚点失败（Archive 行空格数错）
+  v2 (#125) 正则锚点也失败（格式假设还是错）
+  v3 (#126) LocalTools 三步全过（子串定位成功），但 AppModule 的
+            `okHttpClient = get(),\\n        )\\n    }\\n` 锚点失败
+            ——因为 batch38 已经改过 AppModule.kt（加了 CronJob 注册），
+            文件结构变了，旧锚点不再匹配
 
-v3 策略：**彻底放弃格式假设**，用纯子串定位：
-    1. 找 'data object Archive'（不含任何空格/引号假设）
-    2. 从该位置往后找第一个行首的 '}'（枚举闭合）
-    3. 在它之前插入新枚举项
+v4 策略：**全部用子串定位**，不依赖任何精确格式：
+  LocalTools.kt 三处：已在 v3 验证通过，保持不变
+  AppModule.kt 两处：
+    a) 找 'okHttpClient = get(),' → 在它后面插入两行参数
+    b) 找 'CronJobScheduler(get(), get())' → 找它之后的 '}' → 在后面插入注册
 
-其余三处锚点（构造参数、getTools 分支、AppModule）在 #124/#125 都**没报错**
-（报错总是卡在第 1 步），说明它们是安全的，保持不变。
-
-铁律：不用 f-string；含 Kotlin 双引号块用 Python 单引号；幂等标记 rhSubAgent
+铁律强化：**改过的文件不能用旧锚点**（铁律 11 的扩展）
 """
 from pathlib import Path
 
@@ -21,34 +24,33 @@ MARK = "rhSubAgent"
 
 
 def fail(path, msg):
-    print('::error file=' + path + '::batch39v3 ' + msg[:1400])
+    print('::error file=' + path + '::batch39v4 ' + msg[:1400])
     raise SystemExit(1)
 
 
-# --- 1~3. LocalTools.kt ---
+# --- 1~3. LocalTools.kt（v3 已验证通过，保持不变）---
 P_TOOLS = "app/src/main/java/me/rerere/rikkahub/data/ai/tools/LocalTools.kt"
 t = (ROOT / P_TOOLS).read_text(encoding="utf-8")
 
 if MARK in t:
-    print("batch39v3: LocalTools already wired")
+    print("batch39v4: LocalTools already wired")
 else:
-    # 1. 子串定位（零格式假设）
+    # 1. 枚举：子串定位
     KEY = 'data object Archive'
     i = t.find(KEY)
     if i < 0:
         fail(P_TOOLS, "substring 'data object Archive' not found")
-    # 2. 从 Archive 之后找第一个行首 '}'
     j = t.find('\n}', i)
     if j < 0:
         fail(P_TOOLS, "enum closing brace not found after Archive")
-    insert_pos = j + 1  # 指向 '}' 本身，插在它前面
+    insert_pos = j + 1
     new_enum_line = (
         '    /* rhSubAgent: 子代理工具组（原先漏接，导致 AI 调不到） */\n'
         '    @Serializable @SerialName("subagent") data object SubAgent : LocalToolOption()\n'
     )
     t = t[:insert_pos] + new_enum_line + t[insert_pos:]
 
-    # 3. 构造参数
+    # 2. 构造参数
     ANCHOR_CTOR = (
         '    private val storageVolumeGrantStore: me.rerere.rikkahub.data.storage.StorageVolumeGrantStore,\n'
     )
@@ -62,7 +64,7 @@ else:
     )
     t = t[:cidx] + new_ctor + t[cidx + len(ANCHOR_CTOR):]
 
-    # 4. getTools 分支
+    # 3. getTools 分支
     ANCHOR_BRANCH = (
         '        if (options.contains(LocalToolOption.Archive)) {\n'
         '            tools.add(me.rerere.rikkahub.data.ai.tools.local.zipFilesTool(context))\n'
@@ -95,41 +97,38 @@ else:
     t = t[:bidx] + new_branch + t[bidx + len(ANCHOR_BRANCH):]
 
     (ROOT / P_TOOLS).write_text(t, encoding="utf-8")
-    print("batch39v3: LocalTools wired (substring enum + ctor + getTools branch)")
+    print("batch39v4: LocalTools wired (substring enum + ctor + getTools branch)")
 
-# --- 5. AppModule ---
+# --- 4. AppModule（v4：全子串定位）---
 P_APP = "app/src/main/java/me/rerere/rikkahub/di/AppModule.kt"
 ta = (ROOT / P_APP).read_text(encoding="utf-8")
 
 if MARK in ta:
-    print("batch39v3: AppModule already wired")
+    print("batch39v4: AppModule already wired")
 else:
-    ANCHOR_APP_TOOLS = (
-        '            okHttpClient = get(),\n'
-        '        )\n'
-        '    }\n'
-    )
-    aidx = ta.find(ANCHOR_APP_TOOLS)
+    # 4a. LocalTools(...) 传参：找 'okHttpClient = get(),' 在它后面插入
+    KEY_OK = 'okHttpClient = get(),\n'
+    aidx = ta.find(KEY_OK)
     if aidx < 0:
-        fail(P_APP, "LocalTools okHttpClient anchor not found")
-    new_app_tools = (
-        '            okHttpClient = get(),\n'
+        fail(P_APP, "substring 'okHttpClient = get(),' not found")
+    insert_a = aidx + len(KEY_OK)
+    new_args = (
         '            subAgentEngine = getOrNull(), // rhSubAgent\n'
         '            subAgentRegistry = getOrNull(), // rhSubAgent\n'
-        '        )\n'
-        '    }\n'
     )
-    ta = ta[:aidx] + new_app_tools + ta[aidx + len(ANCHOR_APP_TOOLS):]
+    ta = ta[:insert_a] + new_args + ta[insert_a:]
 
-    ANCHOR_CRON = (
-        '    single {\n'
-        '        me.rerere.rikkahub.service.CronJobScheduler(get(), get())\n'
-        '    }\n'
-    )
-    cidx2 = ta.find(ANCHOR_CRON)
+    # 4b. 注册：找 'CronJobScheduler(get(), get())' → 找它之后的 '}' → 在后面插入
+    KEY_CRON = 'CronJobScheduler(get(), get())'
+    cidx2 = ta.find(KEY_CRON)
     if cidx2 < 0:
-        fail(P_APP, "CronJobScheduler single anchor not found")
-    new_reg = ANCHOR_CRON + (
+        fail(P_APP, "substring 'CronJobScheduler(get(), get())' not found")
+    # 从 KEY_CRON 之后找第一个 '}\n'
+    brace = ta.find('}\n', cidx2 + len(KEY_CRON))
+    if brace < 0:
+        fail(P_APP, "closing brace after CronJobScheduler not found")
+    insert_b = brace + 2  # 跳过 '}\n'
+    new_reg = (
         '\n'
         '    /* rhSubAgent: 子代理引擎原先未注册 → 工具面拿不到实例。\n'
         '       SubAgentEngine 内部用惰性解析断 DI 环（ChatService↔LocalTools），\n'
@@ -147,9 +146,9 @@ else:
         '        )\n'
         '    }\n'
     )
-    ta = ta[:cidx2] + new_reg + ta[cidx2 + len(ANCHOR_CRON):]
+    ta = ta[:insert_b] + new_reg + ta[insert_b:]
 
     (ROOT / P_APP).write_text(ta, encoding="utf-8")
-    print("batch39v3: AppModule wired (registry + engine + LocalTools args)")
+    print("batch39v4: AppModule wired (substring okHttpClient + substring CronJob)")
 
-print("batch39v3: OK")
+print("batch39v4: OK")
