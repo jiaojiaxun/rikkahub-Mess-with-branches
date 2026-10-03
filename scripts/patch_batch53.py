@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
-'''batch53 v2: 修 v1 静态自查发现的致命错误
+'''batch53 v3: 修 #158 死因——ChatList 加载行锚点四行少一段
 
-v1 致命错: NLx2 常量用 chr(10) 生成裸跨行字符串字面量——Kotlin 不允许,
-编译必炸。v2 改用 System.lineSeparator() 运行时拼接(零反斜杠且合法)。
-同时简化 LiteStreamingText: 不再用 NLx2 常量, joinToString 直接传
-System.lineSeparator() 调用链, append 分段构建。
+#158 annotations: `batch53 loading row anchor not found`。
+真实文件（Range 17800-19800 实读）里 loading 块是：
+    if (loading) {
+        item(LoadingIndicatorKey) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,   ← v2 锚点漏了这行
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+v2 的 OLD_4 只写到 `modifier = Modifier.padding(8.dp),` 就截断——
+`Row(` 后还有两行参数再接 `{`。v3 锚点补齐全部四行。
 
-其余与 v1 一致: DisplaySetting.liteStreamRender 默认 false(原版不变);
-流式末条纯文本直出; ChatList 加载行轻量化。'''
+其余与 v2 完全一致（DisplaySetting/ChatMessage 在 #158 已实证成功：
+annotations 显示 `DisplaySetting OK`、`ChatMessage OK`）。
+铁律执行：零反斜杠；幂等；自检双向。'''
 from pathlib import Path
 
 ROOT = Path.cwd()
@@ -113,15 +120,13 @@ private fun LiteStreamingText(
                  'System.lineSeparator() + System.lineSeparator()']:
         if need not in c:
             fail(CM, 'selfcheck missing: ' + need)
-    if 'NLx2' in c or 'NL_2' in c:
-        fail(CM, 'selfcheck: stale NLx2/NL_2 reference remains')
     (ROOT / CM).write_text(c, encoding='utf-8')
     print('batch53: ChatMessage OK')
 else:
     print('batch53: ChatMessage already applied')
 
 # ============================================================
-# 3. ChatList.kt — 加载行轻量化
+# 3. ChatList.kt — 加载行轻量化（v3 修正锚点：完整四行）
 # ============================================================
 CL = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatList.kt'
 l = (ROOT / CL).read_text(encoding='utf-8')
@@ -130,7 +135,9 @@ if 'rhLiteStreamLoading' not in l:
         '            if (loading) {' + NL +
         '                item(LoadingIndicatorKey) {' + NL +
         '                    Row(' + NL +
-        '                        modifier = Modifier.padding(8.dp),'
+        '                        modifier = Modifier.padding(8.dp),' + NL +
+        '                        verticalAlignment = Alignment.CenterVertically,' + NL +
+        '                        horizontalArrangement = Arrangement.spacedBy(8.dp),'
     )
     NEW_4 = (
         '            if (loading) {' + NL +
@@ -145,10 +152,14 @@ if 'rhLiteStreamLoading' not in l:
         '                        )' + NL +
         '                    } else' + NL +
         '                    Row(' + NL +
-        '                        modifier = Modifier.padding(8.dp),'
+        '                        modifier = Modifier.padding(8.dp),' + NL +
+        '                        verticalAlignment = Alignment.CenterVertically,' + NL +
+        '                        horizontalArrangement = Arrangement.spacedBy(8.dp),'
     )
     if OLD_4 not in l:
-        fail(CL, 'loading row anchor not found')
+        fail(CL, 'loading row anchor not found (v3 4-line form)')
+    if l.count(OLD_4) != 1:
+        fail(CL, 'loading row anchor not unique: ' + str(l.count(OLD_4)))
     l = l.replace(OLD_4, NEW_4, 1)
     for need in ['rhLiteStreamLoading', 'liteStreamRender']:
         if need not in l:
@@ -158,4 +169,4 @@ if 'rhLiteStreamLoading' not in l:
 else:
     print('batch53: ChatList already applied')
 
-print('batch53 v2: OK')
+print('batch53 v3: OK')
