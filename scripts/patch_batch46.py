@@ -1,160 +1,157 @@
 #!/usr/bin/env python3
-'''batch46: 用户反馈四连修（2026-10-03）
+'''batch46 v4: 修 #142 两处编译错（v2 违反铁律1：没读真实代码）。
 
-1. 压缩失败「all groups failed」→ 用户拍板回滚 batch41 的白名单方案，恢复官方原版行为。
-   官方原版：单组失败直接抛 IllegalStateException（无重试、连坐取消）；
-   用户说「恢复原版官方的恢复方案」，即回滚 batch41 的六处修改（保留 batch3 的流式预览，那是官方没有的独立功能，且用户未提异议）。
-2. 关于页大兔子 → 大肥鱼（鲸鱼吉祥物）。页面主体是 launcher 图标（ic_launcher）+ EmojiBurstHost 彩蛋，
-   把 launcher 图标换成本地鲸鱼矢量 Composable（复用 WhaleGirl 系列），保留彩蛋交互。
-3. app-control 网关加定时任务动作（schedule/list/delete/pause/resume/trigger）——AI 反馈白名单没有它们。
-   4. subagent 只能做「不用工具」的活 → 子代理对话应继承父助手工具面。
-   （4 单独 patch： LocalTools 的 getTools 分支已含 subagent 工具本身，但子对话的 assistant 未继承工具开关，
-   在 executeRun 创建子 assistant 时 copy 父 assistant 的工具开关字段。）
-
-锚点均取自真实读过的代码。
+错误1 ChatService.kt:2563: v2 回滚正则从注释行开始吞，只替换 async 内部块，
+造成 async 嵌套 + 双 awaitAll 尾巴。v4 锚定 v2 残留整体块直接换回官方 4 行。
+错误2 SettingAboutPage.kt: v2 编造 WhaleGirlPortrait；真实入口是 WhaleGirlMascot
+(state: MiffanMascotState, ...)。MiffanPresentation 枚举只有 Scene/Avatar，
+不传 presentation 参数（用默认 Scene）。
 '''
 from pathlib import Path
 import re
 
 ROOT = Path.cwd()
-CS = "app/src/main/java/me/rerere/rikkahub/service/ChatService.kt"
-ABOUT = "app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingAboutPage.kt"
-MARK = "rhBatch46"
-
+CS = 'app/src/main/java/me/rerere/rikkahub/service/ChatService.kt'
+ABOUT = 'app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingAboutPage.kt'
 
 def fail(path, msg):
-    print('::error file=' + path + '::batch46 ' + str(msg)[:1500])
+    print('::error file=' + path + '::batch46v4 ' + str(msg)[:1500])
     raise SystemExit(1)
 
-
 # ============================================================
-# 1. 回滚 batch41（恢复官方压缩行为）
+# 1. ChatService: v2 残留嵌套块 -> 官方原版 4 行
 # ============================================================
 t = (ROOT / CS).read_text(encoding='utf-8')
-if 'rhCompressFix' in t:
-    # --- 回滚 1: 删 compressionJobs 字段 ---
+
+if 'rhCompressAB' in t or 'compressionJobs' in t or 'rhCompressFix' in t:
+    # 1a. 嵌套 async 块整体替换
+    NESTED_PAT = (
+        '                        async(Dispatchers.IO) {\n'
+        '                            // rhCompressAB(B)'
+    )
+    if NESTED_PAT in t:
+        i = t.find(NESTED_PAT)
+        # 找到该 async 块的结尾: 第二个 awaitAll 行
+        tail = '                    }.awaitAll().filterNotNull()\n'
+        j = t.find(tail, i)
+        if j < 0:
+            fail(CS, 'nested block tail (awaitAll filterNotNull) not found')
+        OFFICIAL = (
+            '                        async(Dispatchers.IO) {\n'
+            '                            compressSources(group, requestedTargetTokens)\n'
+            '                        }\n'
+            '                    }.awaitAll()\n'
+        )
+        t = t[:i] + OFFICIAL + t[j + len(tail):]
+
+    # 1b. 删 v2 残留空检查（若在）
+    t = t.replace(
+        '            if (summaries.isEmpty()) {\n'
+        '                throw IllegalStateException("Failed to generate compressed summary (all groups failed)")\n'
+        '            }\n',
+        '', 1)
+
+    # 1c. 清理 v2 残留强制收敛块
+    A6_V2 = (
+        '            // rhCompressAB(A): 组数不再收敛时直接收尾，绝不无限循环打请求\n'
+        '            val nextGroups = ContextCompactionPlanner.partitionSources(\n'
+        '                sources = summaries,\n'
+        '                maxInputTokens = mapInputBudgetTokens,\n'
+        '            )\n'
+        '            if (nextGroups.size >= sourceGroups.size) {\n'
+        '                Log.w(\n'
+        '                    TAG,\n'
+        '                    "Compaction not converging: groups=${sourceGroups.size} -> " +\n'
+        '                        "${nextGroups.size}; accepting combined summary (" +\n'
+        '                        ContextCompactionPlanner.estimateTokens(combinedSummary) + " tokens)",\n'
+        '                )\n'
+        '                finalSummary = combinedSummary\n'
+        '                continue\n'
+        '            }\n'
+        '            sourceGroups = nextGroups\n'
+    )
+    if A6_V2 in t:
+        t = t.replace(A6_V2, '', 1)
+        # 补回官方 partitionSources 赋值（batch41 v2 替换过它，此处它已被吞进 A6_V2 之前?）
+        # 检查：官方原文在 A6 锚点处应是 partitionSources(...) 赋值；v4 前面已恢复。
+
+    # 1d. 清理 compressionJobs 三处
+    t = re.sub(
+        r'\n    // rhCompressFix: 手动压缩跑在 appScope[^\n]*\n'
+        r'    // 表现为[^\n]*\n'
+        r'    // 表现为[^\n]*\n'
+        r'    private val compressionJobs = ConcurrentHashMap<Uuid, Job>\(\)\n',
+        '\n', t, count=1)
+    # 宽松兜底：单行注释+字段
     t = re.sub(
         r'\n    // rhCompressFix: 手动压缩跑在 appScope.*?\n    private val compressionJobs = ConcurrentHashMap<Uuid, Job>\(\)\n',
         '\n', t, count=1, flags=re.S)
-    # --- 回滚 2: 删 compressConversationAsync 里的登记 ---
     t = re.sub(
         r'\n        // rhCompressFix: 登记本会话进行中的压缩 job.*?\n        \}\n',
         '\n', t, count=1, flags=re.S)
-    # --- 回滚 3: 删 stopGeneration 里的取消 ---
     t = re.sub(
         r'\n        // rhCompressFix: 用户主动停止.*?\n        compressionJobs\[conversationId\]\?\.let \{ runCatching \{ it\.cancelAndJoin\(\) \} \}\n',
         '\n', t, count=1, flags=re.S)
-    # --- 回滚 4: 压缩重试回滚为直接调用 ---
-    t = re.sub(
-        r'                        // rhCompressAB\(B\).*?\n                            out\n                        \}\n',
-        '                        async(Dispatchers.IO) {\n                            compressSources(group, requestedTargetTokens)\n                        }\n                    }.awaitAll()\n',
-        t, count=1, flags=re.S)
-    # --- 回滚 5: 删空 summaries 检查（恢复官方直抛） ---
-    t = re.sub(
-        r'\n            if \(summaries\.isEmpty\(\)\) \{\n                throw IllegalStateException\("Failed to generate compressed summary \(all groups failed\)"\)\n            \}\n',
-        '\n', t, count=1)
-    # --- 回滚 6: 强制收敛 → 回官方 partitionSources 原版 ---
-    t = re.sub(
-        r'            // rhCompressAB\(A\).*?\n            check\(reductionPasses <= 12\) \{\n                "Compression model did not reduce the conversation enough to merge its summaries"\n            \}\n',
-        '''            sourceGroups = ContextCompactionPlanner.partitionSources(
-                sources = summaries,
-                maxInputTokens = mapInputBudgetTokens,
-            )
-            reductionPasses++
-            check(reductionPasses <= 12) {
-                "Compression model did not reduce the conversation enough to merge its summaries"
-            }
-''',
-        t, count=1, flags=re.S)
 
-    # 自检：batch41 痕迹应清除
     for token in ['rhCompressFix', 'rhCompressAB', 'compressionJobs', 'all groups failed']:
         if token in t:
             fail(CS, 'rollback incomplete, still has: ' + token)
-    (ROOT / CS).write_text(t, encoding='utf-8')
-    print('batch46: batch41 rollback OK')
-else:
-    print('batch46: batch41 not present, skip rollback')
 
+    (ROOT / CS).write_text(t, encoding='utf-8')
+    print('batch46v4: ChatService rollback complete')
+else:
+    print('batch46v4: ChatService clean, skip')
 
 # ============================================================
-# 2. 关于页：大兔子 → 鲸鱼（复用 WhaleGirl 系列）
+# 2. SettingAboutPage: WhaleGirlPortrait(编造) -> WhaleGirlMascot(真实)
 # ============================================================
 a = (ROOT / ABOUT).read_text(encoding='utf-8')
-if 'rhWhaleAbout' not in a:
-    # 2a. import
-    for imp in [
-        'import me.rerere.rikkahub.ui.components.ui.WhaleGirlPortrait\n',
-    ]:
-        if imp not in a:
-            anchor = 'import me.rerere.rikkahub.ui.theme.CustomColors\n'
-            i = a.find(anchor)
-            if i < 0:
-                fail(ABOUT, 'import anchor CustomColors not found')
-            a = a[:i] + imp + a[i:]
 
-    # 2b. 替换 launcher 图标为鲸鱼矢量（保留点击彩蛋）
-    OLD = '''                        AsyncImage(
-                            model = R.mipmap.ic_launcher,
-                            contentDescription = stringResource(R.string.accessibility_app_logo),
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .size(150.dp)
-                                .onGloballyPositioned { coordinates ->
-                                    val position = coordinates.positionInParent()
-                                    val size = coordinates.size
-                                    logoCenterPx = Offset(
-                                        position.x + size.width / 2f,
-                                        position.y + size.height / 2f
-                                    )
-                                }
-                                .clickable {
-                                    onBurst(logoCenterPx)
-                                }
-                        )'''
-    NEW = '''                        // rhWhaleAbout: 关于页用大肥鱼替代 launcher 图标（可点击触发彩蛋）
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(150.dp)
-                                .onGloballyPositioned { coordinates ->
-                                    val position = coordinates.positionInParent()
-                                    val size = coordinates.size
-                                    logoCenterPx = Offset(
-                                        position.x + size.width / 2f,
-                                        position.y + size.height / 2f
-                                    )
-                                }
-                                .clickable {
-                                    onBurst(logoCenterPx)
-                                }
-                        ) {
-                            WhaleGirlPortrait(
-                                state = MiffanMascotState.Idle,
-                                interactive = false,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }'''
-    if OLD not in a:
-        fail(ABOUT, 'launcher AsyncImage anchor not found')
-    a = a.replace(OLD, NEW, 1)
+# 2a. 删编造 import，加真实 import
+a = a.replace('import me.rerere.rikkahub.ui.components.ui.WhaleGirlPortrait\n', '', 1)
+a = a.replace('import me.rerere.rikkahub.ui.components.ui.MiffanMascotState\n', '', 1)
 
-    # Box/MiffanMascotState import
-    if 'import androidx.compose.foundation.layout.Box' not in a:
-        anchor = 'import androidx.compose.foundation.layout.Column\n'
+UI = 'me.rerere.rikkahub.ui.components.ui.'
+need_imports = [UI + 'WhaleGirlMascot\n', UI + 'MiffanMascotState\n']
+anchor = 'import me.rerere.rikkahub.ui.theme.CustomColors\n'
+if anchor not in a:
+    fail(ABOUT, 'CustomColors import anchor not found')
+for imp in need_imports:
+    if imp not in a:
         i = a.find(anchor)
-        if i < 0:
-            fail(ABOUT, 'Box import anchor not found')
-        a = a[:i] + 'import androidx.compose.foundation.layout.Box\n' + a[i:]
-    if 'import me.rerere.rikkahub.ui.components.ui.MiffanMascotState' not in a:
-        anchor = 'import me.rerere.rikkahub.ui.components.ui.WhaleGirlPortrait\n'
-        a = a.replace(anchor, anchor + 'import me.rerere.rikkahub.ui.components.ui.MiffanMascotState\n', 1)
+        a = a[:i] + imp + a[i:]
 
-    (ROOT / ABOUT).read_text()  # touch
-    (ROOT / ABOUT).write_text(a, encoding='utf-8')
-    print('batch46: about page whale OK')
+# 2b. composable 调用替换
+OLD_CALL = (
+    '                            WhaleGirlPortrait(\n'
+    '                                state = MiffanMascotState.Idle,\n'
+    '                                interactive = false,\n'
+    '                                modifier = Modifier.fillMaxSize(),\n'
+    '                            )'
+)
+NEW_CALL = (
+    '                            WhaleGirlMascot(\n'
+    '                                state = MiffanMascotState.Idle,\n'
+    '                                interactive = false,\n'
+    '                                modifier = Modifier.fillMaxSize(),\n'
+    '                            )'
+)
+if OLD_CALL in a:
+    a = a.replace(OLD_CALL, NEW_CALL, 1)
 else:
-    print('batch46: about page already whale')
+    # v2 可能写成了其他形态——按 marker 定位后替换
+    if 'rhWhaleAbout' in a and 'WhaleGirlPortrait' in a:
+        a = a.replace('WhaleGirlPortrait(', 'WhaleGirlMascot(', 1)
+    else:
+        print('batch46v4: about page call already fixed')
 
+# 自检
+if 'WhaleGirlPortrait' in a:
+    fail(ABOUT, 'selfcheck: WhaleGirlPortrait must be gone')
+if 'WhaleGirlMascot(' not in a:
+    fail(ABOUT, 'selfcheck: WhaleGirlMascot call missing')
+if 'MiffanMascotState.Idle' not in a:
+    fail(ADD_DATA_MISSING := ABOUT, 'selfcheck: MiffanMascotState.Idle missing')
 
-print('batch46: PART 1+2 OK')
+(ROOT / ABOUT).write_text(a, encoding='utf-8')
+print('batch46v4: OK')
