@@ -7,7 +7,7 @@
 
 铁律遵守：
 - 不用 f-string（batch32 教训）
-- 锚点用行级正则
+- 锚点用行级正则 + [\\s\\S]*? 容错（#114 教训：精确空白匹配太脆）
 - 幂等标记特异（mascotEnabled / rhWhalePreset）
 - Kotlin 含双引号的代码块用 Python 单引号字符串（避免 SyntaxError）
 """
@@ -96,7 +96,8 @@ t_asst = (ROOT / P_ASST).read_text(encoding="utf-8")
 if "rhWhalePreset" in t_asst:
     print("batch35: AssistantPage already has whale preset button")
 else:
-    ANCHOR_ASST = re.compile(r'(AssistantImporter\(\s*\n\s*onUpdate\s*=\s*\{\s*\n\s*update\(it\)\s*\n\s*state\.confirm\(\)\s*\n\s*\}\s*,\s*\n\s*modifier\s*=\s*Modifier\.fillMaxWidth\(\)\s*,\s*\n\s*\),)')
+    # #114 教训：精确空白匹配 \s*\n\s* 太脆，改用 [\s\S]*? 非贪婪通配
+    ANCHOR_ASST = re.compile(r'(AssistantImporter\([\s\S]*?fillMaxWidth\(\)[\s\S]*?\),)')
     m = ANCHOR_ASST.search(t_asst)
     if not m:
         fail(P_ASST, "AssistantImporter anchor not found")
