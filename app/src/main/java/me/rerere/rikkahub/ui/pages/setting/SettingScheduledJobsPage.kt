@@ -5,15 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LargeFlexibleTopAppBar
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -28,20 +23,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
-import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Delete01
-import me.rerere.hugeicons.stroke.Play
 import me.rerere.rikkahub.data.cron.CronJobStore
 import me.rerere.rikkahub.data.cron.ScheduledJobRunRecord
 import me.rerere.rikkahub.data.model.CronJob
 import me.rerere.rikkahub.data.model.CronParser
+import me.rerere.rikkahub.service.CronJobScheduler
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.utils.plus
 import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -53,10 +46,15 @@ import java.util.Locale
  * 背景：AI 可以通过 schedule_job 等工具自己建定时任务，但此前没有任何
  * 界面能查看、开关、删除或手动触发 —— 用户只能让 AI 列给他看。本页把
  * CronJobStore 的 jobsFlow/historyFlow 直接接进来，补上这个可见性缺口。
+ *
+ * 注：`me.rerere.rikkahub.utils.plus` 是 fork 为 PaddingValues 提供的扩展，
+ * 不加这个 import 会在 `contentPadding + PaddingValues(...)` 处编译失败
+ * （#121 的教训）。
  */
 @Composable
 fun SettingScheduledJobsPage() {
     val store: CronJobStore = koinInject()
+    val scheduler: CronJobScheduler = koinInject()
     val jobs by store.jobsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val history by store.historyFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
@@ -110,14 +108,20 @@ fun SettingScheduledJobsPage() {
                                     }
                                 },
                                 trailingContent = {
-                                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                        Switch(
-                                            checked = job.enabled,
-                                            onCheckedChange = { checked ->
-                                                scope.launch { store.upsert(job.copy(enabled = checked)) }
-                                            },
-                                        )
-                                    }
+                                    Switch(
+                                        checked = job.enabled,
+                                        onCheckedChange = { checked ->
+                                            scope.launch {
+                                                val updated = job.copy(enabled = checked)
+                                                store.upsert(updated)
+                                                if (checked) {
+                                                    scheduler.schedule(updated)
+                                                } else {
+                                                    scheduler.cancel(job.id)
+                                                }
+                                            }
+                                        },
+                                    )
                                 },
                             )
                         }
@@ -148,7 +152,7 @@ fun SettingScheduledJobsPage() {
     }
 
     detailJob?.let { job ->
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { detailJob = null },
             title = { Text(job.name) },
             text = {
@@ -160,20 +164,36 @@ fun SettingScheduledJobsPage() {
                     val last = job.lastRunAt
                     if (last != null) Text("上次执行：" + formatTime(last))
                     if (!CronParser.isValid(job.cronExpression)) {
-                        Text("cron 表达式无法解析，不会被调度", color = MaterialTheme.colorScheme.error)
+                        Text(
+                            text = "cron 表达式无法解析，不会被调度",
+                            color = MaterialTheme.colorScheme.error,
+                        )
                     }
+                    Text(
+                        text = "立即执行会在后台触发一次，不等结果",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                 }
             },
             confirmButton = {
-                TextButton(onClick = { detailJob = null }) { Text("关闭") }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = {
+                        scheduler.triggerNow(job.id)
+                        detailJob = null
+                    }) {
+                        Text("立即执行")
+                    }
+                    TextButton(onClick = {
+                        scope.launch { store.delete(job.id) }
+                        scheduler.cancel(job.id)
+                        detailJob = null
+                    }) {
+                        Text("删除", color = MaterialTheme.colorScheme.error)
+                    }
+                }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    scope.launch { store.delete(job.id) }
-                    detailJob = null
-                }) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
+                TextButton(onClick = { detailJob = null }) { Text("关闭") }
             },
         )
     }
