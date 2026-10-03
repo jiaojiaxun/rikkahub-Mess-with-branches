@@ -9,6 +9,7 @@
 - 不用 f-string（batch32 教训）
 - 锚点用行级正则
 - 幂等标记特异（mascotEnabled / rhWhalePreset）
+- Kotlin 含双引号的代码块用 Python 单引号字符串（避免 SyntaxError）
 """
 from pathlib import Path
 import re
@@ -16,7 +17,7 @@ import re
 ROOT = Path.cwd()
 
 def fail(path, msg):
-    print("::error file=" + path + "::batch35 " + msg[:1400])
+    print('::error file=' + path + '::batch35 ' + msg[:1400])
     raise SystemExit(1)
 
 # --- 1. DisplaySetting 加 mascotEnabled 字段 ---
@@ -30,7 +31,7 @@ else:
     m = ANCHOR_DS.search(t_ds)
     if not m:
         fail(P_DS, "DisplaySetting.showLineNumbers anchor not found")
-    insertion = m.group(1) + "\n    val mascotEnabled: Boolean = false, // rhWhalePreset\n"
+    insertion = m.group(1) + '\n    val mascotEnabled: Boolean = false, // rhWhalePreset\n'
     t_ds = t_ds[:m.start()] + insertion + t_ds[m.end():]
     (ROOT / P_DS).write_text(t_ds, encoding="utf-8")
     print("batch35: DisplaySetting.mascotEnabled added")
@@ -42,36 +43,38 @@ t_theme = (ROOT / P_THEME).read_text(encoding="utf-8")
 if "rhWhalePreset" in t_theme:
     print("batch35: ThemePage already has mascot switch")
 else:
-    ANCHOR_THEME = re.compile(r'(amoledDarkMode\s*=\s*it\s*\}\s*\n\s*\)\s*\n\s*\),)')
+    # 实际代码结构：amoledDarkMode = it }\n)\n},
+    # } 闭 lambda, ) 闭 Switch, } 闭 trailingContent, , 闭 item
+    ANCHOR_THEME = re.compile(r'(amoledDarkMode\s*=\s*it\s*\}\s*\n\s*\)\s*\n\s*\}\s*,)')
     m = ANCHOR_THEME.search(t_theme)
     if not m:
         fail(P_THEME, "amoledDarkMode Switch anchor not found")
     new_items = (
-        m.group(1) + "\n"
-        "                    item(\n"
-        "                        headlineContent = { Text("吉祥物") },\n"
-        "                        supportingContent = { Text("在设置页预览蓝色大肥鱼吉祥物") },\n"
-                        "                        trailingContent = {\n"
-                        "                            Switch(\n"
-                        "                                checked = settings.displaySetting.mascotEnabled,\n"
-                        "                                onCheckedChange = {\n"
-                        "                                    vm.updateSettings(settings.copy(\n"
-                        "                                        displaySetting = settings.displaySetting.copy(mascotEnabled = it)\n"
-                        "                                    ))\n"
-                        "                                }\n"
-                        "                            )\n"
-                        "                        },\n"
-                        "                    )\n"
-                        "                    item(\n"
-                        "                        headlineContent = { Text("吉祥物预览") },\n"
-                        "                        supportingContent = {\n"
-                        "                            WhaleGirlMascot(\n"
-                        "                                state = MiffanMascotState.Idle,\n"
-                        "                                interactive = true,\n"
-                        "                                modifier = Modifier.size(120.dp),\n"
-                        "                            )\n"
-                        "                        },\n"
-                        "                    )\n"
+        m.group(1) + '\n'
+        '                    item(\n'
+        '                        headlineContent = { Text("吉祥物") },\n'
+        '                        supportingContent = { Text("在设置页预览蓝色大肥鱼吉祥物") },\n'
+        '                        trailingContent = {\n'
+        '                            Switch(\n'
+        '                                checked = settings.displaySetting.mascotEnabled,\n'
+        '                                onCheckedChange = {\n'
+        '                                    vm.updateSettings(settings.copy(\n'
+        '                                        displaySetting = settings.displaySetting.copy(mascotEnabled = it)\n'
+        '                                    ))\n'
+        '                                }\n'
+        '                            )\n'
+        '                        },\n'
+        '                    )\n'
+        '                    item(\n'
+        '                        headlineContent = { Text("吉祥物预览") },\n'
+        '                        supportingContent = {\n'
+        '                            WhaleGirlMascot(\n'
+        '                                state = MiffanMascotState.Idle,\n'
+        '                                interactive = true,\n'
+        '                                modifier = Modifier.size(120.dp),\n'
+        '                            )\n'
+        '                        },\n'
+        '                    )\n'
     )
     t_theme = t_theme[:m.start()] + new_items + t_theme[m.end():]
     # 加 import
@@ -98,15 +101,15 @@ else:
     if not m:
         fail(P_ASST, "AssistantImporter anchor not found")
     new_btn = (
-        m.group(1) + "\n"
-        "                    TextButton(\n"
-                        "                        onClick = {\n"
-                        "                            update(createWhaleAssistant())\n"
-                        "                            state.confirm()\n"
-                        "                        }\n"
-                        "                    ) {\n"
-                        "                        Text("使用蓝色大肥鱼预设")\n"
-                        "                    }\n"
+        m.group(1) + '\n'
+        '                    TextButton(\n'
+        '                        onClick = {\n'
+        '                            update(createWhaleAssistant())\n'
+        '                            state.confirm()\n'
+        '                        }\n'
+        '                    ) {\n'
+        '                        Text("使用蓝色大肥鱼预设")\n'
+        '                    }\n'
     )
     t_asst = t_asst[:m.start()] + new_btn + t_asst[m.end():]
     # 加 import
