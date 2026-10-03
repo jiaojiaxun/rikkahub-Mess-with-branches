@@ -87,11 +87,10 @@ fun WhaleGirlMascot(
     }
 
     val clip = resolveWhaleGirlClip(state, generationPhase, inputState, petting, sleeping, submitted)
-    // fork 适配：原版只让 Scene 模式在 Idle 时空闲播放，Avatar 模式会彻底静止。
-    // 聊天页悬浮用的是 Avatar，静止像贴图，所以这里让 Avatar 也保持空闲呼吸。
-    val playing = state != MiffanMascotState.Error &&
-        (state != MiffanMascotState.Idle || petting ||
-            inputState != MiffanMascotInputState.Inactive || submitted)
+    // fork 适配：Miffan 原版只在 Scene 模式空闲时播放，Avatar + Idle 会彻底静止
+    // （playing=false 时 WhaleGirlLineArtPortrait 直接跳过时钟 → 渲染成贴图）。
+    // 聊天页悬浮用 Avatar，必须让空闲也持续呼吸，所以除 Error 外一律播放。
+    val playing = state != MiffanMascotState.Error
     val description = if (state == MiffanMascotState.Error) "蓝色大肥鱼，遇到了问题" else when (clip) {
         WhaleGirlClip.IDLE -> "蓝色大肥鱼"
         WhaleGirlClip.FOCUSED -> "蓝色大肥鱼，关注输入框"
