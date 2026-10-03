@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-'''batch41: 修压缩「取消又请求」+「Failed to generate compressed summary」+ 无收敛死循环
-
-用户实测：错误多为 Failed to generate compressed summary；且多个流式预览反复出现/消失，很久后必失败。
+'''batch41 v2: 修压缩「取消又请求」+「Failed to generate compressed summary」+ 无收敛死循环
 
 根因（源码已读确认）：
   B) compressSources 空结果抛 IllegalStateException；compressGroups 用 async+awaitAll，
      一个失败 → coroutineScope 取消其余 3 个 → 整体失败。无重试。
-  A) while 循环退出条件是「合计 <= mapInputBudgetTokens」，但重新分组用同一预算，
+  A) while 退出条件是「合计 <= mapInputBudgetTokens」，但重新分组用同一预算，
      组数可能永不减少 → 最多 12 轮 + 8 分钟总超时 → 必失败。
   C) compressConversationAsync 跑在 appScope，stopGeneration 不取消它 → 取消了又在请求。
 
-四处改动，锚点全部取自真实读过的源码。
+v2 只改自检：v1 六个锚点全部命中，但错误地断言注释标记个数
+（rhCompressFix 实际 3 处却期 4；rhCompressAB 实际 2 处却期 3）而回滚。改为存在性检查。
 '''
 from pathlib import Path
 
@@ -101,7 +100,7 @@ add4 = '''                        async(Dispatchers.IO) {
 '''
 t = t.replace(A4, add4, 1)
 
-# --- 5. 全部组失败时给出明确错误（而不是静默产出空摘要）---
+# --- 5. 全部组失败时给出明确错误 ---
 A5 = '''            val summaries = compressGroups(sourceGroups, passTargetTokens)
             val combinedSummary = summaries.joinToString("\\n\\n")
 '''
@@ -115,7 +114,7 @@ add5 = '''            val summaries = compressGroups(sourceGroups, passTargetTok
 '''
 t = t.replace(A5, add5, 1)
 
-# --- 6. 强制收敛：组数不减就直接收尾，绝不死循环 ---
+# --- 6. 强制收敛 ---
 A6 = '''            sourceGroups = ContextCompactionPlanner.partitionSources(
                 sources = summaries,
                 maxInputTokens = mapInputBudgetTokens,
@@ -150,14 +149,23 @@ add6 = '''            // rhCompressAB(A): 组数不再收敛时直接收尾，�
 '''
 t = t.replace(A6, add6, 1)
 
-# --- 自检 ---
+# --- 自检：存在性（不数注释个数，v1 就是在这里误杀）---
+required = [
+    "private val compressionJobs = ConcurrentHashMap<Uuid, Job>()",
+    "compressionJobs[conversationId] = self",
+    "compressionJobs[conversationId]?.let { runCatching { it.cancelAndJoin() } }",
+    "}.awaitAll().filterNotNull()",
+    "if (summaries.isEmpty()) {",
+    "all groups failed",
+    "if (nextGroups.size >= sourceGroups.size) {",
+]
+for r in required:
+    if r not in t:
+        fail("selfcheck_missing", repr(r))
+
 cnt = t.count("compressionJobs")
 if cnt != 4:
-    fail("selfcheck_compressionJobs", "count=" + str(cnt) + " expect 4")
-if t.count(MARK) != 4:
-    fail("selfcheck_marker", "count=" + str(t.count(MARK)) + " expect 4")
-if t.count("rhCompressAB") != 3:
-    fail("selfcheck_AB", "count=" + str(t.count("rhCompressAB")) + " expect 3")
+    fail("selfcheck_count", "compressionJobs=" + str(cnt) + " expect 4")
 
 (ROOT / P).write_text(t, encoding="utf-8")
-print("batch41: OK (6 anchors, compressionJobs=4, markers=4, AB=3)")
+print("batch41 v2: OK (6 anchors applied, " + str(len(required)) + " presence checks passed)")
