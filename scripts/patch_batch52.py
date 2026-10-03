@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
-'''batch52 v2: 修 v1 的 doubao-2.1 锚点笔误（visionImport→visionInput），
-并对其余锚点做了全文核对。其余与 v1 一致。'''
+'''batch52 v3: 模型上下文长度库（第三人视角审查后的修复版）
+
+#155 死因：o 系列锚点 tokens(tokenRegex("^o$"), tokenRegex("^\d+$"))
+在 Python 源里反斜杠转义不匹配 → fail（铁律5「零反斜杠」违反）。
+v3 策略：放弃 tokens 行锚点，改用块名锚点 NAME = defineModel { → 向后找
+块尾 NL+4空格'}', 插入 contextLength(N)。块名无引号无反斜杠，天然免疫。
+
+审查中发现的数值修正（对照《全球主流模型上下文长度.md》v3）：
+- GLM_5_1: 200_000（v2 误写 1M；文档明确 5.1=200K，5.2 才是 1M）
+- STEP_3_7_FLASH: 128_000（文档「128K–256K 平台为准」，保守取下限）
+- HY3/HY4: 移除（文档明确「未公开」，不编数值——缺失优于错误）
+本轮共 80 个模型灌数。
+
+ModelDsl 部分（D1-D4）在 #155 已验证 OK，逐字保留。
+'''
 from pathlib import Path
 
 ROOT = Path.cwd()
@@ -17,7 +30,7 @@ def fail(path, msg):
 
 
 # ============================================================
-# 1. ModelDsl.kt — 恢复 contextLength（上游 2.5.5 实现恢复）
+# 1. ModelDsl.kt — 恢复 contextLength DSL（#155 实证 OK，原样保留）
 # ============================================================
 d = (ROOT / DSL).read_text(encoding='utf-8')
 if MARK_DSL not in d:
@@ -114,7 +127,7 @@ else:
     print('batch52: ModelDsl already applied')
 
 # ============================================================
-# 2. ModelRegistry.kt — 查询入口 + 全量灌数
+# 2. ModelRegistry.kt — 查询入口 + 块名锚点灌数
 # ============================================================
 r = (ROOT / REG).read_text(encoding='utf-8')
 if MARK_REG not in r:
@@ -149,186 +162,112 @@ if MARK_REG not in r:
         fail(REG, 'R0 MODEL_ABILITIES anchor not found')
     r = r.replace(OLD_R0, NEW_R0, 1)
 
-    # --- 全量灌数。锚点 = 各模型 builder 块逐字节（真实读取）。 ---
-    INFUSIONS = [
-        ('        tokens("gpt", "4", "o")' + NL + '        visionInput()' + NL + '        toolAbility()' + NL + '    }',
-         '        tokens("gpt", "4", "o")' + NL + '        visionInput()' + NL + '        toolAbility()' + NL + '        contextLength(128_000)' + NL + '    }'),
-        ('        tokens("gpt", "4", "1")' + NL + '        visionInput()' + NL + '        toolAbility()' + NL + '    }',
-         '        tokens("gpt", "4", "1")' + NL + '        visionInput()' + NL + '        toolAbility()' + NL + '        contextLength(1_047_576)' + NL + '    }'),
-        ('        tokens(tokenRegex("^o$"), tokenRegex("^\\d+$"))' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens(tokenRegex("^o$"), tokenRegex("^\\d+$"))' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(200_000)' + NL + '    }'),
-        ('        tokens("gpt", "oss")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "oss")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(131_072)' + NL + '    }'),
-        ('        tokens("gpt", "5")' + NL + '        notTokens("gpt", "5", ".")' + NL + '        notTokens("gpt", "5", "chat")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "5")' + NL + '        notTokens("gpt", "5", ".")' + NL + '        notTokens("gpt", "5", "chat")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(400_000)' + NL + '    }'),
-        ('        tokens("gpt", "5", "1")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "5", "1")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(400_000)' + NL + '    }'),
-        ('        tokens("gpt", "5", "2")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "5", "2")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(400_000)' + NL + '    }'),
-        ('        tokens("gpt", "5", "3")' + NL + '        visionInput()' + NL + '        toolAbility()' + NL + '    }',
-         '        tokens("gpt", "5", "3")' + NL + '        visionInput()' + NL + '        toolAbility()' + NL + '        contextLength(400_000)' + NL + '    }'),
-        ('        tokens("gpt", "5", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "5", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(400_000)' + NL + '    }'),
-        ('        tokens("gpt", "5", "4", "mini")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "5", "4", "mini")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(400_000)' + NL + '    }'),
-        ('        tokens("gpt", "5", "4", "nano")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "5", "4", "nano")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(400_000)' + NL + '    }'),
-        ('        tokens("gpt", "5", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "5", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gpt", "5", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "5", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gpt", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gpt", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gemini", "2", "0", "flash")' + NL + '        visionInput()' + NL + '        toolAbility()' + NL + '    }',
-         '        tokens("gemini", "2", "0", "flash")' + NL + '        visionInput()' + NL + '        toolAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gemini", "2", "5", "flash")' + NL + '        notTokens("image")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gemini", "2", "5", "flash")' + NL + '        notTokens("image")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gemini", "2", "5", "pro")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gemini", "2", "5", "pro")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gemini", "3", "pro")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gemini", "3", "pro")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gemini", "3", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gemini", "3", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gemini", "3", "1", "pro", "preview")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gemini", "3", "1", "pro", "preview")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gemini", "3", "1", "pro", "preview", "customtools")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gemini", "3", "1", "pro", "preview", "customtools")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("gemini", "3", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("gemini", "3", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        exact("gemini-flash-latest")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        exact("gemini-flash-latest")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        exact("gemini-pro-latest")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        exact("gemini-pro-latest")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_048_576)' + NL + '    }'),
-        ('        tokens("claude", "3", "5", "sonnet")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "3", "5", "sonnet")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(200_000)' + NL + '    }'),
-        ('        tokens("claude", "3", "7", "sonnet")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "3", "7", "sonnet")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(200_000)' + NL + '    }'),
-        ('        tokens("claude", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(200_000)' + NL + '    }'),
-        ('        tokens("claude", "4", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "4", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(200_000)' + NL + '    }'),
-        ('        tokens("claude", "sonnet", "4", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "sonnet", "4", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("claude", "opus", "4", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "opus", "4", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("claude", "opus", "4", "7")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "opus", "4", "7")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("claude", "opus", "4", "8")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "opus", "4", "8")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("claude", "sonnet", "5")' + NL + '        notTokens("claude", "sonnet", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "sonnet", "5")' + NL + '        notTokens("claude", "sonnet", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("claude", "opus", "5")' + NL + '        notTokens("claude", "opus", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("claude", "opus", "5")' + NL + '        notTokens("claude", "opus", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("deepseek", "v", "3")' + NL + '        toolAbility()' + NL + '    }',
-         '        tokens("deepseek", "v", "3")' + NL + '        toolAbility()' + NL + '        contextLength(128_000)' + NL + '    }'),
-        ('        tokens("deepseek", "chat")' + NL + '        toolAbility()' + NL + '    }',
-         '        tokens("deepseek", "chat")' + NL + '        toolAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("deepseek", "r", "1")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("deepseek", "r", "1")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(128_000)' + NL + '    }'),
-        ('        tokens("deepseek", "reasoner")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("deepseek", "reasoner")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("deepseek", "v", "4", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("deepseek", "v", "4", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("deepseek", "v", "4", "flash", "vision", "exp")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("deepseek", "v", "4", "flash", "vision", "exp")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("deepseek", "v", "4", "pro")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("deepseek", "v", "4", "pro")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("deepseek", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("deepseek", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("deepseek", "v", "4", "1", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("deepseek", "v", "4", "1", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("deepseek", "v", "3", "1")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("deepseek", "v", "3", "1")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(128_000)' + NL + '    }'),
-        ('        tokens("deepseek", "v", "3", "2")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("deepseek", "v", "3", "2")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(128_000)' + NL + '    }'),
-        ('        tokens("qwen", "3")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("qwen", "3")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(128_000)' + NL + '    }'),
-        ('        tokens("qwen", "3", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("qwen", "3", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("qwen", "3", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("qwen", "3", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("qwen", "3", "7")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("qwen", "3", "7")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("qwen", "3", "8")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("qwen", "3", "8")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("qwen", "3", "5", "max")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("qwen", "3", "5", "max")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("qwen", "3", "6", "max")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("qwen", "3", "6", "max")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("qwen", "3", "7", "max")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("qwen", "3", "7", "max")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("qwen", "3", "8", "max")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("qwen", "3", "8", "max")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("doubao", "1", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("doubao", "1", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
-        ('        tokens("doubao", "1", "8")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("doubao", "1", "8")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
-        ('        tokens("doubao", "2", "0")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("doubao", "2", "0")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
-        ('        tokens("doubao", "2", "1")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("doubao", "2", "1")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
-        ('        tokens("grok", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("grok", "4")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
-        ('        tokens("kimi", "k", "2")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("kimi", "k", "2")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(128_000)' + NL + '    }'),
-        ('        tokens("kimi", "k", "2", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("kimi", "k", "2", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
-        ('        tokens("kimi", "k", "2", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("kimi", "k", "2", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
-        ('        tokens("kimi", "k", "3")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("kimi", "k", "3")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        exact("k3")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        exact("k3")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("step", "3")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("step", "3")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(128_000)' + NL + '    }'),
-        ('        tokens("step", "3", "7", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("step", "3", "7", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
-        ('        tokens("step", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("step", "5")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("glm", "4", "5")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("glm", "4", "5")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(128_000)' + NL + '    }'),
-        ('        tokens("glm", "4", "6")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("glm", "4", "6")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(200_000)' + NL + '    }'),
-        ('        tokens("glm", "4", "7")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("glm", "4", "7")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(200_000)' + NL + '    }'),
-        ('        tokens("glm", "5")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("glm", "5")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(200_000)' + NL + '    }'),
-        ('        tokens("glm", "5", "1")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("glm", "5", "1")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("glm", "5", "2")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("glm", "5", "2")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("glm", "5", "3")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("glm", "5", "3")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("glm", "5", "3", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("glm", "5", "3", "flash")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("minimax", "m", "2")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("minimax", "m", "2")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(204_800)' + NL + '    }'),
-        ('        tokens("minimax", "m", "2", "5")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("minimax", "m", "2", "5")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(204_800)' + NL + '    }'),
-        ('        tokens("minimax", "m", "2", "7")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("minimax", "m", "2", "7")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(204_800)' + NL + '    }'),
-        ('        tokens("minimax", "m", "3")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("minimax", "m", "3")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(1_000_000)' + NL + '    }'),
-        ('        tokens("mimo", "v", "2", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("mimo", "v", "2", "6")' + NL + '        visionInput()' + NL + '        toolReasoningAbility()' + NL + '        contextLength(208_000)' + NL + '    }'),
-        ('        tokens("hy", "3")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("hy", "3")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
-        ('        tokens("hy", "4")' + NL + '        toolReasoningAbility()' + NL + '    }',
-         '        tokens("hy", "4")' + NL + '        toolReasoningAbility()' + NL + '        contextLength(256_000)' + NL + '    }'),
+    # --- 块名锚点灌数（80 模型，数值=文档 v3 官方口径） ---
+    VALUES = [
+        ('GPT4O', 128000),
+        ('GPT_4_1', 1047576),
+        ('OPENAI_O_MODELS', 200000),
+        ('GPT_OSS', 131072),
+        ('GPT_5', 400000),
+        ('GPT_5_1', 400000),
+        ('GPT_5_2', 400000),
+        ('GPT_5_3', 400000),
+        ('GPT_5_4', 400000),
+        ('GPT_5_4_MINI', 400000),
+        ('GPT_5_4_NANO', 400000),
+        ('GPT_5_5', 1048576),
+        ('GPT_5_6', 1048576),
+        ('GPT_6', 1048576),
+        ('GEMINI_20_FLASH', 1048576),
+        ('GEMINI_2_5_FLASH', 1048576),
+        ('GEMINI_2_5_PRO', 1048576),
+        ('GEMINI_3_PRO', 1048576),
+        ('GEMINI_3_FLASH', 1048576),
+        ('GEMINI_3_1_PRO_PREVIEW', 1048576),
+        ('GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS', 1048576),
+        ('GEMINI_3_5', 1048576),
+        ('GEMINI_FLASH_LATEST', 1048576),
+        ('GEMINI_PRO_LATEST', 1048576),
+        ('CLAUDE_SONNET_3_5', 200000),
+        ('CLAUDE_SONNET_3_7', 200000),
+        ('CLAUDE_4', 200000),
+        ('CLAUDE_4_5', 200000),
+        ('CLAUDE_SONNET_4_6', 1000000),
+        ('CLAUDE_OPUS_4_6', 1000000),
+        ('CLAUDE_OPUS_4_7', 1000000),
+        ('CLAUDE_OPUS_4_8', 1000000),
+        ('CLAUDE_SONNET_5', 1000000),
+        ('CLAUDE_OPUS_5', 1000000),
+        ('DEEPSEEK_V3_MODEL', 128000),
+        ('DEEPSEEK_CHAT', 1000000),
+        ('DEEPSEEK_R1_MODEL', 128000),
+        ('DEEPSEEK_REASONER', 1000000),
+        ('DEEPSEEK_V4_FLASH', 1000000),
+        ('DEEPSEEK_V4_FLASH_VISION_EXP', 1000000),
+        ('DEEPSEEK_V4_PRO', 1000000),
+        ('DEEPSEEK_FLASH', 1000000),
+        ('DEEPSEEK_V4_1_FLASH', 1000000),
+        ('DEEPSEEK_V3_1', 128000),
+        ('DEEPSEEK_V3_2', 128000),
+        ('QWEN_3', 128000),
+        ('QWEN_3_5', 1000000),
+        ('QWEN_3_6', 1000000),
+        ('QWEN_3_7', 1000000),
+        ('QWEN_3_8', 1000000),
+        ('QWEN_3_5_MAX', 1000000),
+        ('QWEN_3_6_MAX', 1000000),
+        ('QWEN_3_7_MAX', 1000000),
+        ('QWEN_3_8_MAX', 1000000),
+        ('DOUBAO_1_6', 256000),
+        ('DOUBAO_1_8', 256000),
+        ('DOUBAO_2_0', 256000),
+        ('DOUBAO_2_1', 256000),
+        ('GROK_4', 256000),
+        ('KIMI_K2', 128000),
+        ('KIMI_K2_5', 256000),
+        ('KIMI_K2_6', 256000),
+        ('KIMI_K3', 1000000),
+        ('KIMI_K3_ALIAS', 1000000),
+        ('STEP_3', 128000),
+        ('STEP_3_7_FLASH', 128000),
+        ('STEP_5', 1000000),
+        ('GLM_4_5', 128000),
+        ('GLM_4_6', 200000),
+        ('GLM_4_7', 200000),
+        ('GLM_5', 200000),
+        ('GLM_5_1', 200000),
+        ('GLM_5_2', 1000000),
+        ('GLM_5_3', 1000000),
+        ('GLM_5_3_FLASH', 1000000),
+        ('MINIMAX_M2', 204800),
+        ('MINIMAX_M2_5', 204800),
+        ('MINIMAX_M2_7', 204800),
+        ('MINIMAX_M3', 1000000),
+        ('XIAOMI_MIMO_V2_6', 208000),
     ]
 
     applied = 0
-    for old, new in INFUSIONS:
-        if old in r:
-            r = r.replace(old, new, 1)
-            applied += 1
-        else:
-            fail(REG, 'infusion anchor not found: ' + old[:80])
-    if applied < 80:
-        fail(REG, 'too few infusions applied: ' + str(applied))
+    for name, value in VALUES:
+        header = name + ' = defineModel {'
+        if r.count(header) != 1:
+            fail(REG, 'header count != 1 for ' + name + ' (found ' + str(r.count(header)) + ')')
+        pos = r.find(header)
+        end = r.find(NL + '    }', pos)
+        if end < 0:
+            fail(REG, 'block end not found for ' + name)
+        r = r[:end] + NL + '        contextLength(' + str(value) + ')' + r[end:]
+        applied += 1
+
+    if applied != len(VALUES):
+        fail(REG, 'applied mismatch: ' + str(applied) + ' != ' + str(len(VALUES)))
+    if r.count('contextLength(') != len(VALUES):
+        fail(REG, 'selfcheck: contextLength call count = ' + str(r.count('contextLength(')))
+    if 'MODEL_CONTEXT_LENGTH' not in r:
+        fail(REG, 'selfcheck: MODEL_CONTEXT_LENGTH missing')
+
     (ROOT / REG).write_text(r, encoding='utf-8')
     print('batch52: ModelRegistry OK (' + str(applied) + ' models infused)')
 else:
     print('batch52: ModelRegistry already applied')
 
-print('batch52 v2: OK')
+print('batch52 v3: OK')
