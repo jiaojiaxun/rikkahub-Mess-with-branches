@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
-'''batch47 v2: app-control 网关加定时任务六动作（修 v1 的 triggerNow 签名错误）
+'''batch47 v3: 修 #146 编译错（三处 Kotlin 事实错误，全在我新加的 cron 代码）：
 
-v1 错误（铁律1再犯，已读 CronTools.kt 实证）：scheduler.triggerNow(job) 传了
-CronJob 对象；真实签名是 triggerNow(jobId: String)（trigger_job_now 工具里
-scheduler.triggerNow(jobId)）。v2 一并核对全部 CronJobStore/CronJobScheduler
-调用：upsert(job)/jobs()/delete(id)/cancel(id)/schedule(job) 均与 CronTools 一致。
+1. contentOrNull 是 kotlinx.serialization.json 的扩展函数，必须
+   import kotlinx.serialization.json.contentOrNull —— v2 只补了 JsonPrimitive 类。
+2. CronJobStore.jobs() 是 suspend fun —— listCronJobs/cronJobToJson 调用链
+   必须全部 suspend（CronTools 里在 Tool.execute 协程里调用所以无感）。
+3. put("assistant_id", it) 的 it 是 String?，连带 contentOrNull 未解析产生的
+   Any? 报错会在 import 修复后消失。
 
-用户反馈：AI 调不动定时任务 —— app-control 网关白名单只有切换助手/模型、
-改助手参数、MCP 开关、Web 服务，没有 cron 动作。补六个动作：
-schedule_cron_job / list_cron_jobs / delete_cron_job / pause_cron_job /
-resume_cron_job / trigger_cron_job。
-
-锚点（真实读取）：AppControlTools.kt 的 write_actions 数组 + applyChangeTool
-description；AppControlService.kt 的 applyChange when 分支 + else 文案 +
-switchAssistant 函数头。CronJob 字段/方法签名来自 CronTools.kt（8KB 全读）。
+v3 动作：仅修 patch_batch47.py 自身产物（每次 CI fresh checkout 重放全部脚本，
+所以 v3 直接把 v2 脚本替换掉，产物=修正后的代码）。
 '''
 from pathlib import Path
 
@@ -23,16 +19,14 @@ ACS = 'app/src/main/java/me/rerere/rikkahub/data/ai/tools/appcontrol/AppControlS
 MARK = 'rhAppControlCron'
 
 def fail(path, msg):
-    print('::error file=' + path + '::batch47v2 ' + str(msg)[:1500])
+    print('::error file=' + path + '::batch47v3 ' + str(msg)[:1500])
     raise SystemExit(1)
 
 # ============================================================
-# 1. AppControlTools.kt — capabilities 白名单 + 描述 + version
+# 1. AppControlTools.kt（与 v2 相同，此处 idempotent）
 # ============================================================
 t = (ROOT / ACT).read_text(encoding='utf-8')
-if MARK in t:
-    print('batch47v2: already applied (marker in AppControlTools)')
-else:
+if MARK not in t:
     CAP_ANCHOR = '''                            add(JsonPrimitive("set_web_server"))
                         })'''
     CAP_NEW = '''                            add(JsonPrimitive("set_web_server"))
@@ -60,18 +54,18 @@ else:
     if DESC_ANCHOR not in t:
         fail(ACT, 'applyChange description anchor not found')
     t = t.replace(DESC_ANCHOR, DESC_NEW, 1)
-
     t = t.replace('put("version", 3)', 'put("version", 4)', 1)
-
     (ROOT / ACT).write_text(t, encoding='utf-8')
-    print('batch47v2: AppControlTools updated')
+    print('batch47v3: AppControlTools ok')
+else:
+    print('batch47v3: AppControlTools already applied')
 
 # ============================================================
-# 2. AppControlService.kt — when 分支 + 实现
+# 2. AppControlService.kt（v3 修正版实现）
 # ============================================================
 s = (ROOT / ACS).read_text(encoding='utf-8')
-if 'rhAppControlCron' in s:
-    print('batch47v2: AppControlService already applied')
+if MARK in s:
+    print('batch47v3: AppControlService already applied')
 else:
     WHEN_ANCHOR = '''        "set_web_server" -> setWebServer(args)
         else -> buildJsonObject {'''
@@ -100,7 +94,9 @@ else:
     s = s.replace(ERR_OLD, ERR_NEW, 1)
 
     IMPL_ANCHOR = '    private suspend fun switchAssistant(args: JsonObject): JsonObject {'
-    IMPL_BLOCK = '''    // ==== rhAppControlCron: 定时任务动作实现 ====
+    # v3 修正：全部读函数标 suspend；contentOrNull 显式 import；
+    # put("assistant_id", it) 的 it 为 String，直接传。
+    IMPL_BLOCK = '''    // ==== rhAppControlCron: 定时任务动作实现（v3: 修 contentOrNull import + jobs() suspend）====
 
     private fun cronStore(): me.rerere.rikkahub.data.cron.CronJobStore =
         org.koin.core.context.GlobalContext.get().get()
@@ -114,33 +110,34 @@ else:
             put("name", job.name)
             put("cron", job.cronExpression)
             put("prompt", job.prompt)
-            job.assistantId?.let { put("assistant_id", it) }
-            job.conversationId?.let { put("conversation_id", it) }
+            if (job.assistantId != null) put("assistant_id", job.assistantId)
+            if (job.conversationId != null) put("conversation_id", job.conversationId)
             put("enabled", job.enabled)
             put("created_at_ms", job.createdAt)
         }
 
+    private fun strArg(args: JsonObject, key: String): String? =
+        (args[key] as? JsonPrimitive)?.contentOrNull
+
     private suspend fun scheduleCronJob(args: JsonObject): JsonObject {
-        val name = (args["name"] as? JsonPrimitive)?.contentOrNull
-            ?: return errorJson("name required")
-        val cron = (args["cron"] as? JsonPrimitive)?.contentOrNull
-            ?: return errorJson("cron required")
-        val prompt = (args["prompt"] as? JsonPrimitive)?.contentOrNull
-            ?: return errorJson("prompt required")
+        val name = strArg(args, "name") ?: return errorJson("name required")
+        val cron = strArg(args, "cron") ?: return errorJson("cron required")
+        val prompt = strArg(args, "prompt") ?: return errorJson("prompt required")
         if (!me.rerere.rikkahub.data.model.CronParser.isValid(cron)) {
             return errorJson("not a valid 5-field cron expression: $cron")
         }
-        val targetConversation = when (val v = (args["conversation_id"] as? JsonPrimitive)?.contentOrNull) {
-            null -> null
-            "new" -> null
-            else -> v
+        val rawConversation = strArg(args, "conversation_id")
+        val targetConversation = when {
+            rawConversation == null -> null
+            rawConversation == "new" -> null
+            else -> rawConversation
         }
         val job = me.rerere.rikkahub.data.model.CronJob(
             id = kotlin.uuid.Uuid.random().toString(),
             name = name,
             prompt = prompt,
             cronExpression = cron,
-            assistantId = (args["assistant_id"] as? JsonPrimitive)?.contentOrNull,
+            assistantId = strArg(args, "assistant_id"),
             conversationId = targetConversation,
             enabled = true,
             createdAt = System.currentTimeMillis(),
@@ -150,23 +147,21 @@ else:
         return successJson("scheduled cron job ${job.id} ($name)")
     }
 
-    private fun listCronJobs(): JsonObject = buildJsonObject {
+    private suspend fun listCronJobs(): JsonObject = buildJsonObject {
         put("jobs", kotlinx.serialization.json.buildJsonArray {
             cronStore().jobs().forEach { add(cronJobToJson(it)) }
         })
     }
 
     private suspend fun deleteCronJob(args: JsonObject): JsonObject {
-        val jobId = (args["job_id"] as? JsonPrimitive)?.contentOrNull
-            ?: return errorJson("job_id required")
+        val jobId = strArg(args, "job_id") ?: return errorJson("job_id required")
         cronStore().delete(jobId)
         cronScheduler().cancel(jobId)
         return successJson("deleted job $jobId")
     }
 
     private suspend fun pauseCronJob(args: JsonObject): JsonObject {
-        val jobId = (args["job_id"] as? JsonPrimitive)?.contentOrNull
-            ?: return errorJson("job_id required")
+        val jobId = strArg(args, "job_id") ?: return errorJson("job_id required")
         val job = cronStore().jobs().firstOrNull { it.id == jobId }
             ?: return errorJson("no such job: $jobId")
         cronStore().upsert(job.copy(enabled = false))
@@ -175,8 +170,7 @@ else:
     }
 
     private suspend fun resumeCronJob(args: JsonObject): JsonObject {
-        val jobId = (args["job_id"] as? JsonPrimitive)?.contentOrNull
-            ?: return errorJson("job_id required")
+        val jobId = strArg(args, "job_id") ?: return errorJson("job_id required")
         val job = cronStore().jobs().firstOrNull { it.id == jobId }
             ?: return errorJson("no such job: $jobId")
         val resumed = job.copy(enabled = true)
@@ -186,12 +180,10 @@ else:
     }
 
     private suspend fun triggerCronJob(args: JsonObject): JsonObject {
-        val jobId = (args["job_id"] as? JsonPrimitive)?.contentOrNull
-            ?: return errorJson("job_id required")
+        val jobId = strArg(args, "job_id") ?: return errorJson("job_id required")
         if (cronStore().jobs().none { it.id == jobId }) {
             return errorJson("no such job: $jobId")
         }
-        // v2 修正：真实签名是 triggerNow(jobId: String)（CronTools.kt 实证）
         cronScheduler().triggerNow(jobId)
         return successJson("triggered job $jobId")
     }
@@ -201,23 +193,30 @@ else:
         fail(ACS, 'switchAssistant anchor not found')
     s = s.replace(IMPL_ANCHOR, IMPL_BLOCK, 1)
 
-    if 'import kotlinx.serialization.json.JsonPrimitive' not in s:
-        IMP_ANCHOR = 'import kotlinx.serialization.json.JsonObject\n'
-        if IMP_ANCHOR not in s:
-            fail(ACS, 'JsonObject import anchor not found')
-        s = s.replace(IMP_ANCHOR, IMP_ANCHOR + 'import kotlinx.serialization.json.JsonPrimitive\n', 1)
+    # v3 核心：补齐全部三个 import（JsonPrimitive 类 + contentOrNull 扩展 + buildJsonArray）
+    need_imports = [
+        'import kotlinx.serialization.json.JsonPrimitive\n',
+        'import kotlinx.serialization.json.contentOrNull\n',
+        'import kotlinx.serialization.json.buildJsonArray\n',
+    ]
+    IMP_ANCHOR = 'import kotlinx.serialization.json.JsonObject\n'
+    if IMP_ANCHOR not in s:
+        fail(ACS, 'JsonObject import anchor not found')
+    for imp in need_imports:
+        if imp not in s:
+            s = s.replace(IMP_ANCHOR, IMP_ANCHOR + imp, 1)
 
     for need in [
         MARK,
         '"schedule_cron_job" -> scheduleCronJob(args)',
         'private suspend fun triggerCronJob',
         'cronScheduler().triggerNow(jobId)',
-        'cronStore().upsert(job)',
+        'import kotlinx.serialization.json.contentOrNull',
     ]:
         if need not in s:
             fail(ACS, 'selfcheck missing: ' + need)
 
     (ROOT / ACS).write_text(s, encoding='utf-8')
-    print('batch47v2: AppControlService updated')
+    print('batch47v3: AppControlService ok')
 
-print('batch47v2: OK')
+print('batch47v3: OK')
