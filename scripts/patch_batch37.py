@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
-"""batch37: 定时任务设置页接线
+"""batch37 v2: 定时任务设置页接线（修复 #120 锚点错误）
+
+#120 失败根因（又犯了铁律 1：猜锚点没读源码）：
+  RouteActivity 的 entry 用的是**全限定名**
+    entry<Screen.SettingToolApprovals> {
+        me.rerere.rikkahub.ui.pages.setting.SettingToolApprovalsPage()
+    }
+  而我猜的是裸名 SettingToolApprovalsPage() → 锚点找不到。
+
+v2 修正：锚点改用真实源码（含三处换行 + 全限定名），新 entry body 也用
+全限定名，避免依赖 import。
 
 四处改动：
-1. RouteActivity.kt Screen sealed interface 加 SettingScheduledJobs
-2. RouteActivity.kt entryProvider 加 entry<Screen.SettingScheduledJobs>
-3. RouteActivity.kt import SettingScheduledJobsPage
-4. SettingPage.kt 高级服务 CardGroup 加“定时任务”入口
-
-锚点（已用 API 读真实源码）：
-  Screen 尾部：'    @Serializable\n    data object Stats : Screen\n\n}'\n
-  entryProvider：entry<Screen.SettingToolApprovals> { ... }\n
-  SettingPage：onClick = { navController.navigate(Screen.SettingFiles) } 那块
+1. Screen sealed interface 加 SettingScheduledJobs（锚点：Stats）
+2. entryProvider 加 entry（锚点：SettingToolApprovals 真实块）
+3. import 补 SettingScheduledJobsPage（搭在 SettingPage import 后面，兜底正则）
+4. SettingPage 高级服务组加入口（锚点：SettingFiles item）
 
 铁律：不用 f-string；含 Kotlin 双引号块用 Python 单引号；幂等标记 rhScheduledJobs
 """
 from pathlib import Path
+import re
 
 ROOT = Path.cwd()
 MARK = "rhScheduledJobs"
@@ -48,36 +54,40 @@ else:
     )
     t = t[:idx] + new_screen + t[idx + len(ANCHOR_SCREEN):]
 
-    # 2. entryProvider
+    # 2. entryProvider（真实源码：全限定名）
     ANCHOR_ENTRY = (
         '                            entry<Screen.SettingToolApprovals> {\n'
-        '                                SettingToolApprovalsPage()\n'
+        '                                me.rerere.rikkahub.ui.pages.setting.SettingToolApprovalsPage()\n'
         '                            }\n'
     )
     eidx = t.find(ANCHOR_ENTRY)
     if eidx < 0:
-        fail(P_ROUTE, "entryProvider SettingToolApprovals anchor not found")
+        fail(P_ROUTE, "entryProvider SettingToolApprovals anchor not found (v2)")
     new_entry = ANCHOR_ENTRY + (
         '\n'
+        '                            /* rhScheduledJobs */\n'
         '                            entry<Screen.SettingScheduledJobs> {\n'
-        '                                SettingScheduledJobsPage()\n'
+        '                                me.rerere.rikkahub.ui.pages.setting.SettingScheduledJobsPage()\n'
         '                            }\n'
     )
     t = t[:eidx] + new_entry + t[eidx + len(ANCHOR_ENTRY):]
 
-    # 3. import
+    # 3. import（兜底：找任意 setting 包 import 插入）
     if 'import me.rerere.rikkahub.ui.pages.setting.SettingScheduledJobsPage' not in t:
         anchor_import = 'import me.rerere.rikkahub.ui.pages.setting.SettingPage\n'
-        if anchor_import not in t:
-            # 回退：找任意 setting 包 import
-            import re
+        if anchor_import in t:
+            t = t.replace(
+                anchor_import,
+                anchor_import + 'import me.rerere.rikkahub.ui.pages.setting.SettingScheduledJobsPage\n',
+                1,
+            )
+        else:
             m = re.search(r'import me\.rerere\.rikkahub\.ui\.pages\.setting\.[A-Za-z0-9_]+\n', t)
             if not m:
                 fail(P_ROUTE, "no setting import anchor found")
-            t = t[:m.start()] + 'import me.rerere.rikkahub.ui.pages.setting.SettingScheduledJobsPage\n' + t[m.start():]
-        else:
-            t = t.replace(anchor_import,
-                          anchor_import + 'import me.rerere.rikkahub.ui.pages.setting.SettingScheduledJobsPage\n', 1)
+            t = (t[:m.start()]
+                 + 'import me.rerere.rikkahub.ui.pages.setting.SettingScheduledJobsPage\n'
+                 + t[m.start():])
 
     (ROOT / P_ROUTE).write_text(t, encoding="utf-8")
     print("batch37: RouteActivity wired (Screen + entry + import)")
