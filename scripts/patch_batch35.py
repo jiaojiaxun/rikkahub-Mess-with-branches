@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
-"""batch35: 大肥鱼 C+D 接线（三处改动）
+"""batch35 v3: 大肥鱼 C+D 接线（修复 #115 两处编译错误）
 
-1. DisplaySetting 加 mascotEnabled 字段
-2. SettingPreferencesThemePage 加吉祥物开关 + 120dp 预览
-3. AssistantPage 创建对话框加"使用蓝色大肥鱼预设"按钮
+v3 修复（#115 教训）：
+1. ThemePage 锚点必须吃掉旧 item 的闭合 ')'——v2 只停到 '},'，
+   新 item 被插进旧 item 的参数列表内 → mixing named/positional (行101)
+   真实结构：onCheckedChange = { amoledDarkMode = it }   <- } 闭 lambda
+             )                                            <- ) 闭 Switch
+             },                                           <- } 闭 trailingContent
+             )                                            <- ) 闭 item  <= v2 漏了
+2. AssistantPage 弃用懒匹配正则——v2 的 [\s\S]*?\), 越过 AssistantImporter
+   （它后面是 ')' 换行 '}'，没有 '),'）一路吃到下行 Row 的 '),'，
+   把 TextButton 插进 Row 参数区 → horizontalArrangement on Unit 等一串错。
+   v3 改用真实源码逐字节 str.find 精确匹配，找不到即 fail。
+3. 去掉 ThemePage 重复 dp import（原文已有 dp，只缺 layout.size）。
+4. DisplaySetting 部分 #114/#115 两次通过，保持幂等原样。
 
-铁律遵守：
-- 不用 f-string（batch32 教训）
-- 锚点用行级正则 + [\\s\\S]*? 容错（#114 教训：精确空白匹配太脆）
-- 幂等标记特异（mascotEnabled / rhWhalePreset）
-- Kotlin 含双引号的代码块用 Python 单引号字符串（避免 SyntaxError）
+铁律：不用 f-string；含 Kotlin 双引号的块用 Python 单引号字符串；幂等标记 rhWhalePreset
 """
 from pathlib import Path
 import re
@@ -20,7 +26,7 @@ def fail(path, msg):
     print('::error file=' + path + '::batch35 ' + msg[:1400])
     raise SystemExit(1)
 
-# --- 1. DisplaySetting 加 mascotEnabled 字段 ---
+# --- 1. DisplaySetting 加 mascotEnabled 字段（两次 CI 已验证通过，保持） ---
 P_DS = "app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt"
 t_ds = (ROOT / P_DS).read_text(encoding="utf-8")
 
@@ -43,12 +49,12 @@ t_theme = (ROOT / P_THEME).read_text(encoding="utf-8")
 if "rhWhalePreset" in t_theme:
     print("batch35: ThemePage already has mascot switch")
 else:
-    # 实际代码结构：amoledDarkMode = it }\n)\n},
-    # } 闭 lambda, ) 闭 Switch, } 闭 trailingContent, , 闭 item
-    ANCHOR_THEME = re.compile(r'(amoledDarkMode\s*=\s*it\s*\}\s*\n\s*\)\s*\n\s*\}\s*,)')
+    ANCHOR_THEME = re.compile(
+        r'(amoledDarkMode\s*=\s*it\s*\}\s*\n\s*\)\s*\n\s*\}\s*,\s*\n\s*\))'
+    )
     m = ANCHOR_THEME.search(t_theme)
     if not m:
-        fail(P_THEME, "amoledDarkMode Switch anchor not found")
+        fail(P_THEME, "amoledDarkMode Switch + item close anchor not found")
     new_items = (
         m.group(1) + '\n'
         '                    item(\n'
@@ -77,32 +83,46 @@ else:
         '                    )\n'
     )
     t_theme = t_theme[:m.start()] + new_items + t_theme[m.end():]
-    # 加 import
-    t_theme = t_theme.replace(
-        "import me.rerere.rikkahub.ui.components.ui.CardGroup",
-        "import me.rerere.rikkahub.ui.components.ui.CardGroup\n"
-        "import me.rerere.rikkahub.ui.components.ui.WhaleGirlMascot\n"
-        "import me.rerere.rikkahub.ui.components.ui.MiffanMascotState\n"
-        "import androidx.compose.foundation.layout.size\n"
-        "import androidx.compose.ui.unit.dp",
-    )
+    # 只补真正缺的 import：layout.size（dp 原文已有，勿重复注入）
+    if 'import androidx.compose.foundation.layout.size\n' not in t_theme:
+        t_theme = t_theme.replace(
+            "import androidx.compose.foundation.layout.padding\n",
+            "import androidx.compose.foundation.layout.padding\n"
+            "import androidx.compose.foundation.layout.size\n",
+            1,
+        )
+    if 'import me.rerere.rikkahub.ui.components.ui.WhaleGirlMascot\n' not in t_theme:
+        t_theme = t_theme.replace(
+            "import me.rerere.rikkahub.ui.components.ui.CardGroup\n",
+            "import me.rerere.rikkahub.ui.components.ui.CardGroup\n"
+            "import me.rerere.rikkahub.ui.components.ui.WhaleGirlMascot\n"
+            "import me.rerere.rikkahub.ui.components.ui.MiffanMascotState\n",
+            1,
+        )
     (ROOT / P_THEME).write_text(t_theme, encoding="utf-8")
     print("batch35: ThemePage mascot switch + preview added")
 
-# --- 3. AssistantPage 创建对话框加"使用蓝色大肥鱼预设"按钮 ---
+# --- 3. AssistantPage 加"使用蓝色大肥鱼预设"按钮（精确匹配，非正则） ---
 P_ASST = "app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/AssistantPage.kt"
 t_asst = (ROOT / P_ASST).read_text(encoding="utf-8")
 
 if "rhWhalePreset" in t_asst:
     print("batch35: AssistantPage already has whale preset button")
 else:
-    # #114 教训：精确空白匹配 \s*\n\s* 太脆，改用 [\s\S]*? 非贪婪通配
-    ANCHOR_ASST = re.compile(r'(AssistantImporter\([\s\S]*?fillMaxWidth\(\)[\s\S]*?\),)')
-    m = ANCHOR_ASST.search(t_asst)
-    if not m:
-        fail(P_ASST, "AssistantImporter anchor not found")
+    EXACT_BLOCK = (
+        '                    AssistantImporter(\n'
+        '                        onUpdate = {\n'
+        '                            update(it)\n'
+        '                            state.confirm()\n'
+        '                        },\n'
+        '                        modifier = Modifier.fillMaxWidth(),\n'
+        '                    )\n'
+    )
+    idx = t_asst.find(EXACT_BLOCK)
+    if idx < 0:
+        fail(P_ASST, "AssistantImporter exact block not found (source changed?)")
+    insert_at = idx + len(EXACT_BLOCK)
     new_btn = (
-        m.group(1) + '\n'
         '                    TextButton(\n'
         '                        onClick = {\n'
         '                            update(createWhaleAssistant())\n'
@@ -112,13 +132,14 @@ else:
         '                        Text("使用蓝色大肥鱼预设")\n'
         '                    }\n'
     )
-    t_asst = t_asst[:m.start()] + new_btn + t_asst[m.end():]
-    # 加 import
-    t_asst = t_asst.replace(
-        "import me.rerere.rikkahub.data.model.Assistant\n",
-        "import me.rerere.rikkahub.data.model.Assistant\n"
-        "import me.rerere.rikkahub.data.model.createWhaleAssistant\n",
-    )
+    t_asst = t_asst[:insert_at] + new_btn + t_asst[insert_at:]
+    if 'import me.rerere.rikkahub.data.model.createWhaleAssistant\n' not in t_asst:
+        t_asst = t_asst.replace(
+            "import me.rerere.rikkahub.data.model.Assistant\n",
+            "import me.rerere.rikkahub.data.model.Assistant\n"
+            "import me.rerere.rikkahub.data.model.createWhaleAssistant\n",
+            1,
+        )
     (ROOT / P_ASST).write_text(t_asst, encoding="utf-8")
     print("batch35: AssistantPage whale preset button added")
 
