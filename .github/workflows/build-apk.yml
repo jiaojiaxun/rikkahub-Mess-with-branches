@@ -42,9 +42,11 @@ jobs:
       # (::error + exit 1) when an anchor has moved. They run in a deterministic order:
       # the named feature scripts first, then patch_batchN.py sorted numerically.
       # Adding scripts/patch_batch11.py needs no workflow change.
+      # On failure the offending script's tail output is surfaced as a check annotation,
+      # because anonymous log download is not available for this repo.
       - name: Apply source patches
         run: |
-          set -euo pipefail
+          set -uo pipefail
           for f in \
             scripts/patch_chat_ui_tools.py \
             scripts/patch_local_tool_page.py \
@@ -54,7 +56,13 @@ jobs:
           do
             if [ -f "$f" ]; then
               echo "== applying $f"
-              python3 "$f"
+              if ! python3 "$f" > .patch_out.log 2>&1; then
+                msg=$(tail -n 15 .patch_out.log | tr '\n' ' ' | head -c 800)
+                echo "::error title=Patch failed: $f::$msg"
+                cat .patch_out.log
+                exit 1
+              fi
+              tail -n 2 .patch_out.log || true
             fi
           done
 
@@ -140,6 +148,7 @@ jobs:
             build.log
             test.log
             stats-test.log
+            .patch_out.log
           if-no-files-found: ignore
 
       - name: Fail when a build step failed
