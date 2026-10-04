@@ -1,24 +1,21 @@
 #!/usr/bin/env python3
-'''batch77v3: 55-4a 子代理审批横幅（ChatList.kt + ChatPage.kt）
+'''batch77v4: 55-4a 子代理审批横幅（ChatList.kt + ChatPage.kt）
 
-#207 死因：displayGroups items anchor count=0
-真实形态：items( 与 items = displayGroups, 分处两行——不能用单行复合判断
-真实形态实测：
-  items(
-      items = displayGroups,
-      key = ...
+#208 死因：ChatPage loadingJob anchor count=0——
+'val loadingJob' 与 'conversationJobs' 同行在 CI 形态不存在（batch70-73 改过该区域）
+ChatList.kt 4 项修改全部通过（patch 日志实证），只挂 ChatPage 计算块锚点。
 
-v3 修复：
-- 先找 items = displayGroups,（精确行），再向上找最近的 items(（精确行）
-- 原 onConversationSystemPromptChange 双签名按序号区分（count 预期为 2）
-- 其余逻辑不变
+v4 修复（只改 ChatPage 部分，ChatList 部分保持 v3 不变——已验证通过）：
+- 弃用 loadingJob 锚点
+- 改为锚 ChatList( 调用行（验证下一行是 innerPadding = innerPadding,）
+- 计算块插在 ChatList( 之前（同一 @Composable 作用域，remember 合法）
 
 五查：
-1. import 清单：ChatList.kt 已有 Card/Icon/Text/Surface/Spacer 等（实读确认）
-2. 同文件冲突：ChatList.kt 被 batch63/64/69 碰过；ChatPage.kt 被 batch70-73 碰过
-3. 作用域：ChatListNormal 的 LazyColumn 内（@Composable 函数体内）
-4. 括号配对：横幅 item 是独立块，自平衡
-5. 函数签名：ChatList + ChatListNormal 加可选参数（零破坏）
+1. import：ChatPage 已有 UIMessagePart（batch70 加的引用链在用）；remember 已有
+2. 同文件冲突：ChatPage 被 batch70-73 碰过——新锚点 ChatList( 调用行未被碰
+3. 作用域：Scaffold content lambda 内（@Composable）✅
+4. 括号配对：计算块自平衡
+5. 函数签名：无改动
 
 Python 三查：无引号字面量 / 无未定义引用 / 无 f-string/walrus/join
 '''
@@ -39,7 +36,7 @@ def concat_lines(lines):
 
 
 def fail(path, message):
-    print('::error file=' + path + '::batch77v3 ' + str(message)[:1400])
+    print('::error file=' + path + '::batch77v4 ' + str(message)[:1400])
     raise SystemExit(1)
 
 
@@ -48,7 +45,7 @@ def indent_of(line):
 
 
 # ============================================================
-# 1. ChatList.kt：加 subAgentPendingCount 参数 + 横幅 item
+# 1. ChatList.kt（与 v3 完全一致，#208 已验证通过）
 # ============================================================
 CL = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatList.kt'
 cl = (ROOT / CL).read_text(encoding='utf-8')
@@ -56,7 +53,6 @@ if MARK not in cl:
     lines = cl.split(NL)
     applied = []
 
-    # 1a. 收集所有签名行索引（预期 2 个：ChatList + ChatListNormal）
     csp_indices = []
     for index, line in enumerate(lines):
         if 'onConversationSystemPromptChange: ((String?) -> Unit)? = null,' in line:
@@ -64,7 +60,6 @@ if MARK not in cl:
     if len(csp_indices) != 2:
         fail(CL, 'onConversationSystemPromptChange anchor count=' + str(len(csp_indices)))
 
-    # 按从后往前顺序插入，避免位移
     nsi = csp_indices[1]
     ind = indent_of(lines[nsi])
     lines.insert(nsi + 1, ind + 'subAgentPendingCount: Int = 0, // ' + MARK)
@@ -74,7 +69,6 @@ if MARK not in cl:
     lines.insert(csp + 1, ind + 'subAgentPendingCount: Int = 0, // ' + MARK)
     applied.append('ChatList-param')
 
-    # 1b. ChatList 调用 ChatListNormal 处传参
     csp_call_indices = []
     for index, line in enumerate(lines):
         if 'onConversationSystemPromptChange = onConversationSystemPromptChange,' in line:
@@ -86,19 +80,11 @@ if MARK not in cl:
     lines.insert(csp_call + 1, ind + 'subAgentPendingCount = subAgentPendingCount, // ' + MARK)
     applied.append('ChatList-call')
 
-    # 1c. LazyColumn 顶部加横幅 item
-    # 真实形态：items( 在前一行，items = displayGroups, 在后一行
-    # 锚点策略：先精确匹配 items = displayGroups, 再向上找 items(
     items_eq_indices = []
     for index, line in enumerate(lines):
         if line.strip() == 'items = displayGroups,':
             items_eq_indices.append(index)
     if len(items_eq_indices) != 1:
-        print('::error file=' + CL + '::batch77v3 dump items candidates:')
-        for idx, line in enumerate(lines):
-            s = line.strip()
-            if 'displayGroups' in s or s == 'items(':
-                print('  >> line ' + str(idx) + ': ' + s[:160])
         fail(CL, 'items = displayGroups anchor count=' + str(len(items_eq_indices)))
     items_eq = items_eq_indices[0]
     items_idx = -1
@@ -107,11 +93,6 @@ if MARK not in cl:
             items_idx = idx
             break
     if items_idx < 0:
-        print('::error file=' + CL + '::batch77v3 dump around items = displayGroups:')
-        for off in range(-4, 4):
-            j = items_eq + off
-            if 0 <= j < len(lines):
-                print('  >> line ' + str(j) + ': ' + lines[j].strip()[:160])
         fail(CL, 'items( anchor not found above items = displayGroups')
     ind = indent_of(lines[items_idx])
     banner_lines = [
@@ -139,7 +120,6 @@ if MARK not in cl:
     lines[items_idx:items_idx] = banner_lines
     applied.append('banner')
 
-    # 自检
     text = concat_lines(lines)
     if text.count('subAgentPendingCount: Int = 0') != 2:
         fail(CL, 'subAgentPendingCount param count=' + str(text.count('subAgentPendingCount: Int = 0')))
@@ -148,12 +128,12 @@ if MARK not in cl:
     if 'item(key = "sub_agent_banner")' not in text:
         fail(CL, 'banner item missing after apply')
     (ROOT / CL).write_text(text, encoding='utf-8')
-    print('batch77v3: ChatList OK (' + ', '.join(applied) + ')')
+    print('batch77v4: ChatList OK (' + ', '.join(applied) + ')')
 else:
-    print('batch77v3: ChatList already applied')
+    print('batch77v4: ChatList already applied')
 
 # ============================================================
-# 2. ChatPage.kt：ChatList 调用处传 subAgentPendingCount
+# 2. ChatPage.kt（v4：弃 loadingJob 锚点，锚 ChatList( 调用行）
 # ============================================================
 CP = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt'
 cp = (ROOT / CP).read_text(encoding='utf-8')
@@ -161,15 +141,20 @@ if MARK not in cp:
     lines = cp.split(NL)
     applied = []
 
-    # 2a. 加 subAgentPendingCount 计算（锚点：val loadingJob 行之后）
-    loading_indices = []
+    # 2a. 锚 ChatList( 调用行（验证下一行是 innerPadding = innerPadding,）
+    chatlist_call_indices = []
     for index, line in enumerate(lines):
-        if 'val loadingJob' in line and 'conversationJobs' in line:
-            loading_indices.append(index)
-    if len(loading_indices) != 1:
-        fail(CP, 'loadingJob anchor count=' + str(len(loading_indices)))
-    li = loading_indices[0]
-    ind = indent_of(lines[li])
+        if line.strip() == 'ChatList(':
+            if index + 1 < len(lines) and 'innerPadding = innerPadding,' in lines[index + 1]:
+                chatlist_call_indices.append(index)
+    if len(chatlist_call_indices) != 1:
+        print('batch77v4: dump ChatList( candidates:')
+        for idx, line in enumerate(lines):
+            if 'ChatList(' in line:
+                print('  >> line ' + str(idx) + ': ' + line.strip()[:160])
+        fail(CP, 'ChatList( call anchor count=' + str(len(chatlist_call_indices)))
+    cli = chatlist_call_indices[0]
+    ind = indent_of(lines[cli])
     calc_lines = [
         ind + '// ' + MARK + ': 计算子代理 Pending 数量',
         ind + 'val subAgentPendingCount = remember(conversation.messageNodes) {',
@@ -179,11 +164,12 @@ if MARK not in cp:
         ind + '        }',
         ind + '    }',
         ind + '}',
+        ind + '',
     ]
-    lines[li + 1:li + 1] = calc_lines
+    lines[cli:cli] = calc_lines
     applied.append('calc')
 
-    # 2b. ChatList 调用处传参（锚点：onConversationSystemPromptChange = { newPrompt ->）
+    # 2b. ChatList 调用处传参（锚点在插入后重新搜索，索引自动正确）
     csp_call_indices = []
     for index, line in enumerate(lines):
         if 'onConversationSystemPromptChange = { newPrompt ->' in line:
@@ -201,8 +187,8 @@ if MARK not in cp:
     if 'subAgentPendingCount = subAgentPendingCount,' not in text:
         fail(CP, 'subAgentPendingCount param missing after apply')
     (ROOT / CP).write_text(text, encoding='utf-8')
-    print('batch77v3: ChatPage OK (' + ', '.join(applied) + ')')
+    print('batch77v4: ChatPage OK (' + ', '.join(applied) + ')')
 else:
-    print('batch77v3: ChatPage already applied')
+    print('batch77v4: ChatPage already applied')
 
-print('batch77v3: OK')
+print('batch77v4: OK')
