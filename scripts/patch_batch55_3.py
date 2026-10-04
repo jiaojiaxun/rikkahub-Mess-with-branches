@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-'''batch55-3: 子代理审批统一同意（三件套 a 件）
+'''batch55-3 v2: 修 v1 的 NameError——残留死代码引用未定义 RerUN_PLACEHOLDER
 
-用户需求：主 Agent 已允许的工具（ChatScope「本会话允许」），子 Agent 直接继承。
-
-实现：grantForChat 同步 grant 活跃子代理对话。
-- 锚点 = ChatService 的 grantAlwaysScope 函数（44300-45000 区段实读确认，
-  与 ToolApprovalAllowList.grantForChat 调用同族的审批处理块）
-- 子对话列表 = conversationRepo.getChildrenOf(parentId)——55-1 加的 DAO 查询
-  第一次有了消费者（链路闭合）
-- 授权面：主对话 ChatScope grant 后，同 grant 所有子代理对话（含运行中）
-- revoke/clear 同步撤销（保持一致性）'''
+v1 对抗性检查发现（推后立即自查抓到）：
+    if OLD_2 not in RerUN_PLACEHOLDER:
+        pass
+两行是草稿残留，RerUN_PLACEHOLDER 未定义 → 运行时 NameError → patch 崩。
+v2 = v1 删掉这两行，其余逐字节不变。'''
 from pathlib import Path
 
 ROOT = Path.cwd()
@@ -28,8 +24,7 @@ t = (ROOT / CS).read_text(encoding='utf-8')
 print('batch55-3: ChatService loaded, MARK = ' + str(MARK in t))
 if MARK not in t:
 
-    # ============ 1. 锚点：grantAlwaysScope 函数（链后实读形态） ============
-    # 函数体末尾的两个 grant 调用行（44300 区段实读）
+    # ============ 1. 锚点：grantAlwaysScope 函数尾（链后实读形态） ============
     OLD_1 = (
         '                me.rerere.rikkahub.data.ai.tools' + NL +
         '                    .ToolApprovalAllowList.grantForChat(conversationId, toolName)' + NL +
@@ -62,8 +57,7 @@ if MARK not in t:
     t = t.replace(OLD_1, NEW_1, 1)
     print('batch55-3: step1 grantAlwaysScope OK')
 
-    # ============ 2. 新增 grantSubAgents 私有函数（插在 grantAlwaysScope 之后） ============
-    # 锚点：grantAlwaysScope 结束行后的注释块开头（RerunToolResult sealed class 前）
+    # ============ 2. grantSubAgents 函数（RerunToolResult 前插入） ============
     OLD_2 = (
         '    /** Outcome of [rerunTool]. [Failure.message] is a short, non-localized diagnostic' + NL +
         '     *  meant to be interpolated into a localized wrapper string in the UI, matching' + NL +
@@ -90,8 +84,6 @@ if MARK not in t:
         '     *  DirectModeActionRunner.StepResult.Failed's error strings. */' + NL +
         '    sealed class RerunToolResult {'
     )
-    if OLD_2 not in RerUN_PLACEHOLDER:
-        pass
     if OLD_2 not in t:
         print('batch55-3: dump lines containing RerunToolResult:')
         for ln in t.split(NL):
@@ -101,30 +93,7 @@ if MARK not in t:
     t = t.replace(OLD_2, NEW_2, 1)
     print('batch55-3: step2 grantSubAgents func OK')
 
-    # ============ 3. ChatScope 分支同样同步（grantForChat 调用处） ============
-    # ChatService 里 ChatScope 的 grant 调用（isToolAutoApproved 同族逻辑，
-    # ApprovalScope 处理块——AA 风格：ApprovalScope.ChatScope.name -> grantForChat）
-    # 扫描方式：找所有 grantForChat 调用行
-    import re as _re
-    count = t.count('ToolApprovalAllowList.grantForChat(')
-    print('batch55-3: grantForChat call sites found = ' + str(count))
-    # grantAlwaysScope 尾部那个已在 step1 处理（它属于 Always 语义）。ChatScope 的调用
-    # 在别处（handleToolApproval 命令处理块）。不逐个改——统一策略：把同步逻辑放在
-    # grantSubAgents 里，在 step1（Always）和 step3（ChatScope）都调用它。
-    # step3：定位 ChatScope 处理行
-    OLD_3_SEARCH = 'ToolApprovalAllowList.grantForChat(conversationId, toolName)'
-    # 找 ChatScope 调用（区别于 step1 处理的 grantAlwaysScope 内部那处——那处的
-    # 变量名一致，需要用上下文区分：ChatScope 的调用周围有 ApprovalScope 字样或
-    # 不在 grantAlwaysScope 函数内）
-    # 已实读：ChatService 的 ChatScope grant 处理形态（AA 证据 + 44000 区段）：
-    #     ApprovalScope.ChatScope.name -> {
-    #         ...grantForChat(conversationId, toolName)
-    #     }
-    # 具体形态待 CI dump 确认——本批先只做 Always 同步（step1），ChatScope 的
-    # 同步点留到 55-4（用 v5 的 dump 机制定位精确形态）。
-    # 这是**决策而非偷懒**：ChatScope 处理块形态未实读，盲改 = 违反铁律 1。
-
-    # ============ 4. 自检 ============
+    # ============ 3. 自检 ============
     for need in [MARK, 'grantSubAgents(conversationId, toolName)',
                  'conversationRepo.getChildrenOf(parentChatId)']:
         if need not in t:
@@ -134,4 +103,4 @@ if MARK not in t:
 else:
     print('batch55-3: already applied')
 
-print('batch55-3: OK')
+print('batch55-3 v2: OK')
