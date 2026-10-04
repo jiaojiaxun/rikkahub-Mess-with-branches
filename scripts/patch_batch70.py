@@ -5,6 +5,8 @@
 
 1. ChatService.sendMessage 增加 quotedMessageId，并写入新 UIMessage
 2. ChatVM.handleMessageSend 增加 quotedMessageId，并透传
+   （ChatVM 部分由 batch72 全权处理——#193 实证精确匹配在 CI 形态下不命中，
+   本脚本跳过 ChatVM 避免 fail-fast 阻塞后续脚本）
 3. ChatPage 增加引用状态、引用条、ChatList 回调和发送接线
 
 五查：import / 同文件冲突 / 作用域 / 括号配对 / 函数签名。
@@ -110,53 +112,10 @@ else:
     print('batch70: ChatService already applied')
 
 # ============================================================
-# 2. ChatVM: handleMessageSend + service passthrough
+# 2. ChatVM: 由 batch72 全权处理（鲁棒搜索版）
+#    batch70 跳过此文件，避免精确匹配 fail-fast 阻塞后续脚本
 # ============================================================
-CV = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt'
-vm = (ROOT / CV).read_text(encoding='utf-8')
-if MARK not in vm:
-    if vm.count('import kotlin.uuid.Uuid') != 1:
-        fail(CV, 'Uuid import count is not one')
-    lines = vm.split(NL)
-
-    signatures = []
-    for index, line in enumerate(lines):
-        if line.strip().startswith('fun handleMessageSend(') and 'UIMessagePart' in line:
-            signatures.append(index)
-    if len(signatures) != 1:
-        fail(CV, 'handleMessageSend signature count=' + str(len(signatures)))
-    signature_index = signatures[0]
-    if 'quotedMessageId' in lines[signature_index]:
-        fail(CV, 'handleMessageSend already contains quotedMessageId without marker')
-    if 'answer: Boolean = true)' not in lines[signature_index]:
-        fail(CV, 'handleMessageSend signature shape changed; dump=' + lines[signature_index].strip()[:220])
-    lines[signature_index] = lines[signature_index].replace(
-        'answer: Boolean = true)',
-        'answer: Boolean = true, quotedMessageId: Uuid? = null)',
-        1,
-    )
-
-    calls = []
-    for index, line in enumerate(lines):
-        if 'chatService.sendMessage(_conversationId, content, answer)' in line:
-            calls.append(index)
-    if len(calls) != 1:
-        fail(CV, 'target sendMessage call count=' + str(len(calls)))
-    lines[calls[0]] = lines[calls[0]].replace(
-        'chatService.sendMessage(_conversationId, content, answer)',
-        'chatService.sendMessage(_conversationId, content, answer, quotedMessageId)',
-        1,
-    )
-
-    result = concat_lines(lines)
-    if 'quotedMessageId: Uuid? = null' not in result:
-        fail(CV, 'ChatVM parameter self-check failed')
-    if 'chatService.sendMessage(_conversationId, content, answer, quotedMessageId)' not in result:
-        fail(CV, 'ChatVM passthrough self-check failed')
-    (ROOT / CV).write_text(result, encoding='utf-8')
-    print('batch70: ChatVM verified and patched')
-else:
-    print('batch70: ChatVM already applied')
+print('batch70: ChatVM deferred to batch72')
 
 # ============================================================
 # 3. ChatPage: state, bar, ChatList callback, send calls
