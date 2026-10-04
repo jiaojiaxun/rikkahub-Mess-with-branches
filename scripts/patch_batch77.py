@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-'''batch77v6: 55-4a 子代理审批横幅（ChatList.kt only）
+'''batch77v7: 55-4a 子代理审批横幅（ChatList.kt only）
 
-#210 死因：UIMessagePart import anchor count=0
-精确行匹配 'import me.rerere.ai.ui.UIMessagePart' 在 CI 形态不存在——
-batch63/64/69 可能改过 imports 区。改用子串匹配。
+#211 死因：UIMessagePart import anchor count=0
+dump 实证：CI 形态 ChatList.kt 的 import 区只有 'import me.rerere.ai.ui.UIMessage'
+（不带 Part）——UIMessagePart 的 import 不存在或被 batch63/64/69 改成了别的形式。
 
-v6 修复（只改 import 锚点策略，其余逻辑保持 v5 不变）：
-- 弃精确行 strip 全等
-- 改子串匹配：line 含 'UIMessagePart' 且 strip 以 'import ' 开头
-- 加 dump 兜底
+v7 修复：锚 'import me.rerere.ai.ui.UIMessage'（精确行 strip 全等，dump 确认存在）
+在它之后插 'import me.rerere.ai.ui.ToolApprovalState'
 
 五查：
-1. import：ToolApprovalState 与 UIMessagePart 同包（me.rerere.ai.ui），实读确认
-2. 同文件冲突：ChatList.kt 被 batch63/64/69 碰过——子串匹配兼容形态变化
+1. import：ToolApprovalState 与 UIMessage 同包（me.rerere.ai.ui）
+2. 同文件冲突：ChatList.kt 被 batch63/64/69 碰过——锚 UIMessage import 稳定
 3. 作用域：ChatListNormal 内（@Composable）
 4. 括号配对：calc + banner 自平衡
 5. 函数签名：可选参数零破坏
@@ -36,7 +34,7 @@ def concat_lines(lines):
 
 
 def fail(path, message):
-    print('::error file=' + path + '::batch77v6 ' + str(message)[:1400])
+    print('::error file=' + path + '::batch77v7 ' + str(message)[:1400])
     raise SystemExit(1)
 
 
@@ -52,21 +50,20 @@ cl = (ROOT / CL).read_text(encoding='utf-8')
 lines = cl.split(NL)
 applied = []
 
-# 1a. 加 ToolApprovalState import（子串匹配 UIMessagePart import 行）
+# 1a. 加 ToolApprovalState import（锚：import me.rerere.ai.ui.UIMessage 精确行）
 if 'ToolApprovalState' not in cl:
-    ui_part_indices = []
+    ui_msg_indices = []
     for index, line in enumerate(lines):
-        s = line.strip()
-        if s.startswith('import ') and 'UIMessagePart' in s:
-            ui_part_indices.append(index)
-    if len(ui_part_indices) != 1:
-        print('batch77v6: dump UIMessagePart candidates:')
+        if line.strip() == 'import me.rerere.ai.ui.UIMessage':
+            ui_msg_indices.append(index)
+    if len(ui_msg_indices) != 1:
+        print('batch77v7: dump UIMessage candidates:')
         for idx, line in enumerate(lines):
             s = line.strip()
-            if 'UIMessage' in s or 'ui.UIMessage' in s:
+            if 'UIMessage' in s and s.startswith('import '):
                 print('  >> line ' + str(idx) + ': ' + s[:160])
-        fail(CL, 'UIMessagePart import anchor count=' + str(len(ui_part_indices)))
-    lines.insert(ui_part_indices[0] + 1, 'import me.rerere.ai.ui.ToolApprovalState')
+        fail(CL, 'UIMessage import anchor count=' + str(len(ui_msg_indices)))
+    lines.insert(ui_msg_indices[0] + 1, 'import me.rerere.ai.ui.ToolApprovalState')
     applied.append('import')
 
 # 1b. 签名行（预期 2 个）
@@ -183,5 +180,5 @@ if 'val subAgentPendingCount = remember(conversation.messageNodes)' not in text:
 if 'item(key = "sub_agent_banner")' not in text:
     fail(CL, 'banner item missing in final')
 (ROOT / CL).write_text(text, encoding='utf-8')
-print('batch77v6: ChatList OK (' + ', '.join(applied) + ')')
-print('batch77v6: OK')
+print('batch77v7: ChatList OK (' + ', '.join(applied) + ')')
+print('batch77v7: OK')
