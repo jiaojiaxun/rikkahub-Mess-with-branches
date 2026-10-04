@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-'''batch55-4b v4: 子代理折叠树（ChatDrawerVM + ConversationList）
+'''batch55-4b v5: 子代理折叠树（ChatDrawerVM + ConversationList）
 
-#216 死因（比锚点更深的语法错误）：
-ConversationList.kt:92 Unresolved reference 'getChildren' on receiver of type '() -> Unit'
-根因：onMoveToFolder: (Conversation) -> Unit = {} 是 ConversationList 的【最后一个参数】
-（后面直接跟 )，无尾逗号）。v3 在其下一行插入 getChildren，新行被解析进 {} lambda 体。
+#217 死因：Unresolved reference 'clickable' on receiver of type 'Modifier'
+（ConversationList.kt:291）——clickable 与 combinedClickable 是不同函数，
+文件只有 combinedClickable import。这正是 v1 草稿对抗性检查列出的问题之一，
+但在重写 v2/v3/v4 时丢了这条修复。
 
-v4 修复（语法边界感知）：
-- 2b：把无逗号行替换为带逗号（= {} → = {},），再插入新参数行
-- 2d：ConversationItem 的 onClick（最后一个参数）同样处理（替换加逗号 + 插入）
-- 锚点改精确行匹配区分两处：= {}（无逗号，ConversationList）vs = {},（有逗号，ConversationItem）
-  ——天然区分，不需要序号
-- ChatDrawer.kt:386 是连带错误（签名没加成），修好 ConversationList 即消失
+v5 = v4 + 一行 import androidx.compose.foundation.clickable
+
+推前完整符号清单核对（铁律 23）——18 个符号全部有 import 来源：
+  已有 12：remember/mutableStateOf/getValue/setValue/HugeIcons/Icon/Modifier/
+           Modifier.size/MaterialTheme/onSurfaceVariant/dp/emptyList
+  v4 加 5：collectAsState/Flow/emptyFlow/ArrowDown01/ArrowRight01
+  v5 加 1：clickable ← 本次修复
 
 五查：
-1. import：ConversationList 加 collectAsState/Flow/emptyFlow/ArrowDown01/ArrowRight01；
-   ChatDrawerVM 加 flow。by 委托需 getValue——已有 ✅
+1. import：见上（完整清单核对完成）
 2. 同文件冲突：锚点均不在 batch45/66/68 碰过的区域
 3. 作用域：ConversationItem @Composable，collectAsState 合法
-4. 括号配对：替换行+插入行，参数列表结构完整（尾逗号合法 Kotlin 1.4+）
+4. 括号配对：参数列表尾逗号（合法 Kotlin 1.4+）
 5. 函数签名：可选参数零破坏
 
 Python 三查：无引号字面量 / 无未定义引用 / 无 f-string/walrus/join
@@ -40,7 +40,7 @@ def concat_lines(lines):
 
 
 def fail(path, msg):
-    print('::error file=' + path + '::batch55-4b-v4 ' + str(msg)[:1400])
+    print('::error file=' + path + '::batch55-4b-v5 ' + str(msg)[:1400])
     raise SystemExit(1)
 
 
@@ -49,7 +49,7 @@ def indent_of(line):
 
 
 # ============================================================
-# 1. ChatDrawerVM.kt：加 getChildrenFlow 方法（与 v3 相同）
+# 1. ChatDrawerVM.kt：加 getChildrenFlow 方法
 # ============================================================
 VM = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatDrawerVM.kt'
 vm_text = (ROOT / VM).read_text(encoding='utf-8')
@@ -88,9 +88,9 @@ if MARK not in vm_text:
     if 'fun getChildrenFlow(parentId: Uuid)' not in text:
         fail(VM, 'getChildrenFlow missing after apply')
     (ROOT / VM).write_text(text, encoding='utf-8')
-    print('batch55-4b-v4: ChatDrawerVM OK (' + ', '.join(applied) + ')')
+    print('batch55-4b-v5: ChatDrawerVM OK (' + ', '.join(applied) + ')')
 else:
-    print('batch55-4b-v4: ChatDrawerVM already applied')
+    print('batch55-4b-v5: ChatDrawerVM already applied')
 
 # ============================================================
 # 2. ConversationList.kt
@@ -101,7 +101,8 @@ if MARK not in cl_text:
     lines = cl_text.split(NL)
     applied = []
 
-    # 2a. 加 import
+    # 2a. 加 import（5 个：collectAsState/Flow/emptyFlow/clickable/ArrowDown01/ArrowRight01）
+    # 2a-1 collectAsState/Flow/emptyFlow（锚：LazyPagingItems import）
     paging_indices = []
     for idx, ln in enumerate(lines):
         if ln.strip() == 'import androidx.paging.compose.LazyPagingItems':
@@ -113,21 +114,44 @@ if MARK not in cl_text:
     lines.insert(paging_indices[0] + 3, 'import kotlinx.coroutines.flow.emptyFlow')
     applied.append('import-x3')
 
+    # 2a-2 clickable（锚：combinedClickable import——插在它之前保持字母序）
+    combined_indices = []
+    for idx, ln in enumerate(lines):
+        if ln.strip() == 'import androidx.compose.foundation.combinedClickable':
+            combined_indices.append(idx)
+    if len(combined_indices) != 1:
+        print('batch55-4b-v5: dump foundation import candidates:')
+        for idx, ln in enumerate(lines):
+            if 'androidx.compose.foundation.' in ln and ln.strip().startswith('import'):
+                print('  >> line ' + str(idx) + ': ' + ln.strip()[:160])
+        fail(CL, 'combinedClickable import anchor count=' + str(len(combined_indices)))
+    lines.insert(combined_indices[0], 'import androidx.compose.foundation.clickable')
+    applied.append('import-clickable')
+
+    # 2a-3 ArrowDown01/ArrowRight01（锚：Folder01 import）
+    folder_import_indices = []
+    for idx, ln in enumerate(lines):
+        if 'import me.rerere.hugeicons.stroke.Folder01' in ln:
+            folder_import_indices.append(idx)
+    if len(folder_import_indices) != 1:
+        fail(CL, 'Folder01 import anchor count=' + str(len(folder_import_indices)))
+    lines.insert(folder_import_indices[0] + 1, 'import me.rerere.hugeicons.stroke.ArrowDown01')
+    lines.insert(folder_import_indices[0] + 2, 'import me.rerere.hugeicons.stroke.ArrowRight01')
+    applied.append('import-Arrow')
+
     # 2b. ConversationList 签名：onMoveToFolder 是最后一个参数（无尾逗号）
-    # 精确行匹配无逗号版本——只命中 ConversationList（ConversationItem 版本有逗号）
     folder_indices = []
     for idx, ln in enumerate(lines):
         if ln.strip() == 'onMoveToFolder: (Conversation) -> Unit = {}':
             folder_indices.append(idx)
     if len(folder_indices) != 1:
-        print('batch55-4b-v4: dump onMoveToFolder candidates:')
+        print('batch55-4b-v5: dump onMoveToFolder candidates:')
         for idx, ln in enumerate(lines):
             if 'onMoveToFolder' in ln:
                 print('  >> line ' + str(idx) + ': ' + ln.strip()[:160])
         fail(CL, 'onMoveToFolder(no-comma) anchor count=' + str(len(folder_indices)))
     fi = folder_indices[0]
     ind = indent_of(lines[fi])
-    # 语法边界感知：先给原行加尾逗号，再插入新参数行
     lines[fi] = ind + 'onMoveToFolder: (Conversation) -> Unit = {},'
     lines.insert(fi + 1, ind + 'getChildren: (kotlin.uuid.Uuid) -> Flow<List<Conversation>> = { emptyFlow() }, // ' + MARK)
     applied.append('ConversationList-param')
@@ -149,8 +173,7 @@ if MARK not in cl_text:
     lines.insert(mi + 1, ind + 'getChildren = getChildren, // ' + MARK)
     applied.append('ConversationItem-call')
 
-    # 2d. ConversationItem 函数签名：onClick 是最后一个参数（无默认值无逗号）
-    # 精确行匹配：'onClick: (Conversation) -> Unit'（不带逗号）只命中签名行
+    # 2d. ConversationItem 签名：onClick 是最后一个参数
     item_fn_indices = []
     for idx, ln in enumerate(lines):
         if 'private fun ConversationItem(' in ln:
@@ -163,19 +186,18 @@ if MARK not in cl_text:
         if lines[idx].strip() == 'onClick: (Conversation) -> Unit':
             click_indices.append(idx)
     if len(click_indices) != 1:
-        print('batch55-4b-v4: dump onClick candidates after ConversationItem:')
+        print('batch55-4b-v5: dump onClick candidates after ConversationItem:')
         for idx in range(ifi, min(ifi+40, len(lines))):
             if 'onClick' in lines[idx]:
                 print('  >> line ' + str(idx) + ': ' + lines[idx].strip()[:160])
         fail(CL, 'ConversationItem onClick anchor count=' + str(len(click_indices)))
     cci = click_indices[0]
     ind = indent_of(lines[cci])
-    # 语法边界感知：onClick 加尾逗号，再插入新参数行
     lines[cci] = ind + 'onClick: (Conversation) -> Unit,'
     lines.insert(cci + 1, ind + 'getChildren: (kotlin.uuid.Uuid) -> Flow<List<Conversation>> = { emptyFlow() }, // ' + MARK)
     applied.append('ConversationItem-param')
 
-    # 2e. ConversationItem 内部加展开逻辑（锚点：val backgroundColor 行之前）
+    # 2e. ConversationItem 内部加展开逻辑
     bg_indices = []
     for idx, ln in enumerate(lines):
         if 'val backgroundColor = if (selected)' in ln and idx > ifi:
@@ -219,23 +241,16 @@ if MARK not in cl_text:
     lines[pi:pi] = arrow_lines
     applied.append('arrow')
 
-    # 2g. 加 ArrowDown01/ArrowRight01 import
-    folder_import_indices = []
-    for idx, ln in enumerate(lines):
-        if 'import me.rerere.hugeicons.stroke.Folder01' in ln:
-            folder_import_indices.append(idx)
-    if len(folder_import_indices) != 1:
-        fail(CL, 'Folder01 import anchor count=' + str(len(folder_import_indices)))
-    lines.insert(folder_import_indices[0] + 1, 'import me.rerere.hugeicons.stroke.ArrowDown01')
-    lines.insert(folder_import_indices[0] + 2, 'import me.rerere.hugeicons.stroke.ArrowRight01')
-    applied.append('import-Arrow')
-
     # 自检
     text = concat_lines(lines)
-    if 'import androidx.compose.runtime.collectAsState' not in text:
-        fail(CL, 'collectAsState import missing in final')
-    if 'import kotlinx.coroutines.flow.Flow' not in text:
-        fail(CL, 'Flow import missing in final')
+    for need in ['import androidx.compose.runtime.collectAsState',
+                 'import kotlinx.coroutines.flow.Flow',
+                 'import kotlinx.coroutines.flow.emptyFlow',
+                 'import androidx.compose.foundation.clickable',
+                 'import me.rerere.hugeicons.stroke.ArrowDown01',
+                 'import me.rerere.hugeicons.stroke.ArrowRight01']:
+        if need not in text:
+            fail(CL, 'import missing in final: ' + need)
     if text.count('getChildren: (kotlin.uuid.Uuid) -> Flow<List<Conversation>> = { emptyFlow() },') != 2:
         fail(CL, 'getChildren param count != 2')
     if 'onMoveToFolder: (Conversation) -> Unit = {},' not in text:
@@ -245,8 +260,8 @@ if MARK not in cl_text:
     if 'HugeIcons.ArrowDown01' not in text:
         fail(CL, 'arrow icon missing in final')
     (ROOT / CL).write_text(text, encoding='utf-8')
-    print('batch55-4b-v4: ConversationList OK (' + ', '.join(applied) + ')')
+    print('batch55-4b-v5: ConversationList OK (' + ', '.join(applied) + ')')
 else:
-    print('batch55-4b-v4: ConversationList already applied')
+    print('batch55-4b-v5: ConversationList already applied')
 
-print('batch55-4b-v4: OK')
+print('batch55-4b-v5: OK')
