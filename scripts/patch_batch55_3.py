@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
-'''batch55-3 v3: 修 #169 死因——单引号串内的裸撇号（SyntaxError line 64）
+'''batch55-3 v4: 修 #170——Repository 缺 getChildrenOf 转发（Unresolved reference）
 
-#169 annotations 实证：
-  SyntaxError: unterminated string literal (line 64)
-  '     *  DirectModeActionRunner.StepResult.Failed's error strings. */' + NL +
-                                                  ^^^ 在这里字符串提前终止
+#170 死因（annotations 五条链）：
+  ChatService.kt:1049  Unresolved reference 'getChildrenOf' on
+                      receiver of type 'ConversationRepository'
+  （1048/1050/1052/1053/1055 均为连带推断失败）
 
-根因：OLD_2 的注释行含 Kotlin 源码里的撇号（Failed's）——我把它写在
-Python 单引号字符串里，'s 前的 ' 闭合了字符串。这是铁律 5 的第五犯：
-单引号串内嵌撇号（前科：#96 f-string / #155 \\d / #160 裸跨行 /
-#164 单引号转义 / #169 裸撇号）。
+根因：55-1 把 getChildrenOf(@Query) 加进了 **ConversationDAO**，55-3 在
+ChatService 调的是 **conversationRepo.getChildrenOf**（Repository 层）——
+Repository 从未有转发方法。fork 惯例：ChatService 只碰 conversationRepo。
 
-v3 修法：撇号用 chr(39)（SQ 变量）拼接，锚点行拆段构造。
-同时把 v2 的「QuickJS 检查环境与 Python 语义不对称」教训入档：
-JS 里写 Python 单引号串做检查 = 检查无效——以后含撇号的锚点一律
-在构造层用 SQ 变量，不依赖检查环境。'''
+v4 = v3 全部内容 + 第三步：ConversationRepository 加转发方法（复用已有的
+conversationEntityToConversation 映射——55-2 已给反映射加 parentChatId）。'''
 from pathlib import Path
 
 ROOT = Path.cwd()
@@ -22,6 +19,7 @@ NL = chr(10)
 Q = chr(34)
 SQ = chr(39)
 MARK = 'rhSubAgentGrant'
+MARK_REPO = 'rhRepoChildren'
 
 
 def fail(path, msg):
@@ -29,12 +27,55 @@ def fail(path, msg):
     raise SystemExit(1)
 
 
+# ============================================================
+# 1. ConversationRepository — getChildrenOf 转发（v4 新增）
+# ============================================================
+CR = 'app/src/main/java/me/rerere/rikkahub/data/repository/ConversationRepository.kt'
+r = (ROOT / CR).read_text(encoding='utf-8')
+print('batch55-3: Repository loaded, MARK_REPO = ' + str(MARK_REPO in r))
+if MARK_REPO not in r:
+    # 锚点：updateConversationFolderId 函数（22:25 勘测实读确认存在）
+    OLD_R = (
+        '    /**' + NL +
+        '     * 单列更新会话的文件夹归属，folderId 为 null 表示移出文件夹（未归类）。' + NL +
+        '     */' + NL +
+        '    suspend fun updateConversationFolderId(conversationId: Uuid, folderId: Uuid?) {'
+    )
+    NEW_R = (
+        '    /** ' + MARK_REPO + ' (batch55-3): 查询某主对话的全部子代理对话。' + NL +
+        '     * 列表视图不需要完整 nodes，与 getConversationsOfAssistant 同模式。 */' + NL +
+        '    suspend fun getChildrenOf(parentId: Uuid): List<Conversation> {' + NL +
+        '        return conversationDAO.getChildrenOf(parentId.toString()).map { entity ->' + NL +
+        '            conversationEntityToConversation(entity, emptyList())' + NL +
+        '        }' + NL +
+        '    }' + NL + NL +
+        '    /**' + NL +
+        '     * 单列更新会话的文件夹归属，folderId 为 null 表示移出文件夹（未归类）。' + NL +
+        '     */' + NL +
+        '    suspend fun updateConversationFolderId(conversationId: Uuid, folderId: Uuid?) {'
+    )
+    if OLD_R not in r:
+        print('batch55-3: dump lines containing updateConversationFolderId:')
+        for ln in r.split(NL):
+            if 'updateConversationFolderId' in ln:
+                print('  >> ' + ln.strip()[:200])
+        fail(CR, 'Repository folderId fn anchor not found')
+    if r.count(OLD_R) != 1:
+        fail(CR, 'Repository folderId fn anchor not unique')
+    r = r.replace(OLD_R, NEW_R, 1)
+    (ROOT / CR).write_text(r, encoding='utf-8')
+    print('batch55-3: Repository getChildrenOf OK')
+else:
+    print('batch55-3: Repository already applied')
+
+# ============================================================
+# 2. ChatService — grantAlwaysScope 同步 + grantSubAgents 函数（v3 原样）
+# ============================================================
 CS = 'app/src/main/java/me/rerere/rikkahub/service/ChatService.kt'
 t = (ROOT / CS).read_text(encoding='utf-8')
 print('batch55-3: ChatService loaded, MARK = ' + str(MARK in t))
 if MARK not in t:
 
-    # ============ 1. grantAlwaysScope 函数尾（链后实读形态） ============
     OLD_1 = (
         '                me.rerere.rikkahub.data.ai.tools' + NL +
         '                    .ToolApprovalAllowList.grantForChat(conversationId, toolName)' + NL +
@@ -67,8 +108,6 @@ if MARK not in t:
     t = t.replace(OLD_1, NEW_1, 1)
     print('batch55-3: step1 grantAlwaysScope OK')
 
-    # ============ 2. grantSubAgents 函数（RerunToolResult 前插入） ============
-    # 注释行含撇号（Failed's）——用 SQ 拼接，锚点拆段构造
     OLD_2 = (
         '    /** Outcome of [rerunTool]. [Failure.message] is a short, non-localized diagnostic' + NL +
         '     *  meant to be interpolated into a localized wrapper string in the UI, matching' + NL +
@@ -103,14 +142,13 @@ if MARK not in t:
     t = t.replace(OLD_2, NEW_2, 1)
     print('batch55-3: step2 grantSubAgents func OK')
 
-    # ============ 3. 自检 ============
     for need in [MARK, 'grantSubAgents(conversationId, toolName)',
                  'conversationRepo.getChildrenOf(parentChatId)']:
         if need not in t:
             fail(CS, 'selfcheck missing: ' + need)
     (ROOT / CS).write_text(t, encoding='utf-8')
-    print('batch55-3: applied (Always-scope sync; ChatScope sync deferred to 55-4)')
+    print('batch55-3: ChatService applied')
 else:
-    print('batch55-3: already applied')
+    print('batch55-3: ChatService already applied')
 
-print('batch55-3 v3: OK')
+print('batch55-3 v4: OK')
