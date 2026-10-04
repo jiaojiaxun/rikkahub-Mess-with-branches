@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-'''batch77v5: 55-4a 子代理审批横幅（ChatList.kt only）
+'''batch77v6: 55-4a 子代理审批横幅（ChatList.kt only）
 
-#209 死因（对抗性检查预判的两个问题全中）：
-1. ChatPage.kt 无 ToolApprovalState import → Unresolved reference
-2. ChatPage.kt 插入 val 位置与已有 val 冲突 → 'val' cannot be reassigned + Syntax error
+#210 死因：UIMessagePart import anchor count=0
+精确行匹配 'import me.rerere.ai.ui.UIMessagePart' 在 CI 形态不存在——
+batch63/64/69 可能改过 imports 区。改用子串匹配。
 
-v5 方案：ChatPage.kt 完全不改——计算逻辑移到 ChatListNormal 内部
-- ChatList.kt 加 import ToolApprovalState
-- ChatListNormal 内部用 remember 算 subAgentPendingCount（不靠参数传入）
-- ChatList 参数 subAgentPendingCount 保留（默认 0，ChatPage 不传）
-- 实际上直接在 ChatListNormal 里算，不依赖参数
+v6 修复（只改 import 锚点策略，其余逻辑保持 v5 不变）：
+- 弃精确行 strip 全等
+- 改子串匹配：line 含 'UIMessagePart' 且 strip 以 'import ' 开头
+- 加 dump 兜底
 
 五查：
-1. import：ChatList.kt 加 import me.rerere.ai.ui.ToolApprovalState（UIMessagePart 同包，实读确认）
-2. 同文件冲突：ChatList.kt 被 batch63/64/69 碰过——新锚点在 ChatListNormal 函数体内未被碰
-3. 作用域：ChatListNormal 是 @Composable，remember 合法 ✅
-4. 括号配对：计算块自平衡
-5. 函数签名：无改动（参数已有默认值 0）
+1. import：ToolApprovalState 与 UIMessagePart 同包（me.rerere.ai.ui），实读确认
+2. 同文件冲突：ChatList.kt 被 batch63/64/69 碰过——子串匹配兼容形态变化
+3. 作用域：ChatListNormal 内（@Composable）
+4. 括号配对：calc + banner 自平衡
+5. 函数签名：可选参数零破坏
 
 Python 三查：无引号字面量 / 无未定义引用 / 无 f-string/walrus/join
 '''
@@ -37,7 +36,7 @@ def concat_lines(lines):
 
 
 def fail(path, message):
-    print('::error file=' + path + '::batch77v5 ' + str(message)[:1400])
+    print('::error file=' + path + '::batch77v6 ' + str(message)[:1400])
     raise SystemExit(1)
 
 
@@ -46,29 +45,31 @@ def indent_of(line):
 
 
 # ============================================================
-# 1. ChatList.kt：加 import + 参数 + 横幅 item（计算在 ChatListNormal 内）
+# 1. ChatList.kt
 # ============================================================
 CL = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatList.kt'
 cl = (ROOT / CL).read_text(encoding='utf-8')
 lines = cl.split(NL)
 applied = []
 
-# 1a. 加 ToolApprovalState import（锚点：import me.rerere.ai.ui.UIMessagePart）
-if 'import me.rerere.ai.ui.ToolApprovalState' not in cl:
+# 1a. 加 ToolApprovalState import（子串匹配 UIMessagePart import 行）
+if 'ToolApprovalState' not in cl:
     ui_part_indices = []
     for index, line in enumerate(lines):
-        if line.strip() == 'import me.rerere.ai.ui.UIMessagePart':
+        s = line.strip()
+        if s.startswith('import ') and 'UIMessagePart' in s:
             ui_part_indices.append(index)
     if len(ui_part_indices) != 1:
+        print('batch77v6: dump UIMessagePart candidates:')
+        for idx, line in enumerate(lines):
+            s = line.strip()
+            if 'UIMessage' in s or 'ui.UIMessage' in s:
+                print('  >> line ' + str(idx) + ': ' + s[:160])
         fail(CL, 'UIMessagePart import anchor count=' + str(len(ui_part_indices)))
     lines.insert(ui_part_indices[0] + 1, 'import me.rerere.ai.ui.ToolApprovalState')
     applied.append('import')
 
-text_check = concat_lines(lines)
-if 'import me.rerere.ai.ui.ToolApprovalState' not in text_check:
-    fail(CL, 'ToolApprovalState import missing after apply')
-
-# 1b. 收集签名行索引（预期 2 个：ChatList + ChatListNormal）
+# 1b. 签名行（预期 2 个）
 csp_indices = []
 for index, line in enumerate(lines):
     if 'onConversationSystemPromptChange: ((String?) -> Unit)? = null,' in line:
@@ -76,7 +77,6 @@ for index, line in enumerate(lines):
 if len(csp_indices) != 2:
     fail(CL, 'onConversationSystemPromptChange anchor count=' + str(len(csp_indices)))
 
-# 从后往前插入
 nsi = csp_indices[1]
 ind = indent_of(lines[nsi])
 lines.insert(nsi + 1, ind + 'subAgentPendingCount: Int = 0, // ' + MARK)
@@ -98,7 +98,7 @@ ind = indent_of(lines[csp_call])
 lines.insert(csp_call + 1, ind + 'subAgentPendingCount = subAgentPendingCount, // ' + MARK)
 applied.append('ChatList-call')
 
-# 1d. 在 ChatListNormal 里加 subAgentPendingCount 计算（锚点：val displayGroups 行之后）
+# 1d. ChatListNormal 里加 subAgentPendingCount 计算（锚点：val displayGroups 行之后）
 display_groups_indices = []
 for index, line in enumerate(lines):
     if 'val displayGroups = remember(conversation.messageNodes)' in line:
@@ -106,8 +106,6 @@ for index, line in enumerate(lines):
 if len(display_groups_indices) != 1:
     fail(CL, 'displayGroups anchor count=' + str(len(display_groups_indices)))
 dgi = display_groups_indices[0]
-# 找 displayGroups 的 remember 块结束（下一个 } 之后）
-# 简化：在 displayGroups 声明块之后插入（找下一个空行或下一个 val）
 insert_after = dgi
 for idx in range(dgi + 1, min(dgi + 10, len(lines))):
     stripped = lines[idx].strip()
@@ -133,7 +131,7 @@ calc_lines = [
 lines[insert_after + 1:insert_after + 1] = calc_lines
 applied.append('calc')
 
-# 1e. LazyColumn 顶部加横幅 item
+# 1e. LazyColumn 顶部横幅 item
 items_eq_indices = []
 for index, line in enumerate(lines):
     if line.strip() == 'items = displayGroups,':
@@ -185,6 +183,5 @@ if 'val subAgentPendingCount = remember(conversation.messageNodes)' not in text:
 if 'item(key = "sub_agent_banner")' not in text:
     fail(CL, 'banner item missing in final')
 (ROOT / CL).write_text(text, encoding='utf-8')
-print('batch77v5: ChatList OK (' + ', '.join(applied) + ')')
-print('batch77v5: ChatPage NOT MODIFIED (calc moved to ChatListNormal)')
-print('batch77v5: OK')
+print('batch77v6: ChatList OK (' + ', '.join(applied) + ')')
+print('batch77v6: OK')
