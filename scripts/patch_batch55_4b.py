@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-'''batch55-4b v3: 子代理折叠树（ChatDrawerVM + ConversationList）
+'''batch55-4b v4: 子代理折叠树（ChatDrawerVM + ConversationList）
 
-#214/#215 死因：onMoveToFolder anchor count=2——
-该参数行在 ConversationList 和 ConversationItem 两个函数签名里都出现。
+#216 死因（比锚点更深的语法错误）：
+ConversationList.kt:92 Unresolved reference 'getChildren' on receiver of type '() -> Unit'
+根因：onMoveToFolder: (Conversation) -> Unit = {} 是 ConversationList 的【最后一个参数】
+（后面直接跟 )，无尾逗号）。v3 在其下一行插入 getChildren，新行被解析进 {} lambda 体。
 
-v3 修复：预期 count=2，取第 1 个（ConversationList 在文件前部）。
-其余逻辑保持 v2 不变。
+v4 修复（语法边界感知）：
+- 2b：把无逗号行替换为带逗号（= {} → = {},），再插入新参数行
+- 2d：ConversationItem 的 onClick（最后一个参数）同样处理（替换加逗号 + 插入）
+- 锚点改精确行匹配区分两处：= {}（无逗号，ConversationList）vs = {},（有逗号，ConversationItem）
+  ——天然区分，不需要序号
+- ChatDrawer.kt:386 是连带错误（签名没加成），修好 ConversationList 即消失
 
 五查：
-1. import：ConversationList 加 collectAsState/Flow/emptyFlow/ArrowDown01/ArrowRight01；ChatDrawerVM 加 flow
-2. 同文件冲突：ConversationList 被 batch45/66/68 碰过——锚点避开被碰区域
+1. import：ConversationList 加 collectAsState/Flow/emptyFlow/ArrowDown01/ArrowRight01；
+   ChatDrawerVM 加 flow。by 委托需 getValue——已有 ✅
+2. 同文件冲突：锚点均不在 batch45/66/68 碰过的区域
 3. 作用域：ConversationItem @Composable，collectAsState 合法
-4. 括号配对：展开逻辑独立块自平衡
+4. 括号配对：替换行+插入行，参数列表结构完整（尾逗号合法 Kotlin 1.4+）
 5. 函数签名：可选参数零破坏
 
 Python 三查：无引号字面量 / 无未定义引用 / 无 f-string/walrus/join
@@ -33,7 +40,7 @@ def concat_lines(lines):
 
 
 def fail(path, msg):
-    print('::error file=' + path + '::batch55-4b-v3 ' + str(msg)[:1400])
+    print('::error file=' + path + '::batch55-4b-v4 ' + str(msg)[:1400])
     raise SystemExit(1)
 
 
@@ -42,7 +49,7 @@ def indent_of(line):
 
 
 # ============================================================
-# 1. ChatDrawerVM.kt：加 getChildrenFlow 方法
+# 1. ChatDrawerVM.kt：加 getChildrenFlow 方法（与 v3 相同）
 # ============================================================
 VM = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatDrawerVM.kt'
 vm_text = (ROOT / VM).read_text(encoding='utf-8')
@@ -50,7 +57,6 @@ if MARK not in vm_text:
     lines = vm_text.split(NL)
     applied = []
 
-    # 1a. 加 flow import（锚点：import kotlinx.coroutines.flow.first）
     first_indices = []
     for idx, ln in enumerate(lines):
         if ln.strip() == 'import kotlinx.coroutines.flow.first':
@@ -60,7 +66,6 @@ if MARK not in vm_text:
     lines.insert(first_indices[0] + 1, 'import kotlinx.coroutines.flow.flow')
     applied.append('import-flow')
 
-    # 1b. 加 getChildrenFlow 方法（锚点：fun saveScrollPosition 行之前）
     save_indices = []
     for idx, ln in enumerate(lines):
         if 'fun saveScrollPosition(index: Int, offset: Int)' in ln:
@@ -83,12 +88,12 @@ if MARK not in vm_text:
     if 'fun getChildrenFlow(parentId: Uuid)' not in text:
         fail(VM, 'getChildrenFlow missing after apply')
     (ROOT / VM).write_text(text, encoding='utf-8')
-    print('batch55-4b-v3: ChatDrawerVM OK (' + ', '.join(applied) + ')')
+    print('batch55-4b-v4: ChatDrawerVM OK (' + ', '.join(applied) + ')')
 else:
-    print('batch55-4b-v3: ChatDrawerVM already applied')
+    print('batch55-4b-v4: ChatDrawerVM already applied')
 
 # ============================================================
-# 2. ConversationList.kt：加 import + 参数 + 展开逻辑
+# 2. ConversationList.kt
 # ============================================================
 CL = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ConversationList.kt'
 cl_text = (ROOT / CL).read_text(encoding='utf-8')
@@ -96,7 +101,7 @@ if MARK not in cl_text:
     lines = cl_text.split(NL)
     applied = []
 
-    # 2a. 加 import（锚点：import androidx.paging.compose.LazyPagingItems）
+    # 2a. 加 import
     paging_indices = []
     for idx, ln in enumerate(lines):
         if ln.strip() == 'import androidx.paging.compose.LazyPagingItems':
@@ -108,28 +113,33 @@ if MARK not in cl_text:
     lines.insert(paging_indices[0] + 3, 'import kotlinx.coroutines.flow.emptyFlow')
     applied.append('import-x3')
 
-    # 2b. ConversationList 签名加 getChildren 参数
-    # 锚点：onMoveToFolder: (Conversation) -> Unit = {} 出现 2 次
-    # 第 1 个 = ConversationList（文件前部），第 2 个 = ConversationItem（文件后部）
+    # 2b. ConversationList 签名：onMoveToFolder 是最后一个参数（无尾逗号）
+    # 精确行匹配无逗号版本——只命中 ConversationList（ConversationItem 版本有逗号）
     folder_indices = []
     for idx, ln in enumerate(lines):
-        if 'onMoveToFolder: (Conversation) -> Unit = {}' in ln:
+        if ln.strip() == 'onMoveToFolder: (Conversation) -> Unit = {}':
             folder_indices.append(idx)
-    if len(folder_indices) != 2:
-        fail(CL, 'onMoveToFolder anchor count=' + str(len(folder_indices)))
-    fi = folder_indices[0]  # 第 1 个 = ConversationList
+    if len(folder_indices) != 1:
+        print('batch55-4b-v4: dump onMoveToFolder candidates:')
+        for idx, ln in enumerate(lines):
+            if 'onMoveToFolder' in ln:
+                print('  >> line ' + str(idx) + ': ' + ln.strip()[:160])
+        fail(CL, 'onMoveToFolder(no-comma) anchor count=' + str(len(folder_indices)))
+    fi = folder_indices[0]
     ind = indent_of(lines[fi])
+    # 语法边界感知：先给原行加尾逗号，再插入新参数行
+    lines[fi] = ind + 'onMoveToFolder: (Conversation) -> Unit = {},'
     lines.insert(fi + 1, ind + 'getChildren: (kotlin.uuid.Uuid) -> Flow<List<Conversation>> = { emptyFlow() }, // ' + MARK)
     applied.append('ConversationList-param')
 
-    # 2c. ConversationItem 调用处传参（锚点：onMoveToFolder = onMoveToFolder, 在 ConversationItem 调用块内）
+    # 2c. ConversationItem 调用处传参
     move_indices = []
     for idx, ln in enumerate(lines):
         if 'onMoveToFolder = onMoveToFolder,' in ln:
             move_indices.append(idx)
     filtered = []
     for idx in move_indices:
-        ctx = '\n'.join(lines[max(0, idx-15):idx+1])
+        ctx = NL.join(lines[max(0, idx-15):idx+1])
         if 'ConversationItem(' in ctx:
             filtered.append(idx)
     if len(filtered) != 1:
@@ -139,7 +149,8 @@ if MARK not in cl_text:
     lines.insert(mi + 1, ind + 'getChildren = getChildren, // ' + MARK)
     applied.append('ConversationItem-call')
 
-    # 2d. ConversationItem 函数加 getChildren 参数（锚点：onClick: (Conversation) -> Unit 行）
+    # 2d. ConversationItem 函数签名：onClick 是最后一个参数（无默认值无逗号）
+    # 精确行匹配：'onClick: (Conversation) -> Unit'（不带逗号）只命中签名行
     item_fn_indices = []
     for idx, ln in enumerate(lines):
         if 'private fun ConversationItem(' in ln:
@@ -149,16 +160,22 @@ if MARK not in cl_text:
     ifi = item_fn_indices[0]
     click_indices = []
     for idx in range(ifi, min(ifi+30, len(lines))):
-        if 'onClick: (Conversation) -> Unit' in lines[idx]:
+        if lines[idx].strip() == 'onClick: (Conversation) -> Unit':
             click_indices.append(idx)
     if len(click_indices) != 1:
+        print('batch55-4b-v4: dump onClick candidates after ConversationItem:')
+        for idx in range(ifi, min(ifi+40, len(lines))):
+            if 'onClick' in lines[idx]:
+                print('  >> line ' + str(idx) + ': ' + lines[idx].strip()[:160])
         fail(CL, 'ConversationItem onClick anchor count=' + str(len(click_indices)))
     cci = click_indices[0]
     ind = indent_of(lines[cci])
+    # 语法边界感知：onClick 加尾逗号，再插入新参数行
+    lines[cci] = ind + 'onClick: (Conversation) -> Unit,'
     lines.insert(cci + 1, ind + 'getChildren: (kotlin.uuid.Uuid) -> Flow<List<Conversation>> = { emptyFlow() }, // ' + MARK)
     applied.append('ConversationItem-param')
 
-    # 2e. ConversationItem 内部加展开逻辑（锚点：val backgroundColor 行之后）
+    # 2e. ConversationItem 内部加展开逻辑（锚点：val backgroundColor 行之前）
     bg_indices = []
     for idx, ln in enumerate(lines):
         if 'val backgroundColor = if (selected)' in ln and idx > ifi:
@@ -178,7 +195,7 @@ if MARK not in cl_text:
     lines[bgi:bgi] = expand_lines
     applied.append('expand-state')
 
-    # 2f. ConversationItem 的 Row 内加展开箭头（锚点：AnimatedVisibility(conversation.isPinned) 行）
+    # 2f. ConversationItem 的 Row 内加展开箭头
     pinned_indices = []
     for idx, ln in enumerate(lines):
         if 'AnimatedVisibility(conversation.isPinned)' in ln and idx > bgi:
@@ -202,7 +219,7 @@ if MARK not in cl_text:
     lines[pi:pi] = arrow_lines
     applied.append('arrow')
 
-    # 2g. 加 ArrowDown01/ArrowRight01 import（锚点：import me.rerere.hugeicons.stroke.Folder01）
+    # 2g. 加 ArrowDown01/ArrowRight01 import
     folder_import_indices = []
     for idx, ln in enumerate(lines):
         if 'import me.rerere.hugeicons.stroke.Folder01' in ln:
@@ -219,17 +236,17 @@ if MARK not in cl_text:
         fail(CL, 'collectAsState import missing in final')
     if 'import kotlinx.coroutines.flow.Flow' not in text:
         fail(CL, 'Flow import missing in final')
-    if 'getChildren: (kotlin.uuid.Uuid) -> Flow<List<Conversation>>' not in text:
-        fail(CL, 'getChildren param missing in final')
+    if text.count('getChildren: (kotlin.uuid.Uuid) -> Flow<List<Conversation>> = { emptyFlow() },') != 2:
+        fail(CL, 'getChildren param count != 2')
+    if 'onMoveToFolder: (Conversation) -> Unit = {},' not in text:
+        fail(CL, 'ConversationList onMoveToFolder comma fix missing')
     if 'val hasChildren = children.isNotEmpty()' not in text:
         fail(CL, 'expand state missing in final')
     if 'HugeIcons.ArrowDown01' not in text:
         fail(CL, 'arrow icon missing in final')
     (ROOT / CL).write_text(text, encoding='utf-8')
-    print('batch55-4b-v3: ConversationList OK (' + ', '.join(applied) + ')')
+    print('batch55-4b-v4: ConversationList OK (' + ', '.join(applied) + ')')
 else:
-    print('batch55-4b-v3: ConversationList already applied')
+    print('batch55-4b-v4: ConversationList already applied')
 
-print('batch55-4b-v3: OK')
-print('batch55-4b-v3: NOTE — ChatDrawer.kt 的 ConversationList 调用处需要传 getChildren 参数')
-print('batch55-4b-v3: NOTE — 见 batch55-4b-fix（patch_batch55_4b_fix.py）')
+print('batch55-4b-v4: OK')
