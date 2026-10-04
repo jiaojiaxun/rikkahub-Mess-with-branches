@@ -1,53 +1,46 @@
 #!/usr/bin/env python3
-'''batch85: Yuihub 移植 B 项——底部动作行改等分四宫格
+'''batch85v2: Yuihub 四宫格动作条 —— 修 #232 注解重复
 
-参考：xiaoyuili/Yuihub v2.5.8 提交 12b2776（侧滑页四宫格动作条）
-目标：jiaojiaxun/rikkahub-Mess-with-branches @ fix/batch1
+#232 验尸（根因唯一，证据充分）：
+  ChatDrawer.kt:863  This annotation is not repeatable.
+  → 919/925/928/930 连带（@Composable 上下文判定失败）
 
-【前置对抗性检查结论（本轮实测，必须记录）】
-1. Yuihub 原脚本（写于 batch74v4 之前）的锚点是裸 Row( 行；但 batch74v4 已在
-   底部 Row 前插入 Surface(shape=RoundedCornerShape(20.dp), color=surfaceContainerLow) { ... }
-   包装 → 若按原锚点替换，会残留 Surface(){ } 空壳 → 语法错。
-   本脚本改为锚「batch74v4 之后」的形态：先找 RoundedCornerShape(20.dp) 标记行，
-   向上找最近的 Surface( 行，再配平扫描其闭合 }，整块替换。
-2. 四宫格四项（图像生成/收藏/统计/设置）语义与 fork 现状的映射：
-   - 图像生成：fork 原藏在 Box{DropdownMenu} 第 2 项 → 提升为顶层格
-   - 统计：fork 原藏在 Box{DropdownMenu} 第 1 项 → 提升为顶层格
-   - 收藏/设置：fork 原本就是独立 DrawerAction → 原位语义
-   - fork 原有的「助手」格（→ Screen.Assistant）：本批删除。
-     ✅ 已实读确认无功能回归：SettingPage 的「通用设置」CardGroup 里有
-        item(onClick = { navController.navigate(Screen.Assistant) }) 同级入口。
-3. Screen.Stats 在 fork 是 data object（无参）→ 必须写 Screen.Stats，不能带 chatId
-   （Yuihub 原实现写 Screen.Stats(chatId=...) 会编译挂——勘误文档 §1 必挂项）。
-4. R.string.stats_page_title 在 fork 存在（ChatDrawer 自己就在用）→ 不硬编码。
+根因：fn_block 第一行是 '@Composable'，而锚点 'private fun DrawerAction(' 的
+上一行本就是 '@Composable' → 插入后两个 @Composable 连写 → 注解不可重复。
 
-【五查】
-1. import：需 ensure `androidx.compose.foundation.background`（ChatDrawer 现无此 import）；
-   其余符号（border/clickable/clip/Surface/Text/Icon/ImageVector/Row/Column/
-   Arrangement/Alignment/size/padding/fillMaxWidth/TextOverflow/HugeIcons/
-   Image02/InLove/ChartColumn/Settings03/Screen/stringResource）均已实读确认存在。
-   ← 行级 strip 全等检查 + 插入后回读断言（铁律 20）
-2. 同文件冲突：ChatDrawer.kt 被 batch74v4 碰过（底部 Surface 包装 + 顶部 border）
-   → 本批锚点全部取「链后形态」，与 batch74v4 注入行精确对齐，不重叠别的脚本
-3. 作用域：@Composable ChatDrawerContent 函数体内；Modifier.weight(1f) 在 Row 内（RowScope）
-4. 括号配对：结构化替换用【配平扫描】（起点 Surface( 行深度归零处为终点），
-   替换后断言全文件括号配平与替换前一致（铁律 19c + 21）
-5. 函数签名：不改任何现有签名；新增 2 个 private @Composable 函数（零破坏）
+v2 修复（新铁律 28）：
+锚点改为【两行组合】'@Composable' + 'private fun DrawerAction('，
+在 @Composable 行【之前】插入整个 fn_block（含其首行 @Composable）。
+这样结果形态为：
+    @Composable            ← 新 DrawerActionBar 的
+    private fun DrawerActionBar(...) { ... }
+    // rhDrawerGridStack
+    @Composable            ← 新 DrawerActionStack 的
+    private fun DrawerActionStack(...) { ... }
+    @Composable            ← 原有的（未动）
+    private fun DrawerAction(
 
-【Python 三查】
-1. 引号一律 chr(34)/chr(39) 构造；2. 无未定义引用；3. 无 f-string/walrus/join；
-4. ind() = len(ln.lstrip())（铁律 26：函数体正确性）
+其余逻辑与 v1 完全一致（配平扫描替换 + 8 符号 sanity + import 回读断言）。
+
+【五查（改点专项）】
+1. import：同 v1（background ensure + 回读断言）
+2. 同文件冲突：锚点改两行组合后唯一性更强，仍与 batch74v4 注入行对齐
+3. 作用域：新函数体在文件顶层（private @Composable），插入位置正确
+4. 括号配对：fn_block 自平衡（Row{ } / Column{ }）；替换仍用配平扫描 + 前后配平断言
+5. 函数签名：不改现有签名；新增 2 个 private @Composable
+
+Python 三查：引号变量构造 / 无未定义 / 无 f-string / ind() = len(ln.lstrip())
 '''
 from pathlib import Path
 ROOT = Path.cwd()
 NL = chr(10)
 Q = chr(34)
 M = 'rhDrawerGrid'
-MARK74 = 'RoundedCornerShape(20.dp)'   # batch74v4 注入的 Surface shape 标记
+MARK74 = 'RoundedCornerShape(20.dp)'
 
 
 def fail(p, m):
-    print('::error file=' + p + '::batch85 ' + str(m)[:1400])
+    print('::error file=' + p + '::batch85v2 ' + str(m)[:1400])
     raise SystemExit(1)
 
 
@@ -60,7 +53,6 @@ def balance(text):
 
 
 def find_block_end(lines, start):
-    '''从 start 行（应含开括号）扫描，返回深度首次归零的行号（-1 表示不配平）。'''
     depth = 0
     seen = False
     for i in range(start, len(lines)):
@@ -79,13 +71,13 @@ CD = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatDrawer.kt'
 t = (ROOT / CD).read_text(encoding='utf-8')
 
 if M in t:
-    print('batch85: already applied')
+    print('batch85v2: already applied')
 else:
     lines = t.split(NL)
     applied = []
     bal_before = balance(t)
 
-    # ---------- 1. ensure import background（行级 strip 全等，铁律 20）----------
+    # ---------- 1. ensure import background ----------
     BG_IMPORT = 'import androidx.compose.foundation.background'
     if not any(ln.strip() == BG_IMPORT for ln in lines):
         hits = [i for i, ln in enumerate(lines) if ln.strip() == 'import androidx.compose.foundation.clickable']
@@ -93,15 +85,15 @@ else:
             fail(CD, 'clickable import anchor count=' + str(len(hits)))
         lines.insert(hits[0], BG_IMPORT)
         if not any(ln.strip() == BG_IMPORT for ln in lines):
-            fail(CD, 'background import insert self-check failed')  # 回读断言（铁律 20）
+            fail(CD, 'background import insert self-check failed')
         applied.append('import-background')
     else:
         applied.append('import-background-exists')
 
-    # ---------- 2. 定位 batch74v4 的 Surface 包装 ----------
+    # ---------- 2. 定位并替换 batch74v4 的 Surface 包装 ----------
     mark_hits = [i for i, ln in enumerate(lines) if MARK74 in ln and 'rhDrawerPolish' in ln]
     if len(mark_hits) != 1:
-        print('batch85: dump rhDrawerPolish markers:')
+        print('batch85v2: dump rhDrawerPolish markers:')
         for i, ln in enumerate(lines):
             if 'rhDrawerPolish' in ln:
                 print('  >> ' + str(i) + ': ' + ln.strip()[:150])
@@ -113,7 +105,7 @@ else:
             surf_start = i
             break
     if surf_start < 0:
-        print('batch85: dump above marker:')
+        print('batch85v2: dump above marker:')
         for i in range(max(0, mi - 8), mi + 1):
             print('  >> ' + str(i) + ' [' + str(len(ind(lines[i]))) + '] ' + lines[i].strip()[:120])
         fail(CD, 'Surface( not found above batch74v4 marker')
@@ -121,20 +113,18 @@ else:
     if surf_end < 0:
         fail(CD, 'batch74v4 Surface block unbalanced from line ' + str(surf_start))
     d = ind(lines[surf_start])
-    print('batch85: replacing lines ' + str(surf_start) + '..' + str(surf_end) + ' (indent=' + str(len(d)) + ')')
+    print('batch85v2: replacing lines ' + str(surf_start) + '..' + str(surf_end))
 
-    # 替换前必须确认区间内含四宫格的四个来源符号（防锚点漂移误删）
     region = NL.join(lines[surf_start:surf_end + 1])
     for need_sym in ['HugeIcons.Image02', 'HugeIcons.ChartColumn', 'HugeIcons.InLove',
                      'HugeIcons.Settings03', 'Screen.ImageGen', 'Screen.Stats',
                      'Screen.Favorite', 'Screen.Setting']:
         if need_sym not in region:
-            print('batch85: dump region for missing symbol ' + need_sym + ':')
+            print('batch85v2: dump region for missing symbol ' + need_sym + ':')
             for i in range(surf_start, surf_end + 1):
                 print('  >> ' + str(i) + ': ' + lines[i].strip()[:120])
             fail(CD, 'sanity: region missing ' + need_sym)
 
-    # ---------- 3. 生成四宫格调用块 ----------
     call_block = [
         d + '// ' + M + ' (batch85): 等分四宫格动作条（对齐 Yuihub v2.5.8）',
         d + 'DrawerActionBar(',
@@ -152,15 +142,18 @@ else:
     lines[surf_start:surf_end + 1] = call_block
     applied.append('grid-call')
 
-    # ---------- 4. 插入两个新 @Composable 函数 ----------
-    fn_hits = [i for i, ln in enumerate(lines) if ln.strip() == 'private fun DrawerAction(']
-    if len(fn_hits) != 1:
-        print('batch85: dump DrawerAction candidates:')
-        for i, ln in enumerate(lines):
-            if 'fun DrawerAction' in ln:
-                print('  >> ' + str(i) + ': ' + ln.strip()[:150])
-        fail(CD, 'private fun DrawerAction( anchor count=' + str(len(fn_hits)))
-    fi = fn_hits[0]
+    # ---------- 3. 插入两个新函数（锚：@Composable + private fun DrawerAction( 两行组合）----------
+    combo = []
+    for i in range(len(lines) - 1):
+        if lines[i].strip() == '@Composable' and lines[i + 1].strip() == 'private fun DrawerAction(':
+            combo.append(i)
+    if len(combo) != 1:
+        print('batch85v2: dump @Composable+DrawerAction combos:')
+        for i in range(len(lines) - 1):
+            if 'fun DrawerAction' in lines[i] or 'fun DrawerAction' in lines[i + 1]:
+                print('  >> ' + str(i) + ': ' + lines[i].strip()[:80] + ' | ' + lines[i + 1].strip()[:80])
+        fail(CD, 'Composable+DrawerAction combo count=' + str(len(combo)))
+    ins = combo[0]   # 在 @Composable 行【之前】插入（铁律 28）
     fn_block = [
         '@Composable',
         'private fun DrawerActionBar(',
@@ -191,7 +184,6 @@ else:
         '    }',
         '}',
         '',
-        '// rhDrawerGridStack: 图标在上、小字在下，靠小字自解释（不再依赖长按 Tooltip）',
         '@Composable',
         'private fun DrawerActionStack(',
         '    icon: ImageVector,',
@@ -220,25 +212,29 @@ else:
         '',
     ]
     for j, b in enumerate(fn_block):
-        lines.insert(fi + j, b)
+        lines.insert(ins + j, b)
     applied.append('two-functions')
 
-    # ---------- 5. 自检 ----------
+    # ---------- 4. 自检 ----------
     t2 = NL.join(lines)
     for need in [M, 'private fun DrawerActionBar(', 'private fun DrawerActionStack(',
-                 'onStats = { navController.navigate(Screen.Stats) }',
-                 'Screen.Stats(']:  # 最后一个必须"不存在"
-        if need == 'Screen.Stats(':
-            if need in t2:
-                fail(CD, 'Screen.Stats with args must NOT exist (data object)')
-            continue
+                 'onStats = { navController.navigate(Screen.Stats) }']:
         if need not in t2:
             fail(CD, 'selfcheck missing: ' + need)
+    if 'Screen.Stats(' in t2:
+        fail(CD, 'Screen.Stats with args must NOT exist (data object)')
     if not any(ln.strip() == BG_IMPORT for ln in lines):
         fail(CD, 'background import missing in final')
+    # 关键断言（铁律 28）：不得出现连续两个 @Composable
+    for i in range(len(lines) - 1):
+        if lines[i].strip() == '@Composable' and lines[i + 1].strip() == '@Composable':
+            print('batch85v2: dump consecutive @Composable at ' + str(i) + ':')
+            for k in range(max(0, i - 2), min(len(lines), i + 4)):
+                print('  >> ' + str(k) + ': ' + lines[k].strip()[:100])
+            fail(CD, 'consecutive @Composable detected (annotation not repeatable)')
     if balance(t2) != bal_before:
         fail(CD, 'bracket balance changed: before=' + str(bal_before) + ' after=' + str(balance(t2)))
     (ROOT / CD).write_text(t2, encoding='utf-8')
-    print('batch85: OK (' + ', '.join(applied) + ')')
+    print('batch85v2: OK (' + ', '.join(applied) + ')')
 
-print('batch85: done')
+print('batch85v2: done')
