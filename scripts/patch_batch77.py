@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-'''batch77: 55-4a 子代理审批横幅（ChatList.kt + ChatPage.kt）
+'''batch77v2: 55-4a 子代理审批横幅（ChatList.kt + ChatPage.kt）
 
-需求：主对话顶部显示「子代理等待审批」横幅，点击跳子代理对话
+#206 死因：onConversationSystemPromptChange anchor count=2——
+该签名行在 ChatList 和 ChatListNormal 两个函数里都出现（我假设唯一是错的）
 
-设计：
-1. ChatListNormal 加 subAgentPendingCount: Int = 0 可选参数
-   LazyColumn 顶部（items 之前）加横幅 item（条件：subAgentPendingCount > 0）
-2. ChatPage 的 ChatList 调用处加 subAgentPendingCount 参数
-   数据源：conversation.subAgentConversations 扫描 Pending tool part
+v2 修复：
+- 签名行出现 2 次是预期（ChatList + ChatListNormal）
+- 用序号区分：csp_indices[0] = ChatList，csp_indices[1] = ChatListNormal
+- 按从后往前顺序插入（先处理第 2 个，再处理第 1 个）避免索引位移
 
 五查：
-1. import 清单：ChatList.kt 已有 Card/Icon/Text/Surface/Spacer 等（实读确认）；
-   ChatPage.kt 无需新 import
-2. 同文件冲突：ChatList.kt 被 batch63/64/69 碰过；ChatPage.kt 被 batch70/71/72/73 碰过
+1. import 清单：ChatList.kt 已有 Card/Icon/Text/Surface/Spacer 等（实读确认）
+2. 同文件冲突：ChatList.kt 被 batch63/64/69 碰过；ChatPage.kt 被 batch70-73 碰过
 3. 作用域：ChatListNormal 的 LazyColumn 内（@Composable 函数体内）
 4. 括号配对：横幅 item 是独立块，自平衡
 5. 函数签名：ChatList + ChatListNormal 加可选参数（零破坏）
@@ -36,7 +35,7 @@ def concat_lines(lines):
 
 
 def fail(path, message):
-    print('::error file=' + path + '::batch77 ' + str(message)[:1400])
+    print('::error file=' + path + '::batch77v2 ' + str(message)[:1400])
     raise SystemExit(1)
 
 
@@ -53,19 +52,27 @@ if MARK not in cl:
     lines = cl.split(NL)
     applied = []
 
-    # 1a. ChatList 签名加参数（锚点：onConversationSystemPromptChange 行）
+    # 1a. 收集所有签名行索引（预期 2 个：ChatList + ChatListNormal）
     csp_indices = []
     for index, line in enumerate(lines):
         if 'onConversationSystemPromptChange: ((String?) -> Unit)? = null,' in line:
             csp_indices.append(index)
-    if len(csp_indices) != 1:
+    if len(csp_indices) != 2:
         fail(CL, 'onConversationSystemPromptChange anchor count=' + str(len(csp_indices)))
+
+    # 1b. ChatListNormal 签名（第 2 个匹配，先处理）
+    nsi = csp_indices[1]
+    ind = indent_of(lines[nsi])
+    lines.insert(nsi + 1, ind + 'subAgentPendingCount: Int = 0, // ' + MARK)
+    applied.append('ChatListNormal-param')
+
+    # 1c. ChatList 签名（第 1 个匹配，后处理）
     csp = csp_indices[0]
     ind = indent_of(lines[csp])
     lines.insert(csp + 1, ind + 'subAgentPendingCount: Int = 0, // ' + MARK)
     applied.append('ChatList-param')
 
-    # 1b. ChatList 调用 ChatListNormal 处传参（锚点：onConversationSystemPromptChange = onConversationSystemPromptChange,）
+    # 1d. ChatList 调用 ChatListNormal 处传参（锚点：onConversationSystemPromptChange = onConversationSystemPromptChange,）
     csp_call_indices = []
     for index, line in enumerate(lines):
         if 'onConversationSystemPromptChange = onConversationSystemPromptChange,' in line:
@@ -77,21 +84,7 @@ if MARK not in cl:
     lines.insert(csp_call + 1, ind + 'subAgentPendingCount = subAgentPendingCount, // ' + MARK)
     applied.append('ChatList-call')
 
-    # 1c. ChatListNormal 签名加参数（锚点：onConversationSystemPromptChange: ((String?) -> Unit)? = null,）
-    # 注意：ChatListNormal 的签名在 ChatList 之后，需要重新定位
-    normal_sig_indices = []
-    for index, line in enumerate(lines):
-        if 'onConversationSystemPromptChange: ((String?) -> Unit)? = null,' in line and index > csp:
-            normal_sig_indices.append(index)
-    if len(normal_sig_indices) != 1:
-        fail(CL, 'ChatListNormal signature anchor count=' + str(len(normal_sig_indices)))
-    nsi = normal_sig_indices[0]
-    ind = indent_of(lines[nsi])
-    lines.insert(nsi + 1, ind + 'subAgentPendingCount: Int = 0, // ' + MARK)
-    applied.append('ChatListNormal-param')
-
-    # 1d. LazyColumn 顶部加横幅 item（锚点：items( displayGroups）行之前）
-    # 找 items( displayGroups 行
+    # 1e. LazyColumn 顶部加横幅 item（锚点：items( displayGroups）行之前）
     items_indices = []
     for index, line in enumerate(lines):
         if 'items(' in line and 'displayGroups' in line:
@@ -128,16 +121,16 @@ if MARK not in cl:
 
     # 自检
     text = concat_lines(lines)
-    if 'subAgentPendingCount: Int = 0' not in text:
-        fail(CL, 'subAgentPendingCount param missing after apply')
+    if text.count('subAgentPendingCount: Int = 0') != 2:
+        fail(CL, 'subAgentPendingCount param count=' + str(text.count('subAgentPendingCount: Int = 0')))
     if 'subAgentPendingCount = subAgentPendingCount,' not in text:
         fail(CL, 'subAgentPendingCount call missing after apply')
     if 'item(key = "sub_agent_banner")' not in text:
         fail(CL, 'banner item missing after apply')
     (ROOT / CL).write_text(text, encoding='utf-8')
-    print('batch77: ChatList OK (' + ', '.join(applied) + ')')
+    print('batch77v2: ChatList OK (' + ', '.join(applied) + ')')
 else:
-    print('batch77: ChatList already applied')
+    print('batch77v2: ChatList already applied')
 
 # ============================================================
 # 2. ChatPage.kt：ChatList 调用处传 subAgentPendingCount
@@ -180,8 +173,6 @@ if MARK not in cp:
         fail(CP, 'ChatPage ChatList call anchor count=' + str(len(csp_call_indices)))
     cpc = csp_call_indices[0]
     ind = indent_of(lines[cpc])
-    # 找到该 lambda 的结束（下一行是 }），在其后插入参数
-    # 简化：在 onConversationSystemPromptChange 行之后插入
     lines.insert(cpc + 1, ind + 'subAgentPendingCount = subAgentPendingCount, // ' + MARK)
     applied.append('param')
 
@@ -192,8 +183,8 @@ if MARK not in cp:
     if 'subAgentPendingCount = subAgentPendingCount,' not in text:
         fail(CP, 'subAgentPendingCount param missing after apply')
     (ROOT / CP).write_text(text, encoding='utf-8')
-    print('batch77: ChatPage OK (' + ', '.join(applied) + ')')
+    print('batch77v2: ChatPage OK (' + ', '.join(applied) + ')')
 else:
-    print('batch77: ChatPage already applied')
+    print('batch77v2: ChatPage already applied')
 
-print('batch77: OK')
+print('batch77v2: OK')
