@@ -79,7 +79,7 @@ if MARK not in service:
             continue
         has_ui_message = False
         for probe in range(max(0, index - 3), index):
-            if lines[probe].strip() == 'UIMessage(':
+            if 'UIMessage(' in lines[probe]:
                 has_ui_message = True
                 break
         if not has_ui_message:
@@ -166,7 +166,6 @@ page = (ROOT / CP).read_text(encoding='utf-8')
 if MARK not in page:
     lines = page.split(NL)
 
-    # Import audit: these symbols are used by the quote bar/state.
     if 'import me.rerere.ai.ui.UIMessage' not in page:
         import_anchor = -1
         for index, line in enumerate(lines):
@@ -181,7 +180,6 @@ if MARK not in page:
     if lines.count('import androidx.compose.foundation.layout.fillMaxWidth') != 1:
         fail(CP, 'fillMaxWidth import count is not one')
 
-    # Shared quote state: exactly one hazeState declaration is the stable local anchor.
     haze_indices = [
         index for index, line in enumerate(lines)
         if line.strip() == 'val hazeState = rememberHazeState()'
@@ -194,7 +192,6 @@ if MARK not in page:
         '    var quotingMessage by remember { mutableStateOf<UIMessage?>(null) } // ' + MARK,
     )
 
-    # ChatList callback: locate the only ordinary ChatList( call and its first argument.
     chatlist_calls = []
     for index, line in enumerate(lines):
         if line.strip() == 'ChatList(':
@@ -214,7 +211,6 @@ if MARK not in page:
         indent_of(lines[inner_padding_index]) + 'onQuote = { quotingMessage = it },',
     )
 
-    # Bottom bar: wrap ChatInput with Column and add a compact quote preview above it.
     bottom_indices = [
         index for index, line in enumerate(lines)
         if line.strip() == 'bottomBar = {'
@@ -260,13 +256,11 @@ if MARK not in page:
     lines[chatinput_index:chatinput_index] = quote_bar
     chatinput_index += len(quote_bar)
 
-    # Locate ChatInput's closing parenthesis with balanced parentheses.
     chatinput_end = paren_end(lines, chatinput_index)
     if chatinput_end < 0:
         fail(CP, 'ChatInput parentheses are unbalanced')
     lines.insert(chatinput_end + 1, column_indent + '}')
 
-    # Send click wiring: each target call must occur exactly once.
     send_calls = [
         index for index, line in enumerate(lines)
         if 'vm.handleMessageSend(inputState.getContents())' in line
