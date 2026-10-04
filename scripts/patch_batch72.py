@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-'''batch72: 修复 batch70 ChatVM 定位——鲁棒搜索 + dump 兜底
+'''batch72: ChatVM handleMessageSend 加 quotedMessageId + 透传
 
-#193 死因：ChatVM.kt 里搜不到 chatService.sendMessage(_conversationId, content, answer)
-但仓库实读确认该行存在——说明某个在链脚本已修改了 ChatVM.kt 的这行。
-不再猜，改用更短的关键片段搜索 + fail 时 dump 所有 sendMessage 相关行。
+#195 dump 实证：CI 形态 ChatVM 有两个 sendMessage 调用：
+  line 101: sendMessage(_conversationId, next, true)   — 队列处理
+  line 231: sendMessage(_conversationId, content, false) — handleMessageSend
+全局搜索命中 2 个 → count != 1 → fail。
 
-同时保持 batch70 的其余逻辑不变（ChatService 已成功、ChatPage 未执行到）。
+修复：从 handleMessageSend 签名行往下找第一个 sendMessage 调用（限定作用域）。
+签名参数插入兼容带/不带尾逗号两种格式。
+
+五查：Uuid import 已确认 / ChatVM 无在链脚本碰（batch70 跳过此文件）/
+作用域从签名行起限定 / rfind(')') 插入零括号改动 / 可选参数兼容。
+Python 三查：NL + 手写 concat / 无 f-string/walrus / 符号全定义。
 '''
 from pathlib import Path
 
@@ -28,9 +34,6 @@ def fail(path, message):
     raise SystemExit(1)
 
 
-# ============================================================
-# ChatVM: handleMessageSend 参数 + 透传（鲁棒版）
-# ============================================================
 CV = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt'
 vm = (ROOT / CV).read_text(encoding='utf-8')
 if MARK not in vm:
@@ -63,35 +66,30 @@ if MARK not in vm:
     else:
         fail(CV, 'answer param format not recognized; dump=' + lines[sig].strip()[:200])
 
-    # 2. 透传：鲁棒搜索 sendMessage 调用
-    calls = []
-    for index, line in enumerate(lines):
-        if 'chatService.sendMessage(' in line and '_conversationId' in line:
-            calls.append(index)
-    if len(calls) != 1:
-        print('batch72: dump all sendMessage lines:')
-        for index, line in enumerate(lines):
-            if 'sendMessage' in line:
-                print('  >> line ' + str(index) + ': ' + line.strip()[:200])
-        fail(CV, 'target sendMessage call count=' + str(len(calls)))
+    # 2. 透传：从 handleMessageSend 签名行往下找第一个 sendMessage 调用
+    target = -1
+    for index in range(sig, min(sig + 20, len(lines))):
+        if 'chatService.sendMessage(' in lines[index]:
+            target = index
+            break
+    if target < 0:
+        print('batch72: dump handleMessageSend area (sig=' + str(sig) + '):')
+        for index in range(max(0, sig - 2), min(sig + 25, len(lines))):
+            print('  >> line ' + str(index) + ': ' + lines[index].strip()[:160])
+        fail(CV, 'sendMessage call not found within handleMessageSend')
 
-    target = calls[0]
     old_line = lines[target]
-    # 在最后一个 ) 前插入 quotedMessageId 参数
     stripped = old_line.rstrip()
     if stripped.endswith(')'):
-        # 单行调用：chatService.sendMessage(_conversationId, content, answer)
-        # 或 chatService.sendMessage(_conversationId, content, answer, ...)
         pos = old_line.rfind(')')
         if pos > 0:
-            # 检查是否已有更多参数
-            before_paren = old_line[:pos].rstrip()
-            if before_paren.endswith(','):
+            before = old_line[:pos].rstrip()
+            if before.endswith(','):
                 lines[target] = old_line[:pos] + ' quotedMessageId' + old_line[pos:]
             else:
                 lines[target] = old_line[:pos] + ', quotedMessageId' + old_line[pos:]
         else:
-            fail(CV, 'no closing paren found in sendMessage call')
+            fail(CV, 'no closing paren in sendMessage call')
     else:
         fail(CV, 'sendMessage call is multi-line; dump=' + old_line.strip()[:200])
 
@@ -99,7 +97,7 @@ if MARK not in vm:
     if 'quotedMessageId' not in result:
         fail(CV, 'quotedMessageId missing after apply')
     (ROOT / CV).write_text(result, encoding='utf-8')
-    print('batch72: ChatVM verified and patched')
+    print('batch72: ChatVM verified and patched (target line=' + str(target) + ')')
 else:
     print('batch72: ChatVM already applied')
 
