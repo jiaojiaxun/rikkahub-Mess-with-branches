@@ -1,25 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch103: TopBar glass blur - match ChatInput style
+'''batch103 v2: fix import anchor - fork ChatPage.kt has no hazeSource import
 
-TopBar currently has containerColor=Color.Transparent with NO blur effect.
-ChatInput uses Modifier.hazeBlur(input=HazeInput.Sources(hazeState)).
-This patch makes TopBar use the same hazeBlur, passing hazeState from
-ChatPageContent (where it is already created via rememberHazeState()).
+v1 failed: anchor 'import dev.chrisbanes.haze.hazeSource' does not exist in
+fork ChatPage.kt. The fork only imports rememberHazeState (for creating
+hazeState); hazeSource is in ChatList.kt instead.
 
-Changes to ChatPage.kt:
-  A. Add 3 imports (HazeState, hazeBlur, HazeInput)
-  B. TopBar signature: add hazeState: HazeState param
-  C. TopAppBar: add modifier=Modifier.hazeBlur(input=HazeInput.Sources(hazeState))
-  D. Call site: pass hazeState=hazeState
-
-Five checks:
-1. import: 3 new (HazeState, HazeInput, hazeBlur) - anchored after existing hazeSource import
-2. conflict: ChatPage.kt touched by batch70 (quotingMessage) - but TopBar func and Scaffold
-topBar slot not in batch70 region
-3. scope: TopBar private func / ChatPageContent Scaffold topBar slot
-4. brackets: comma-separated param additions
-5. signature: TopBar adds param only
+v2: anchor on 'import dev.chrisbanes.haze.rememberHazeState' instead.
 '''
 from pathlib import Path
 import sys
@@ -32,7 +19,7 @@ CP = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt'
 
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch103 ' + str(msg)
+    body = 'batch103v2 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -49,16 +36,16 @@ def ind(ln):
 
 t = (ROOT / CP).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch103: already applied')
+    print('batch103v2: already applied')
 else:
     lines = t.split(NL)
     applied = []
 
-    # A. Add imports after existing hazeSource import
-    IMP_ANCHOR = 'import dev.chrisbanes.haze.hazeSource'
+    # A. Add imports after existing rememberHazeState import
+    IMP_ANCHOR = 'import dev.chrisbanes.haze.rememberHazeState'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == IMP_ANCHOR]
     if len(hits) != 1:
-        fail('hazeSource import anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
+        fail('rememberHazeState import anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
     ii = hits[0]
     d = ind(lines[ii])
     new_imports = [
@@ -105,4 +92,4 @@ else:
             fail('selfcheck missing: ' + need)
 
     (ROOT / CP).write_text(out, encoding='utf-8')
-    print('batch103: OK (' + ', '.join(applied) + ')')
+    print('batch103v2: OK (' + ', '.join(applied) + ')')
