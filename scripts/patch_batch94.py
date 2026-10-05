@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch94: 补 kimi-k2 家族规则(修复 ModelContextLengthResolverTest > commonFamiliesResolve)
+'''batch94 v2: 补 kimi-k2 家族规则(修复 ModelContextLengthResolverTest > commonFamiliesResolve)
+
+v1 (#b94 首次)死因:SyntaxError: unterminated string literal at line 98 ——
+      拼接 'listOf(' + Q + 'kimik2' + Q + '), 262_144) 时漏了闭引号,
+      应作 '... + Q + '), 262_144')'。教训:多处重复拼接同一字符串必出错。
+v2 策略:把规则字符串抽成【单一常量 KIMI2_RULE】,所有检查/查找/计数都引用它,
+      全脚本只做一次引号拼接。
 
 现象:CI 单元测试 :app:testDebugUnitTest 长期失败(annotation,非 job 结论)——
       ModelContextLengthResolverTest.kt commonFamiliesResolve FAILED。
@@ -25,7 +31,8 @@
 4. 括号配对:插入单行,自闭合;断言插入前后括号差值不变
 5. 函数签名:不改任何签名
 
-Python 三查:引号走 Q=chr(34) 构造 / NL 手写 concat / 无 f-string/walrus / 失败显式 exit(1)
+Python 三查:引号走 Q=chr(34) 构造且【单一常量只拼一次】/ NL 手写 concat /
+      无 f-string/walrus / 失败显式 exit(1)
 '''
 from pathlib import Path
 import sys
@@ -36,9 +43,15 @@ Q = chr(34)
 MARK = 'rhKimiK2Fix'
 RS = 'app/src/main/java/me/rerere/rikkahub/data/model/ModelContextLengthResolver.kt'
 
+# ---- 唯一一次引号拼接。此后全脚本只引用 KIMI2_RULE / KIMI2_NEED ----
+KIMI2_RULE = 'ContextRule(listOf(' + Q + 'kimik2' + Q + '), 262_144)'
+KIMI2_NEED = KIMI2_RULE + ', // ' + MARK
+# 通用 kimi 兜底行前缀(参数恰为 "kimi",不会命中 kimik3/kimik26/kimik25/kimik2)
+GENERIC_KIMI_PREFIX = 'ContextRule(listOf(' + Q + 'kimi' + Q + '), '
+
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch94 ' + str(msg)
+    body = 'batch94v2 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -55,51 +68,43 @@ def balance(text):
 
 t = (ROOT / RS).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch94: already applied')
+    print('batch94v2: already applied')
     sys.exit(0)
 
 bal0 = balance(t)
 lines = t.split(NL)
 
-# 锚点:通用 kimi 兜底行(CONTEXT_RULES 内,batch56 把值降为 131_072)。
-# 用 startswith 前缀匹配 "ContextRule(listOf(\"kimi\"), " —— 精确锁定参数恰为 "kimi" 的行,
-# 不会命中 kimik3/kimik26/kimik25/kimik2。
-PREFIX = 'ContextRule(listOf(' + Q + 'kimi' + Q + '), '
-hits = [i for i, ln in enumerate(lines) if ln.strip().startswith(PREFIX)]
+hits = [i for i, ln in enumerate(lines) if ln.strip().startswith(GENERIC_KIMI_PREFIX)]
 if len(hits) != 1:
     fail('kimi fallback rule count=' + str(len(hits)), lines, hits[0] if hits else 0)
 
 i = hits[0]
 d = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
-new_line = d + 'ContextRule(listOf(' + Q + 'kimik2' + Q + '), 262_144), // ' + MARK
 
 # 幂等兜底:紧邻上文若已是 kimik2 规则则跳过
-if any('kimik2' in lines[j] for j in range(max(0, i - 2), i)):
-    print('batch94: kimik2 rule already present above, skip')
+if any(KIMI2_RULE in lines[j] for j in range(max(0, i - 2), i)):
+    print('batch94v2: kimik2 rule already present above, skip')
     sys.exit(0)
 
-lines.insert(i, new_line)
+lines.insert(i, d + KIMI2_NEED)
 
 out = NL.join(lines)
 
-for need in [
-    'ContextRule(listOf(' + Q + 'kimik2' + Q + '), 262_144), // ' + MARK,
-]:
-    if need not in out:
-        fail('selfcheck missing: ' + need)
+if KIMI2_NEED not in out:
+    fail('selfcheck missing: ' + KIMI2_NEED)
 
 # 顺序断言:kimik2 必须出现在通用 kimi 之前(先具体后通用)
-idx_k2 = out.find('listOf(' + Q + 'kimik2' + Q + ')')
-idx_kimi = out.find(PREFIX)
+idx_k2 = out.find(KIMI2_RULE)
+idx_kimi = out.find(GENERIC_KIMI_PREFIX)
 if idx_k2 < 0 or idx_kimi < 0 or idx_k2 > idx_kimi:
     fail('order violated: kimik2 must precede generic kimi')
 
 # 无重复:kimik2 规则仅一条
-if out.count('listOf(' + Q + 'kimik2' + Q + '), 262_144) != 1:
+if out.count(KIMI2_RULE) != 1:
     fail('kimik2 rule count != 1')
 
 if balance(out) != bal0:
     fail('bracket balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
 
 (ROOT / RS).write_text(out, encoding='utf-8')
-print('batch94: OK (kimik2 -> 262144 inserted before generic kimi)')
+print('batch94v2: OK (kimik2 -> 262144 inserted before generic kimi)')
