@@ -1,24 +1,33 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch103 v3: fix call-site anchor - onImportSharedConversation line not found
+'''batch103 v4: fix call-site anchor - fork uses MULTI-LINE lambda format
 
-v2 passed A/B/C (imports/signature/modifier) but failed on D (call site).
-The onImportSharedConversation line anchor does not match (possibly different
-quoting/escaping). v3 anchors on onNewChat = { navigateToChatPage(navController) },
-instead, inserting hazeState = hazeState, after it.
+v1/v2/v3 all failed on D (call site) because the fork formats the TopBar args
+as multi-line lambdas:
+    onNewChat = {
+        navigateToChatPage(navController)
+    },
+    onImportSharedConversation = {
+        sharedConversationImportLauncher.launch(arrayOf("text/*", "application/json"))
+    }
+v3 anchored on the single-line `onNewChat = { navigateToChatPage(navController) },`
+which does not exist in the multi-line form. v4 anchors on the multi-line first
+line `onImportSharedConversation = {` (unique; the signature line is
+`onImportSharedConversation: () -> Unit,` with a colon, so no collision).
+
+A/B/C were already passing in v2/v3.
 '''
 from pathlib import Path
 import sys
 
 ROOT = Path.cwd()
 NL = chr(10)
-Q = chr(34)
 MARK = 'rhTopBarBlur'
 CP = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt'
 
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch103v3 ' + str(msg)
+    body = 'batch103v4 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -35,7 +44,7 @@ def ind(ln):
 
 t = (ROOT / CP).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch103v3: already applied')
+    print('batch103v4: already applied')
 else:
     lines = t.split(NL)
     applied = []
@@ -54,7 +63,7 @@ else:
     ]
     applied.append('imports')
 
-    # B. TopBar signature: add hazeState after onImportSharedConversation
+    # B. TopBar signature: add hazeState after onImportSharedConversation type line
     SIG_ANCHOR = 'onImportSharedConversation: () -> Unit,'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == SIG_ANCHOR]
     if len(hits) != 1:
@@ -74,20 +83,21 @@ else:
     lines.insert(ci, d + 'modifier = Modifier.hazeBlur(input = HazeInput.Sources(hazeState)), // ' + MARK)
     applied.append('modifier')
 
-    # D. Call site: insert hazeState = hazeState, after onNewChat line
-    NEWCHAT_ANCHOR = 'onNewChat = { navigateToChatPage(navController) },'
-    hits = [i for i, ln in enumerate(lines) if ln.strip() == NEWCHAT_ANCHOR]
+    # D. Call site: insert hazeState = hazeState, BEFORE the multi-line
+    #    `onImportSharedConversation = {` first line (unique: signature has a colon)
+    CALL_ANCHOR = 'onImportSharedConversation = {'
+    hits = [i for i, ln in enumerate(lines) if ln.strip() == CALL_ANCHOR]
     if len(hits) != 1:
-        fail('onNewChat anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
+        fail('call site onImportSharedConversation={{ anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
     di = hits[0]
     d = ind(lines[di])
-    lines.insert(di + 1, d + 'hazeState = hazeState, // ' + MARK)
+    lines.insert(di, d + 'hazeState = hazeState, // ' + MARK)
     applied.append('callsite')
 
     out = NL.join(lines)
-    for need in [MARK, 'hazeBlur', 'HazeInput.Sources', 'hazeState: HazeState']:
+    for need in [MARK, 'hazeBlur', 'HazeInput.Sources', 'hazeState: HazeState', 'hazeState = hazeState,']:
         if need not in out:
             fail('selfcheck missing: ' + need)
 
     (ROOT / CP).write_text(out, encoding='utf-8')
-    print('batch103v3: OK (' + ', '.join(applied) + ')')
+    print('batch103v4: OK (' + ', '.join(applied) + ')')
