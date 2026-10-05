@@ -1,47 +1,38 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 '''
-batch86b v6: Yuihub Step4-5 透传链 —— 修 #241 根因(注释感知的逗号检查)
+batch86b v7: Yuihub Step4-5 透传链 —— 修 #242 根因(转发参数名 typo)
 
-=========== #241 验尸(dump 通道生效,拿到确切真值) ===========
-失败: ChatMessage sig prev line missing comma:
-      '    onQuote: (() -> Unit)? = null,, // rhQuoteMenu'
-dump(L136-142):
-      L137 onRerunTool: ...
-      L138 onQuote: (() -> Unit)? = null,, // rhQuoteMenu      <-- 双逗号
-      L139 // rhUserAvatarEdit: ...                            <-- 我的插入
-      L140 onChangeUserAvatar: ((Avatar) -> Unit)? = null,
+=========== #242 验尸(证据链完整) ===========
+报错: ChatList.kt:202/495  No parameter with name 'onEditNickname' found.
+202 = ChatList -> ChatListNormal 转发行
+495 = ChatListNormal -> ChatMessage 转发行
 
-根因:ensure_trailing_comma 判断逗号时看的是【整行】(含 // 注释):
-      s = '    onQuote: (() -> Unit)? = null, // rhQuoteMenu'
-      if s.endswith(','):   -> False(整行以注释结尾,不是逗号!)
-      => 误判"没逗号" -> 在注释前再插一个 ',' -> '= null,, // ...' 双逗号语法错
-      位置断言同病:也只看整行 -> 断言失败(理由错但结果对)
+参数链各层的【正确】参数名:
+  ChatPage   -> ChatList              : onEditUserNickname
+  ChatList   -> ChatListNormal        : onEditUserNickname   <- 我写错了
+  ChatListNormal -> ChatMessage       : onEditUserNickname   <- 我写错了
+  ChatMessage -> ChatMessageUserAvatar: onEditNickname       (叶子层,正确)
 
-=========== v6 修法(注释感知,结构性) ===========
-新增 code_part(line):剥掉 `//` 注释后的 [:-].rstrip()
-所有"逗号/链式行"判断一律基于 code_part,不再看整行:
-  1. ensure_trailing_comma:code_part 已以 ',' 结尾 -> 不补
-  2. 防御:code_part 若以 ',,' 结尾 -> 收敛为 ','
-  3. 位置断言前一行:code_part 须以 ',' 结尾
-  4. 链式续行判断:code_part 以 '.' 开头才算
+我的 CL_FWD_ROWS 硬编码了 'onEditNickname = onEditUserNickname,'
+——把【叶子层】的参数名 onEditNickname 错用于【中间转发层】。
 
-=========== 五查(与前版一致) ===========
-1. import:ChatMessage 锚 data.model.Assistant;ChatList 锚 data.model.Conversation
-2. 同文件冲突:ChatMessage 被 66/68(引入 onQuote)、ChatList 被 69/71/77 碰过
-   -> 全配平定位;本批只加可选参数
-3. 作用域:ChatList 内 ChatMessage( 调用限定在 ChatListNormal 函数体(花括号配平)
-4. 括号配对:插入自闭合行;补逗号不改配平;前后全文配平须相等
-5. 函数签名:全部新增可选参数(默认 null)-> 现有调用点零破坏
+为什么自检没拦住:assert_rows_present 只验证"我写的行存在",而我写的就是那行 typo
+—— 自检验证的是"我写了什么",不是"该写什么"。和 #236 同一类陷阱。
 
-=========== 铁律 ===========
-25(插入前须确认插入点前一行有尾逗号——且必须是【代码部分】有)
-29(配平相等 != 位置正确;须位置断言)
-30(dump 必须塞 ::error message——本轮已验证有效)
-31(失败路径显式 sys.exit(1))
+=========== v7 结构性修法(不是补丁) ===========
+【派生代替硬编码】转发行不再手写,从签名行派生:
+  def fwd_of(decl): 'onChangeUserAvatar: T = null,' -> 'onChangeUserAvatar = onChangeUserAvatar,'
+  CL_FWD_ROWS = ['// ' + MARK] + [fwd_of(r) for r in CL_SIG_ROWS[1:]]
+  => 转发行的左/右参数名与签名行【同一份来源】,物理上不可能再不一致。
 
-=========== Python 三查 ===========
-1. 引号一律变量构造 2. helper 先定义后用;无非法语法 3. 无 f-string/walrus/join
+加一致性断言(铁律 33):
+  对每条转发行 'A = B,' 断言 A == B 且 A in 已声明签名参数名集合。
+  (转发=纯透传时,左右名必须一致;若将来要改名,必须显式走 rename 表,不允许 typo 混进去)
+
+=========== 其余与 v6 完全一致(五查 + Python 三查 + 铁律 25/29/30/31) ===========
+铁律 32:判断行尾符号必须剥 // 注释(用 code_part)
+铁律 33(新增):转发参数名 = 签名参数名 的纯透传,必须从签名行【派生】,禁手写两遍
 '''
 from pathlib import Path
 import sys
@@ -56,6 +47,7 @@ CM_SIG_ROWS = [
     'onChangeUserAvatar: ((Avatar) -> Unit)? = null,',
     'onEditUserNickname: (() -> Unit)? = null,',
 ]
+# ChatMessage -> ChatMessageUserAvatar:叶子层参数名不同(显式 rename),手写但单独校验
 CM_CALL_ROWS = [
     '// ' + MARK,
     'onChangeAvatar = onChangeUserAvatar,',
@@ -66,19 +58,24 @@ CL_SIG_ROWS = [
     'onChangeUserAvatar: ((Avatar) -> Unit)? = null,',
     'onEditUserNickname: (() -> Unit)? = null,',
 ]
-CL_FWD_ROWS = [
-    '// ' + MARK,
-    'onChangeUserAvatar = onChangeUserAvatar,',
-    'onEditNickname = onEditUserNickname,',
-]
 AVATAR_IMP = 'import me.rerere.rikkahub.data.model.Avatar'
+
+
+def param_name_of(decl):
+    '''从声明行提取参数名: 'onChangeUserAvatar: T = null,' -> 'onChangeUserAvatar' '''
+    return decl.strip().split(':', 1)[0].strip()
+
+
+# CL_FWD_ROWS 从 CL_SIG_ROWS 派生(纯透传,左右同名)—— 物理上不可能 typo
+CL_FWD_ROWS = ['// ' + MARK] + [param_name_of(r) + ' = ' + param_name_of(r) + ','
+                                for r in CL_SIG_ROWS[1:]]
 
 
 def fail(path, msg, dump_text=''):
     body = str(msg)[:800]
     if dump_text:
         body = body + ' || DUMP: ' + str(dump_text)[:1500]
-    print('::error file=' + path + '::batch86b v6 ' + body)
+    print('::error file=' + path + '::batch86b v7 ' + body)
     sys.stdout.flush()
     sys.exit(1)
 
@@ -101,7 +98,6 @@ def balance(text):
 
 
 def code_part(line):
-    '''剥掉 // 注释后的代码部分(已 rstrip)。所有逗号/链式判断都用它。'''
     i = line.find('//')
     if i >= 0:
         return line[:i].rstrip()
@@ -131,8 +127,6 @@ def dump_str(lines, lo, hi):
 
 
 def ensure_trailing_comma(lines, prev_idx):
-    '''注释感知:只看代码部分是否以 ',' 结尾;顺带收敛已有的 ',,'
-       返回 (是否补了逗号, 是否收敛了双逗号)'''
     if prev_idx < 0:
         return False, False
     raw = lines[prev_idx]
@@ -164,15 +158,12 @@ def insert_before_close(lines, decl_anchor, rows, path, tag):
         fail(path, tag + ' parens never balance', dump_str(lines, si, si + 40))
     if close <= si:
         fail(path, tag + ' close<=start ' + str(close) + '<=' + str(si))
-
     added, fixed = ensure_trailing_comma(lines, close - 1)
-
     d = ind(lines[si])
     for j, r in enumerate(rows):
         lines.insert(close + j, d + r)
     ins_lo = close
     ins_hi = close + len(rows) - 1
-
     prev_code = code_part(lines[ins_lo - 1])
     if not prev_code.endswith(','):
         fail(path, tag + ' prev code missing comma: ' + repr(prev_code),
@@ -203,6 +194,21 @@ def assert_rows_present(lines, rows, path, tag, expect):
                  dump_str(lines, 0, len(lines)))
 
 
+def check_fwd_consistency(sig_rows, fwd_rows, path, tag):
+    '''铁律 33:纯透传转发行 'A = B,' 须满足 A==B 且 A 在签名声明参数名集合内'''
+    declared = set(param_name_of(r) for r in sig_rows if not r.strip().startswith('//'))
+    for r in fwd_rows:
+        st = r.strip()
+        if st.startswith('//'):
+            continue
+        lhs = st.split('=', 1)[0].strip()
+        rhs = st.split('=', 1)[1].strip().rstrip(',')
+        if lhs != rhs:
+            fail(path, tag + ' pass-through renamed: ' + repr(st))
+        if lhs not in declared:
+            fail(path, tag + ' fwd param not declared: ' + repr(lhs) + ' declared=' + str(sorted(declared)))
+
+
 results = []
 
 # =========================================================================
@@ -211,7 +217,7 @@ results = []
 CM = 'app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessage.kt'
 cm = (ROOT / CM).read_text(encoding='utf-8')
 if MARK in cm:
-    print('batch86b v6: ChatMessage already applied')
+    print('batch86b v7: ChatMessage already applied')
 else:
     lines = cm.split(NL)
     bal0 = balance(cm)
@@ -238,18 +244,16 @@ else:
     t = concat(lines)
     if balance(t) != bal0:
         fail(CM, 'balance changed ' + str(bal0) + '->' + str(balance(t)))
-    if ',, ' in t or ',\n' + NL + ' ' + ',' in t:
-        # 粗检:全文不得出现 ',,'
-        for i, ln in enumerate(lines):
-            if code_part(ln).endswith(',,'):
-                fail(CM, 'double comma at L' + str(i + 1), dump_str(lines, i - 2, i + 3))
+    for i, ln in enumerate(lines):
+        if code_part(ln).endswith(',,'):
+            fail(CM, 'double comma at L' + str(i + 1), dump_str(lines, i - 2, i + 3))
     sig_i = [i for i, ln in enumerate(lines) if ln.strip() == CM_SIG_ROWS[1]][0]
     call_i = [i for i, ln in enumerate(lines) if ln.strip() == CM_CALL_ROWS[1]][0]
     if sig_i > call_i:
         fail(CM, 'param inserted after call site')
     (ROOT / CM).write_text(t, encoding='utf-8')
     results.append('ChatMessage(' + ', '.join(applied) + ')')
-    print('batch86b v6: ChatMessage OK (' + ', '.join(applied) + ')')
+    print('batch86b v7: ChatMessage OK (' + ', '.join(applied) + ')')
 
 # =========================================================================
 # Step5  ChatList.kt
@@ -257,8 +261,11 @@ else:
 CL = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatList.kt'
 cl = (ROOT / CL).read_text(encoding='utf-8')
 if MARK in cl:
-    print('batch86b v6: ChatList already applied')
+    print('batch86b v7: ChatList already applied')
 else:
+    # 铁律 33:转发行必须与签名声明一致(派生已保证,此处再显式校验一次)
+    check_fwd_consistency(CL_SIG_ROWS, CL_FWD_ROWS, CL, 'pre')
+
     lines = cl.split(NL)
     bal0 = balance(cl)
     applied = []
@@ -334,6 +341,6 @@ else:
             fail(CL, 'double comma at L' + str(i + 1), dump_str(lines, i - 2, i + 3))
     (ROOT / CL).write_text(t, encoding='utf-8')
     results.append('ChatList(' + ', '.join(applied) + ')')
-    print('batch86b v6: ChatList OK (' + ', '.join(applied) + ')')
+    print('batch86b v7: ChatList OK (' + ', '.join(applied) + ')')
 
-print('batch86b v6: OK -> ' + ' | '.join(results))
+print('batch86b v7: OK -> ' + ' | '.join(results))
