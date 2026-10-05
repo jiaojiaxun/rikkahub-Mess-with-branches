@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Batch-6 build-time patches: "pure official" backup export.
+"""Batch-6 v2: replace PURE_OFFICIAL with LITE (lite backup, no uploads).
 
-Same convention as the other batches: anchored, idempotent, loud (::error + exit 1).
-1. WebDavSync.prepareBackupFile: PURE_OFFICIAL purifies settings and the converted DB.
-2. ImportExportTab: third export row for PURE_OFFICIAL.
-3. Strings: the old official-compatible row is relabelled (logic unchanged), new strings
-   for the pure row.
+v1 added PURE_OFFICIAL (OfficialPurifier净化). User wants three modes simplified
+to two + a new lite mode. v2 renames PURE_OFFICIAL -> LITE and changes behavior:
+LITE skips uploads/ attachments instead of purifying the DB.
+
+Files touched (same as v1):
+1. WebDavSync.kt: LITE skips uploads dir (not OfficialPurifier).
+2. ImportExportTab.kt: third export row for LITE.
+3. Strings: rename pure -> lite.
 """
 import glob
 import re
@@ -18,7 +21,7 @@ TAB = "app/src/main/java/me/rerere/rikkahub/ui/pages/backup/tabs/ImportExportTab
 
 
 def fail(path, msg):
-    print(f"::error file={path}::batch6 patch failed: {msg}", flush=True)
+    print(f"::error file={path}::batch6v2 patch failed: {msg}", flush=True)
     FAILURES.append(f"{path}: {msg}")
 
 
@@ -43,17 +46,17 @@ def sub_once(pattern, replacement, src):
     pat = re.compile(pattern)
     if len(pat.findall(src)) != 1:
         return None
-    return pat.sub(lambda _m: replacement, src)
+    return pat.sub(lambda _m: replacement, src, count=1)
 
 
+# LITE: skip uploads dir (include uploads only when format == FULL)
 SETTINGS_NEW = """val officialSettings = createOfficialSettingsText().let { text ->
-            // rh-batch6:pure-settings
-            if (format == BackupExportFormat.PURE_OFFICIAL) OfficialPurifier.purifySettings(text) else text
+            // rh-batch6v2:lite-settings (lite = same settings, no uploads in archive)
+            text
         }.toByteArray()"""
 
-DB_NEW = """// rh-batch6:pure-db
-                if (format == BackupExportFormat.PURE_OFFICIAL) officialDb?.let { OfficialPurifier.purifyDatabase(it) }
-                if (full) agentDb = createFullDatabaseSnapshot(dbRoot)"""
+DB_NEW = """// rh-batch6v2:lite-db (lite = full agent DB snapshot, but no uploads/ in archive)
+                if (full || format == BackupExportFormat.LITE) agentDb = createFullDatabaseSnapshot(dbRoot)"""
 
 
 def t_settings(src):
@@ -64,23 +67,23 @@ def t_db(src):
     return sub_once(r"if \(full\) agentDb = createFullDatabaseSnapshot\(dbRoot\)", DB_NEW, src)
 
 
-PURE_ITEM = """item(
+LITE_ITEM = """item(
                     onClick = if (!isExporting && !isRestoring) {
                         {
-                            selectedExportFormat = BackupExportFormat.PURE_OFFICIAL
-                            createDocumentLauncher.launch("rikkahub_pure_official_backup.zip")
+                            selectedExportFormat = BackupExportFormat.LITE
+                            createDocumentLauncher.launch("rikkahub_lite_backup.zip")
                         }
                     } else null,
-                    headlineContent = { Text(stringResource(R.string.backup_page_local_backup_export_pure)) },
+                    headlineContent = { Text("\u8f7b\u91cf\u5907\u4efd\uff08\u4e0d\u542b\u9644\u4ef6\uff09") },
                     supportingContent = {
                         Text(
-                            if (isExporting && selectedExportFormat == BackupExportFormat.PURE_OFFICIAL) {
-                                "正在导出：${progress?.detail.orEmpty()}"
-                            } else stringResource(R.string.backup_page_local_backup_export_pure_desc)
+                            if (isExporting && selectedExportFormat == BackupExportFormat.LITE) {
+                                "\u6b63\u5728\u5bfc\u51fa\uff1a${progress?.detail.orEmpty()}"
+                            } else "\u53ea\u5907\u4efd\u5bf9\u8bdd\u6570\u636e\u548c\u8bbe\u7f6e\uff0c\u4e0d\u542b uploads/ \u9644\u4ef6\uff0c\u4f53\u79ef\u5c0f"
                         )
                     },
                     leadingContent = {
-                        if (isExporting && selectedExportFormat == BackupExportFormat.PURE_OFFICIAL) {
+                        if (isExporting && selectedExportFormat == BackupExportFormat.LITE) {
                             CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
                         } else Icon(HugeIcons.File01, null)
                     },
@@ -96,7 +99,7 @@ def t_tab(src):
     ms = list(pat.finditer(src))
     if len(ms) != 1:
         return None
-    return src[: ms[0].start()] + PURE_ITEM + src[ms[0].start():]
+    return src[: ms[0].start()] + LITE_ITEM + src[ms[0].start():]
 
 
 RENAME = {
@@ -105,18 +108,18 @@ RENAME = {
         "backup_page_local_backup_export_official_desc": "The previous official-compatible export: RikkaHub 2.4.14 can restore it; fork-only fields are kept and ignored by the official app",
     },
     "zh": {
-        "backup_page_local_backup_export_official": "兼容导出（宽松）",
-        "backup_page_local_backup_export_official_desc": "沿用原「官方兼容」逻辑：RikkaHub 2.4.14 可以恢复，二改多出的字段原样带上，由官方版自行忽略",
+        "backup_page_local_backup_export_official": "\u517c\u5bb9\u5bfc\u51fa\uff08\u5bff\u677e\uff09",
+        "backup_page_local_backup_export_official_desc": "\u6cba\u7528\u539f\u300c\u5b98\u65b9\u517c\u5bb9\u300d\u903b\u8f91\uff1aRikkaHub 2.4.14 \u53ef\u4ee5\u6062\u590d\uff0c\u4e8c\u6539\u591a\u51fa\u7684\u5b57\u6bb5\u539f\u6837\u5e26\u4e0a\uff0c\u7531\u5b98\u65b9\u7248\u81ea\u884c\u5ffd\u7565",
     },
 }
 ADD = {
     "en": {
-        "backup_page_local_backup_export_pure": "Pure official export",
-        "backup_page_local_backup_export_pure_desc": "Keeps only the tables, fields, providers and tools RikkaHub 2.4.14 knows; everything fork-only is removed. Best for moving back to the official app",
+        "backup_page_local_backup_export_pure": "Lite backup (no attachments)",
+        "backup_page_local_backup_export_pure_desc": "Backs up conversation data and settings only, without uploads/ attachments. Much smaller than a full backup",
     },
     "zh": {
-        "backup_page_local_backup_export_pure": "纯净官方导出",
-        "backup_page_local_backup_export_pure_desc": "只保留 RikkaHub 2.4.14 认识的表、字段、供应商和工具，二改独有的内容全部删除，适合迁回官方版",
+        "backup_page_local_backup_export_pure": "\u8f7b\u91cf\u5907\u4efd\uff08\u4e0d\u542b\u9644\u4ef6\uff09",
+        "backup_page_local_backup_export_pure_desc": "\u53ea\u5907\u4efd\u5bf9\u8bdd\u6570\u636e\u548c\u8bbe\u7f6e\uff0c\u4e0d\u542b uploads/ \u9644\u4ef6\uff0c\u4f53\u79ef\u5c0f",
     },
 }
 
@@ -157,14 +160,14 @@ def patch_strings():
 
 
 def main():
-    patch(WEBDAV, "rh-batch6:pure-settings", t_settings)
-    patch(WEBDAV, "rh-batch6:pure-db", t_db)
-    patch(TAB, "BackupExportFormat.PURE_OFFICIAL", t_tab)
+    patch(WEBDAV, "rh-batch6v2:lite-settings", t_settings)
+    patch(WEBDAV, "rh-batch6v2:lite-db", t_db)
+    patch(TAB, "BackupExportFormat.LITE", t_tab)
     patch_strings()
     if FAILURES:
-        print("batch6 patch failures:\n  " + "\n  ".join(FAILURES), flush=True)
+        print("batch6v2 patch failures:\n  " + "\n  " + "\n  ".join(FAILURES), flush=True)
         return 1
-    print("batch6 patches applied", flush=True)
+    print("batch6v2 patches applied", flush=True)
     return 0
 
 

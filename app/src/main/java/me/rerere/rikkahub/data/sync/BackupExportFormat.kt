@@ -17,11 +17,10 @@ enum class BackupExportFormat {
     OFFICIAL,
 
     /**
-     * Same pipeline as [OFFICIAL], then everything RikkaHub 2.4.14 does not know is removed
-     * (tables, columns, settings keys, provider / tool / message part types). See
-     * [me.rerere.rikkahub.data.sync.webdav.OfficialPurifier].
+     * Lite backup: database + settings only, no uploads/ attachments. Much smaller than [FULL].
+     * Use when you only need conversation data and want a compact archive.
      */
-    PURE_OFFICIAL,
+    LITE,
 }
 
 /**
@@ -31,7 +30,7 @@ enum class BackupExportFormat {
 fun BackupExportFormat.fileName(timestamp: String): String = when (this) {
     BackupExportFormat.FULL -> "backup_${timestamp}_agent.zip"
     BackupExportFormat.OFFICIAL -> "backup_${timestamp}_official.zip"
-    BackupExportFormat.PURE_OFFICIAL -> "backup_${timestamp}_pure.zip"
+    BackupExportFormat.LITE -> "backup_${timestamp}_lite.zip"
 }
 
 /** Folder inside a FULL archive for data the official app cannot read. */
