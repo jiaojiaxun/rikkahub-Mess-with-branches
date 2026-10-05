@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch104: fix parent_chat_id lost on OFFICIAL/PURE_OFFICIAL backup restore
+'''batch104 v2: fix triple-literal quote bug in parent_chat_id ALTER TABLE
 
-Root cause: OFFICIAL/PURE_OFFICIAL export rebuilds ConversationEntity per
-official v24 schema, dropping fork-only columns. batch89 fixed chat_model_id
-by adding ALTER TABLE in the stamp path. parent_chat_id has the same problem
-but was never patched.
-
-Fix: add ALTER TABLE for parent_chat_id right after the chat_model_id one.
-
-Five checks:
-1. import: zero new
-2. conflict: ImportedDatabaseReconciler.kt was directly pushed (batch89),
-   not patched by any patch_batch*.py - so repo form == CI form
-3. scope: inside reconcileDatabaseFile, between beginTransaction/endTransaction
-4. brackets: inserted block is self-balanced
-5. signature: no change
+v1 compiled with error at ImportedDatabaseReconciler.kt L218:
+  "Literals must be surrounded by whitespace"
+  "Unresolved reference 'ConversationEntity' on receiver of type 'String'"
+Root cause: v1 wrote Q + 'ALTER TABLE ' + Q + '`ConversationEntity`' + Q + ' ADD COLUMN...'
+which produces THREE separate string literals. Fix: one single literal.
 '''
 from pathlib import Path
 import sys
@@ -27,14 +18,8 @@ MARK = 'rhParentChatId'
 IDR = 'app/src/main/java/me/rerere/rikkahub/data/db/ImportedDatabaseReconciler.kt'
 
 
-def fail(msg, lines=None, around=-1):
-    body = 'batch104 ' + str(msg)
-    if lines is not None and 0 <= around < len(lines):
-        lo = max(0, around - 3)
-        hi = min(len(lines), around + 4)
-        ctx = ' || '.join('L' + str(i + 1) + ':' + lines[i].strip()[:90] for i in range(lo, hi))
-        body = body + ' || ctx: ' + ctx
-    print('::error file=' + IDR + '::' + body[:1500])
+def fail(msg):
+    print('::error file=' + IDR + '::batch104v2 ' + str(msg)[:1200])
     sys.stdout.flush()
     sys.exit(1)
 
@@ -45,19 +30,16 @@ def ind(ln):
 
 t = (ROOT / IDR).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch104: already applied')
+    print('batch104v2: already applied')
 else:
     lines = t.split(NL)
 
-    # Anchor: the chat_model_id ALTER TABLE block's closing brace
-    # Find the if (!hasColumn(...chat_model_id...)) { block and its closing }
     ANCHOR = 'if (!hasColumn(db, ' + Q + 'ConversationEntity' + Q + ', ' + Q + 'chat_model_id' + Q + ')) {'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == ANCHOR]
     if len(hits) != 1:
-        fail('chat_model_id hasColumn anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
+        fail('chat_model_id anchor count=' + str(len(hits)))
     start = hits[0]
 
-    # Find matching closing brace
     depth = 0
     end = -1
     for i in range(start, len(lines)):
@@ -70,22 +52,23 @@ else:
             end = i
             break
     if end < 0:
-        fail('chat_model_id block end not found', lines, start)
+        fail('block end not found')
 
     d = ind(lines[start])
+    # single string literal for the SQL
+    SQL = Q + 'ALTER TABLE `ConversationEntity` ADD COLUMN `parent_chat_id` TEXT' + Q
     insert_block = [
         d + 'if (!hasColumn(db, ' + Q + 'ConversationEntity' + Q + ', ' + Q + 'parent_chat_id' + Q + ')) {',
-        d + '    db.execSQL(',
-        d + '        ' + Q + 'ALTER TABLE ' + Q + '`ConversationEntity`' + Q + ' ADD COLUMN `parent_chat_id` TEXT' + Q,
-        d + '    )',
+        d + '    db.execSQL(' + SQL + ')',
         d + '} // ' + MARK,
     ]
     lines[end + 1:end + 1] = insert_block
 
     out = NL.join(lines)
-    for need in [MARK, 'parent_chat_id']:
-        if need not in out:
-            fail('selfcheck missing: ' + need)
+    if MARK not in out or 'parent_chat_id' not in out:
+        fail('selfcheck missing')
+    if out.count(SQL) != 1:
+        fail('SQL literal count != 1')
 
     (ROOT / IDR).write_text(out, encoding='utf-8')
-    print('batch104: OK (parent_chat_id ALTER TABLE added)')
+    print('batch104v2: OK (single-literal SQL)')
