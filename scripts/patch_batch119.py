@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch119: hide 'import shared conversation' button when chat is not fresh
+'''batch119 v2: hide import button - correct "fresh conversation" definition
 
-User request: when a conversation already has content, the top-bar
-'import shared conversation' (FileImport) button should auto-hide.
+v1 used `conversation.messageNodes.isEmpty()`, which is WRONG: an assistant's
+preset opening messages (presetMessages) create messageNodes too, so a brand-
+new conversation with a preset opener would be misjudged as "has content".
 
-Location: ChatPage.kt TopBar(), actions block. The import button + its
-DropdownMenu are wrapped in a `Box`. We wrap that Box in
-`if (conversation.messageNodes.isEmpty()) { ... }`.
+User clarified: fresh = no USER-sent messages (preset assistant openings don't
+count as content). So the correct check is: hide when there exists at least one
+message with role == USER.
+
+v2: `conversation.messageNodes.none { node -> node.messages.any { it.role ==
+me.rerere.ai.core.MessageRole.USER } }` gates the button (show only when fresh).
 
 Five checks:
-1. import: zero new (Box/if already available)
-2. conflict: ChatPage.kt touched by batch48/70 etc; this anchor is the
-   TopBar actions Box, distinct from those regions
+1. import: uses fully-qualified me.rerere.ai.core.MessageRole (no new import
+   needed; avoids uncertain import state)
+2. conflict: same TopBar anchor as v1; MARK replaced
 3. scope: inside TopAppBar actions lambda
 4. brackets: wrapped block self-balanced
 5. signature: unchanged
@@ -27,7 +31,7 @@ CP = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt'
 
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch119 ' + str(msg)
+    body = 'batch119v2 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -48,24 +52,19 @@ def balance(text):
 
 t = (ROOT / CP).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch119: already applied')
+    print('batch119v2: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
 
-    # Anchor: the share-menu var declaration inside actions {}
+    # Anchor: showShareMenu var inside actions {}
     ANCHOR = 'var showShareMenu by remember { mutableStateOf(false) }'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == ANCHOR]
     if len(hits) != 1:
         fail('showShareMenu anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
     vi = hits[0]
-    d = ind(lines[vi])
 
-    # Insert an `if (conversation.messageNodes.isEmpty()) {` before this line,
-    # and close it after the share Box block ends.
-    # Find the Box that wraps the import button + DropdownMenu:
-    # it starts at the 'Box {' right after this var, and ends before the next
-    # 'IconButton(' (the menu toggle).
+    # find the wrapping Box after the var
     box_idx = -1
     for j in range(vi + 1, min(vi + 5, len(lines))):
         if lines[j].strip() == 'Box {':
@@ -73,7 +72,7 @@ else:
             break
     if box_idx < 0:
         fail('share Box not found after showShareMenu', lines, vi)
-    # find matching close of that Box
+    # find matching close of that Box via brace depth
     depth = 0
     box_close = -1
     for j in range(box_idx, len(lines)):
@@ -88,17 +87,19 @@ else:
     if box_close < 0:
         fail('share Box close not found', lines, box_idx)
 
-    # wrap: insert if-open before box_idx, if-close after box_close
-    lines.insert(box_idx, ind(lines[box_idx]) + '// ' + MARK + ': hide import button when not a fresh chat')
-    lines.insert(box_idx + 1, ind(lines[box_idx]) + 'if (conversation.messageNodes.isEmpty()) {')
-    lines.insert(box_close + 2, ind(lines[box_idx]) + '}')
+    di = ind(lines[box_idx])
+    # v2: correct fresh-check -> no USER messages
+    lines.insert(box_idx, di + '// ' + MARK + ': hide import button when conversation already has user messages')
+    lines.insert(box_idx + 1, di + 'val rhHasUserMsg = conversation.messageNodes.any { n -> n.messages.any { it.role == me.rerere.ai.core.MessageRole.USER } }')
+    lines.insert(box_idx + 2, di + 'if (!rhHasUserMsg) {')
+    lines.insert(box_close + 3, di + '}')
 
     out = NL.join(lines)
-    for need in [MARK, 'conversation.messageNodes.isEmpty()']:
+    for need in [MARK, 'rhHasUserMsg', 'MessageRole.USER']:
         if need not in out:
             fail('selfcheck missing: ' + need)
     if balance(out) != bal0:
         fail('balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
 
     (ROOT / CP).write_text(out, encoding='utf-8')
-    print('batch119: OK')
+    print('batch119v2: OK')
