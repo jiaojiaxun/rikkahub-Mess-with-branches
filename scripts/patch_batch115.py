@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch115: task B - cron job dialog beautification
+'''batch115 v2: cron dialog beautification - fix anchor
 
-The create/edit dialog (batch111) is plain. This adds:
-  - cron expression quick-fill chips (common presets: daily 9am, hourly, etc.)
-  - clearer visual grouping (label above each field)
-  - enabled toggle with icon
+v1 failed: searched for '),' within 15 lines of 'cronExpr = it },' but the
+cron field's supportingText is a multi-line lambda that extends beyond that.
 
-Five checks:
-1. import: add TextButton + Surface (chip-like); zero risky
-2. conflict: SettingScheduledJobsPage.kt touched by batch111 only; anchors on
-   batch111's inserted dialog block
-3. scope: inside the dialog's Column
-4. brackets: self-balanced
-5. signature: unchanged
+v2: anchor on the supportingText's closing '},' line instead, then insert
+after it. The supportingText block ends with '},' (the lambda close + field
+comma), which is a stable anchor.
 '''
 from pathlib import Path
 import sys
@@ -25,7 +19,7 @@ SP = 'app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingScheduledJobs
 
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch115 ' + str(msg)
+    body = 'batch115v2 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -46,7 +40,7 @@ def balance(text):
 
 t = (ROOT / SP).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch115: already applied')
+    print('batch115v2: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
@@ -68,24 +62,54 @@ else:
         lines.insert(last_imp + 1 + j, imp + ' // ' + MARK)
     applied.append('imports+' + str(len(missing)))
 
-    # 2. add cron preset chips inside the dialog, after the cron field
-    #    anchor: the cron OutlinedTextField's supportingText block end
+    # 2. add cron preset chips after the cron field's supportingText block
+    #    Anchor: supportingText = { (inside the cron OutlinedTextField)
+    #    Then find its closing '},' and insert after it.
     CRON_FIELD = 'onValueChange = { cronExpr = it },'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == CRON_FIELD]
     if len(hits) != 1:
         fail('cronExpr anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
     ci = hits[0]
-    d = ind(lines[ci])
-    # insert after the cron field's closing ), (which is `),` after supportingText)
-    # find the next `),` line after the cron field
-    end_idx = -1
-    for j in range(ci + 1, min(ci + 15, len(lines))):
-        if lines[j].strip() == '),':
-            end_idx = j
+    # find supportingText = { after the cron field
+    st_idx = -1
+    for j in range(ci + 1, min(ci + 10, len(lines))):
+        if lines[j].strip() == 'supportingText = {':
+            st_idx = j
             break
-    if end_idx < 0:
-        fail('cron field close not found', lines, ci)
-    d = ind(lines[end_idx])
+    if st_idx < 0:
+        fail('supportingText not found after cronExpr', lines, ci)
+    # find the closing '},' of the supportingText block
+    # scan forward, tracking brace depth
+    depth = 0
+    st_close = -1
+    for j in range(st_idx, len(lines)):
+        for ch in lines[j]:
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+        if depth <= 0 and j > st_idx:
+            st_close = j
+            break
+    if st_close < 0:
+        fail('supportingText close not found', lines, st_idx)
+    # st_close is the '}' line; the next line should be ')' or '),'
+    # find the '),' that closes the OutlinedTextField
+    field_close = -1
+    for j in range(st_close, min(st_close + 3, len(lines))):
+        if lines[j].strip() == '),':
+            field_close = j
+            break
+    if field_close < 0:
+        # fallback: st_close itself might be '},' (supportingText block close)
+        # then the next line is the field close
+        for j in range(st_close, min(st_close + 5, len(lines))):
+            if lines[j].strip().startswith('),'):
+                field_close = j
+                break
+    if field_close < 0:
+        fail('cron field close not found', lines, st_close)
+    d = ind(lines[field_close])
     chips = [
         d + '',
         d + '// ' + MARK + ': cron preset chips',
@@ -106,7 +130,7 @@ else:
         d + '    }',
         d + '}',
     ]
-    lines[end_idx + 1:end_idx + 1] = chips
+    lines[field_close + 1:field_close + 1] = chips
     applied.append('chips')
 
     out = NL.join(lines)
@@ -117,4 +141,4 @@ else:
         fail('balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
 
     (ROOT / SP).write_text(out, encoding='utf-8')
-    print('batch115: OK (' + ', '.join(applied) + ')')
+    print('batch115v2: OK (' + ', '.join(applied) + ')')
