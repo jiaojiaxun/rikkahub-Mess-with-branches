@@ -1,30 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch112 v4: stream output toggle - one-shot, all anchors on repo state
+'''batch112 v5: fix Python SyntaxError in v4 (missing comma in list literal)
 
-v1/v2/v3 all failed. Root causes accumulated:
-- v1: params injected into wrong function via shared anchor
-- v2: only ReasoningPicker changed, ReasoningButton (the call target) missed
-- v3: call-site insert missed a comma on `onUpdateReasoningLevel = onUpdateReasoningLevel`
-      (original line has NO trailing comma), so new args parsed as lambda body;
-      v3 also dropped v2's ChatInput.kt change when overwriting the script.
+v4 died at import: L133
+    d + 'streamOutput = streamOutput,'
+    d + 'onUpdateStreamOutput = onUpdateStreamOutput,',
+first line missing trailing comma inside a list literal -> SyntaxError.
 
-v4 does everything in ONE script, all anchors based on the RAW repo state
-(ReasoningPicker.kt has no rhStreamToggle marks; ChatInput.kt has none):
-
-ReasoningPicker.kt:
-  A. import Switch
-  B. ReasoningButton signature: +2 params (scan to end of param list)
-  C. ReasoningPicker signature: +2 params (scan to end of param list)
-  D. ReasoningButton's ReasoningPicker call: replace the comma-less
-     `onUpdateReasoningLevel = onUpdateReasoningLevel` line with
-     `... = ...,` + 2 new arg lines
-  E. Switch row after Slider
-ChatInput.kt:
-  F. pass streamOutput + onUpdateStreamOutput to ReasoningButton
-
-Five checks + Python three checks (Q/NL vars, single-literal strings,
-helper defined first, explicit exit(1)).
+v5 = v4 with the comma added. Everything else unchanged.
 '''
 from pathlib import Path
 import sys
@@ -37,7 +20,7 @@ CI = 'app/src/main/java/me/rerere/rikkahub/ui/components/ai/ChatInput.kt'
 
 
 def fail(msg, lines=None, around=-1, path=RP):
-    body = 'batch112v4 ' + str(msg)
+    body = 'batch112v5 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -57,8 +40,6 @@ def balance(text):
 
 
 def param_list_end(lines, start):
-    '''Given the index of a `fun Foo(` line, return the index of the line
-    containing the matching closing paren (depth returns to 0).'''
     depth = 0
     for i in range(start, len(lines)):
         for ch in lines[i]:
@@ -76,13 +57,13 @@ def param_list_end(lines, start):
 # ============================================================
 t = (ROOT / RP).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch112v4 RP: already applied')
+    print('batch112v5 RP: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
     applied = []
 
-    # A. import Switch after SliderDefaults
+    # A. import Switch
     IMP = 'import androidx.compose.material3.SliderDefaults'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == IMP]
     if len(hits) != 1:
@@ -91,7 +72,7 @@ else:
     lines.insert(hits[0] + 1, d + 'import androidx.compose.material3.Switch // ' + MARK)
     applied.append('import')
 
-    # B. ReasoningButton signature: add params
+    # B. ReasoningButton signature
     RB = 'fun ReasoningButton('
     hits = [i for i, ln in enumerate(lines) if ln.strip() == RB]
     if len(hits) != 1:
@@ -105,7 +86,7 @@ else:
     lines.insert(rbe + 1, d + '    onUpdateStreamOutput: (Boolean) -> Unit = {}, // ' + MARK)
     applied.append('btn-sig')
 
-    # C. ReasoningPicker signature: add params (re-find after B shifted lines)
+    # C. ReasoningPicker signature
     RPf = 'fun ReasoningPicker('
     hits = [i for i, ln in enumerate(lines) if ln.strip() == RPf]
     if len(hits) != 1:
@@ -119,9 +100,7 @@ else:
     lines.insert(rpe + 1, d + '    onUpdateStreamOutput: (Boolean) -> Unit = {}, // ' + MARK)
     applied.append('picker-sig')
 
-    # D. ReasoningButton's ReasoningPicker call: comma fix
-    #    Original line (no trailing comma):
-    #        onUpdateReasoningLevel = onUpdateReasoningLevel
+    # D. ReasoningButton's ReasoningPicker call (comma fix)  <-- v4 bug here
     CALL = 'onUpdateReasoningLevel = onUpdateReasoningLevel'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == CALL]
     if len(hits) != 1:
@@ -129,10 +108,11 @@ else:
     ci = hits[0]
     d = ind(lines[ci])
     lines[ci] = d + 'onUpdateReasoningLevel = onUpdateReasoningLevel,'
-    lines[ci + 1:ci + 1] = [
-        d + 'streamOutput = streamOutput,'
+    new_args = [
+        d + 'streamOutput = streamOutput,',
         d + 'onUpdateStreamOutput = onUpdateStreamOutput,',
     ]
+    lines[ci + 1:ci + 1] = new_args
     applied.append('picker-call')
 
     # E. Switch row after Slider
@@ -154,7 +134,7 @@ else:
     if se < 0:
         fail('Slider end not found', lines, si)
     d = ind(lines[si])
-    lines[se + 1:se + 1] = [
+    switch_row = [
         d + '',
         d + '// ' + MARK + ': stream output toggle',
         d + 'Row(',
@@ -164,11 +144,11 @@ else:
         d + ') {',
         d + '    Column {',
         d + '        Text(',
-        d + '            text = "流式输出",',
+        d + '            text = "\u6d41\u5f0f\u8f93\u51fa",',
         d + '            style = MaterialTheme.typography.bodyMedium,',
         d + '        )',
         d + '        Text(',
-        d + '            text = "关闭后等待完整回复再显示",',
+        d + '            text = "\u5173\u95ed\u540e\u7b49\u5f85\u5b8c\u6574\u56de\u590d\u518d\u663e\u793a",',
         d + '            style = MaterialTheme.typography.labelSmall,',
         d + '            color = MaterialTheme.colorScheme.onSurfaceVariant,',
         d + '        )',
@@ -179,6 +159,7 @@ else:
         d + '    )',
         d + '}',
     ]
+    lines[se + 1:se + 1] = switch_row
     applied.append('switch-row')
 
     out = NL.join(lines)
@@ -187,12 +168,11 @@ else:
             fail('RP selfcheck missing: ' + need)
     if balance(out) != bal0:
         fail('RP balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
-    # comma fix verification
-    if 'onUpdateReasoningLevel = onUpdateReasoningLevel\n' in out:
+    if 'onUpdateReasoningLevel = onUpdateReasoningLevel' + NL in out:
         fail('picker call comma fix failed')
 
     (ROOT / RP).write_text(out, encoding='utf-8')
-    print('batch112v4 RP: OK (' + ', '.join(applied) + ')')
+    print('batch112v5 RP: OK (' + ', '.join(applied) + ')')
 
 
 # ============================================================
@@ -200,7 +180,7 @@ else:
 # ============================================================
 t = (ROOT / CI).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch112v4 CI: already applied')
+    print('batch112v5 CI: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
@@ -218,10 +198,13 @@ else:
     if close_idx < 0:
         fail('onUpdateReasoningLevel closing not found', lines, ri, path=CI)
     d = ind(lines[close_idx])
-    lines.insert(close_idx + 1, d + 'streamOutput = assistant.streamOutput, // ' + MARK)
-    lines.insert(close_idx + 2, d + 'onUpdateStreamOutput = { enabled ->')
-    lines.insert(close_idx + 3, d + '    onUpdateAssistant(assistant.copy(streamOutput = enabled))')
-    lines.insert(close_idx + 4, d + '},')
+    ci_new = [
+        d + 'streamOutput = assistant.streamOutput, // ' + MARK,
+        d + 'onUpdateStreamOutput = { enabled ->',
+        d + '    onUpdateAssistant(assistant.copy(streamOutput = enabled))',
+        d + '},',
+    ]
+    lines[close_idx + 1:close_idx + 1] = ci_new
 
     out = NL.join(lines)
     for need in [MARK, 'streamOutput = assistant.streamOutput', 'onUpdateStreamOutput']:
@@ -231,4 +214,4 @@ else:
         fail('CI balance changed: ' + str(bal0) + ' -> ' + str(balance(out)), path=CI)
 
     (ROOT / CI).write_text(out, encoding='utf-8')
-    print('batch112v4 CI: OK')
+    print('batch112v5 CI: OK')
