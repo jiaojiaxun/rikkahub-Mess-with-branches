@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+'''batch118: #12 auto-resume after truncation (豆沙包 style)
+
+When the model's response is truncated (finishReason=length/max_tokens/incomplete)
+or silently cut off (empty text, no finish reason), automatically append a
+"继续" user message and continue the generation loop.
+
+3 files, 7 changes:
+  A. Message.kt: add finishReason field to UIMessage
+  B. StreamChunkHandler.kt Finish handler: store chunk.finishReason
+  C. StreamChunkHandler.kt handleTextGenerationResult: store result.finishReason
+  D. GenerationHandler.kt: add MAX_RESUMES constant
+  E. GenerationHandler.kt: add shouldResumeGeneration() + keyword sets
+  F. GenerationHandler.kt: add resumeCount before for loop
+  G. GenerationHandler.kt: resume logic in if(tools.isEmpty()) block
+
+Five checks + Python three checks done.
+'''
+from pathlib import Path
+import sys
+
+ROOT = Path.cwd()
+NL = chr(10)
+MARK = 'rhAutoResume'
+MSG = 'ai/src/main/java/me/rerere/ai/ui/Message.kt'
+SCH = 'ai/src/main/java/me/rerere/ai/ui/StreamChunkHandler.kt'
+GH = 'app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt'
+
+
+def fail(msg, lines=None, around=-1, path=GH):
+    body = 'batch118 ' + str(msg)
+    if lines is not None and 0 <= around < len(lines):
+        lo = max(0, around - 3)
+        hi = min(len(lines), around + 4)
+        ctx = ' || '.join('L' + str(i + 1) + ':' + lines[i].strip()[:90] for i in range(lo, hi))
+        body = body + ' || ctx: ' + ctx
+    print('::error file=' + path + '::' + body[:1400])
+    sys.stdout.flush()
+    sys.exit(1)
+
+
+def ind(ln):
+    return ln[:len(ln) - len(ln.lstrip())]
+
+
+def balance(text):
+    return (text.count('(') - text.count(')')) + (text.count('{') - text.count('}'))
+
+
+# ============================================================
+# A. Message.kt: add finishReason field
+# ============================================================
+t = (ROOT / MSG).read_text(encoding='utf-8')
+if MARK in t:
+    print('batch118 MSG: already applied')
+else:
+    bal0 = balance(t)
+    lines = t.split(NL)
+    ANCHOR = '    val translation: String? = null'
+    hits = [i for i, ln in enumerate(lines) if ln == ANCHOR]
+    if len(hits) != 1:
+        fail('translation anchor count=' + str(len(hits)), lines, hits[0] if hits else 0, path=MSG)
+    lines[hits[0]] = ANCHOR + ',' + NL + '    val finishReason: String? = null // ' + MARK
+    out = NL.join(lines)
+    if 'finishReason' not in out:
+        fail('MSG selfcheck missing finishReason', path=MSG)
+    if balance(out) != bal0:
+        fail('MSG balance changed', path=MSG)
+    (ROOT / MSG).write_text(out, encoding='utf-8')
+    print('batch118 MSG: OK')
+
+
+# ============================================================
+# B+C. StreamChunkHandler.kt: store finishReason in both paths
+# ============================================================
+t = (ROOT / SCH).read_text(encoding='utf-8')
+if MARK in t:
+    print('batch118 SCH: already applied')
+else:
+    bal0 = balance(t)
+    lines = t.split(NL)
+    applied = []
+
+    # B. Finish handler: find 'is StreamChunk.Finish -> copy(' then the finishedAt line
+    FINISH_ANCHOR = 'is StreamChunk.Finish -> copy('
+    hits = [i for i, ln in enumerate(lines) if ln.strip() == FINISH_ANCHOR]
+    if len(hits) != 1:
+        fail('Finish handler anchor count=' + str(len(hits)), lines, hits[0] if hits else 0, path=SCH)
+    fi = hits[0]
+    # find the finishedAt line within the next 3 lines
+    fa_idx = -1
+    for j in range(fi + 1, min(fi + 4, len(lines))):
+        if 'finishedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())' in lines[j]:
+            fa_idx = j
+            break
+    if fa_idx < 0:
+        fail('Finish handler finishedAt not found', lines, fi, path=SCH)
+    d = ind(lines[fa_idx])
+    # add comma if not present, then add finishReason line
+    if not lines[fa_idx].rstrip().endswith(','):
+        lines[fa_idx] = lines[fa_idx].rstrip() + ','
+    lines.insert(fa_idx + 1, d + 'finishReason = chunk.finishReason // ' + MARK)
+    applied.append('finish-handler')
+
+    # C. handleTextGenerationResult: find 'usage = result.usage,' then finishedAt after it
+    USAGE_ANCHOR = 'usage = result.usage,'
+    hits = [i for i, ln in enumerate(lines) if ln.strip() == USAGE_ANCHOR]
+    if len(hits) != 1:
+        fail('usage=result anchor count=' + str(len(hits)), lines, hits[0] if hits else 0, path=SCH)
+    ui = hits[0]
+    # find finishedAt within next 3 lines
+    fa2 = -1
+    for j in range(ui + 1, min(ui + 4, len(lines))):
+        if 'finishedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())' in lines[j]:
+            fa2 = j
+            break
+    if fa2 < 0:
+        fail('handleTextGenerationResult finishedAt not found', lines, ui, path=SCH)
+    d = ind(lines[fa2])
+    # this line already has a comma (it's not the last arg)
+    lines.insert(fa2 + 1, d + 'finishReason = result.finishReason, // ' + MARK)
+    applied.append('handleTextResult')
+
+    out = NL.join(lines)
+    for need in [MARK, 'chunk.finishReason', 'result.finishReason']:
+        if need not in out:
+            fail('SCH selfcheck missing: ' + need, path=SCH)
+    if balance(out) != bal0:
+        fail('SCH balance changed', path=SCH)
+    (ROOT / SCH).write_text(out, encoding='utf-8')
+    print('batch118 SCH: OK (' + ', '.join(applied) + ')')
+
+
+# ============================================================
+# D-G. GenerationHandler.kt: resume logic
+# ============================================================
+t = (ROOT / GH).read_text(encoding='utf-8')
+if MARK in t:
+    print('batch118 GH: already applied')
+else:
+    bal0 = balance(t)
+    lines = t.split(NL)
+    applied = []
+
+    # D. MAX_RESUMES constant
+    CONST_ANCHOR = 'private const val GENERATION_STREAM_RETRY_MAX_DELAY_MS = 4_000L'
+    hits = [i for i, ln in enumerate(lines) if ln.strip() == CONST_ANCHOR]
+    if len(hits) != 1:
+        fail('const anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
+    ci = hits[0]
+    d = ind(lines[ci])
+    lines.insert(ci + 1, d + 'private const val MAX_RESUMES = 3 // ' + MARK)
+    applied.append('const')
+
+    # E. shouldResumeGeneration + keyword sets before shouldReportEmptyGenerationStream
+    REPORT_ANCHOR = 'internal fun shouldReportEmptyGenerationStream'
+    hits = [i for i, ln in enumerate(lines) if ln.strip() == REPORT_ANCHOR]
+    if len(hits) != 1:
+        fail('shouldReport anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
+    ri = hits[0]
+    d = ind(lines[ri])
+    helper = [
+        d + '// ' + MARK + ': auto-resume keyword sets',
+        d + 'private val TRUNCATION_FINISH_REASONS = setOf(',
+        d + '    "length", "max_tokens", "max_output_tokens", "incomplete",',
+        d + '    "incomplete:max_output_tokens", "max_completion_tokens",',
+        d + ')',
+        d + '',
+        d + 'private val BLOCKED_FINISH_REASONS = setOf(',
+        d + '    "content_filter", "safety", "blocked", "error",',
+        d + ')',
+        d + '',
+        d + 'private fun shouldResumeGeneration(finishReason: String?, text: String): Boolean {',
+        d + '    val lower = finishReason?.lowercase()',
+        d + '    if (lower != null && lower in BLOCKED_FINISH_REASONS) return false',
+        d + '    if (lower != null && lower in TRUNCATION_FINISH_REASONS) return true',
+        d + '    if (text.isBlank() && lower == null) return true',
+        d + '    return false',
+        d + '}',
+        d + '',
+    ]
+    lines[ri:ri] = helper
+    applied.append('helper')
+
+    # F. resumeCount before for loop
+    TURN_ANCHOR = 'val turnStartMs = android.os.SystemClock.elapsedRealtime()'
+    hits = [i for i, ln in enumerate(lines) if ln.strip() == TURN_ANCHOR]
+    if len(hits) != 1:
+        fail('turnStartMs anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
+    ti = hits[0]
+    d = ind(lines[ti])
+    lines.insert(ti + 1, d + 'var resumeCount = 0 // ' + MARK)
+    applied.append('resumeCount')
+
+    # G. resume logic in if(tools.isEmpty()) block
+    BREAK_ANCHOR = '// no tool calls, break'
+    hits = [i for i, ln in enumerate(lines) if ln.strip() == BREAK_ANCHOR]
+    if len(hits) != 1:
+        fail('no tool calls break anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
+    bi = hits[0]
+    d = ind(lines[bi])
+    resume_block = [
+        d + '// ' + MARK + ': auto-resume after truncation',
+        d + 'val assistantText = messages.last().parts',
+        d + '    .filterIsInstance<UIMessagePart.Text>()',
+        d + '    .joinToString("") { it.text }',
+        d + 'val msgFinishReason = messages.last().finishReason',
+        d + 'if (shouldResumeGeneration(msgFinishReason, assistantText) && resumeCount < MAX_RESUMES) {',
+        d + '    resumeCount++',
+        d + '    Log.i(TAG, "generateText: resuming after truncation (finishReason=$msgFinishReason, attempt=$resumeCount/$MAX_RESUMES)")',
+        d + '    messages = messages + UIMessage.user("\u7ee7\u7eed")',
+        d + '    continue',
+        d + '}',
+    ]
+    lines[bi:bi] = resume_block
+    applied.append('resume-logic')
+
+    out = NL.join(lines)
+    for need in [MARK, 'MAX_RESUMES', 'shouldResumeGeneration', 'resumeCount', 'UIMessage.user']:
+        if need not in out:
+            fail('GH selfcheck missing: ' + need)
+    if balance(out) != bal0:
+        fail('GH balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
+    (ROOT / GH).write_text(out, encoding='utf-8')
+    print('batch118 GH: OK (' + ', '.join(applied) + ')')
