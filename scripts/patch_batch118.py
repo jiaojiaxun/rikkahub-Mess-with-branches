@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch118 v3: fix shouldReport anchor
+'''batch118 v4: fix Message.kt trailing comma
 
-v2 failed: anchor 'internal fun shouldReportEmptyGenerationStream' used
-exact strip match (==), but the actual line is
-'internal fun shouldReportEmptyGenerationStream(receivedAnyChunk: Boolean): Boolean ='
-which doesn't equal the bare function name.
+v3 compiled past MSG but failed at compile: Message.kt L27
+"Expecting comma or ')'". Root cause: my inserted field
+  val finishReason: String? = null // rhAutoResume
+has NO trailing comma, but batch65 already added quotedMessageId after
+translation, so finishReason is NOT the last field -> comma required.
 
-v3: use startswith() instead of == for this anchor.
-MSG and SCH sections passed in v2, unchanged here.
+v4: always append a trailing comma to the inserted field.
 
-Adversarial check on ALL GH anchors:
-  1. GENERATION_STREAM_RETRY_MAX_DELAY_MS — exact, v2 passed ✓
-  2. shouldReportEmptyGenerationStream — startswith (v3 fix) ✓
-  3. turnStartMs — exact, verified against source ✓
-  4. '// no tool calls, break' — exact, verified against source ✓
+Also needs to investigate StreamChunkHandler.kt L295 error
+('Expecting an element' / 'generationMillis') - likely pre-existing
+from another patch.
 '''
 from pathlib import Path
 import sys
@@ -28,7 +26,7 @@ GH = 'app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt'
 
 
 def fail(msg, lines=None, around=-1, path=GH):
-    body = 'batch118v3 ' + str(msg)
+    body = 'batch118v4 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -48,11 +46,11 @@ def balance(text):
 
 
 # ============================================================
-# A. Message.kt (unchanged from v2, already passed)
+# A. Message.kt (v4: add trailing comma)
 # ============================================================
 t = (ROOT / MSG).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch118v3 MSG: already applied')
+    print('batch118v4 MSG: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
@@ -67,22 +65,22 @@ else:
     if not lines[idx].rstrip().endswith(','):
         lines[idx] = lines[idx].rstrip() + ','
     d = ind(lines[idx])
-    lines[idx + 1:idx + 1] = [d + 'val finishReason: String? = null // ' + MARK]
+    lines[idx + 1:idx + 1] = [d + 'val finishReason: String? = null, // ' + MARK]
     out = NL.join(lines)
     if 'finishReason' not in out:
         fail('MSG selfcheck missing finishReason', path=MSG)
     if balance(out) != bal0:
         fail('MSG balance changed', path=MSG)
     (ROOT / MSG).write_text(out, encoding='utf-8')
-    print('batch118v3 MSG: OK')
+    print('batch118v4 MSG: OK')
 
 
 # ============================================================
-# B+C. StreamChunkHandler.kt (unchanged from v2, already passed)
+# B+C. StreamChunkHandler.kt (unchanged from v3)
 # ============================================================
 t = (ROOT / SCH).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch118v3 SCH: already applied')
+    print('batch118v4 SCH: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
@@ -129,21 +127,20 @@ else:
     if balance(out) != bal0:
         fail('SCH balance changed', path=SCH)
     (ROOT / SCH).write_text(out, encoding='utf-8')
-    print('batch118v3 SCH: OK (' + ', '.join(applied) + ')')
+    print('batch118v4 SCH: OK (' + ', '.join(applied) + ')')
 
 
 # ============================================================
-# D-G. GenerationHandler.kt (v3: fix shouldReport anchor)
+# D-G. GenerationHandler.kt (unchanged from v3)
 # ============================================================
 t = (ROOT / GH).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch118v3 GH: already applied')
+    print('batch118v4 GH: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
     applied = []
 
-    # D. MAX_RESUMES constant
     CONST_ANCHOR = 'private const val GENERATION_STREAM_RETRY_MAX_DELAY_MS = 4_000L'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == CONST_ANCHOR]
     if len(hits) != 1:
@@ -153,8 +150,6 @@ else:
     lines.insert(ci + 1, d + 'private const val MAX_RESUMES = 3 // ' + MARK)
     applied.append('const')
 
-    # E. shouldResumeGeneration + keyword sets before shouldReportEmptyGenerationStream
-    #    v3 fix: use startswith() instead of ==
     REPORT_PREFIX = 'internal fun shouldReportEmptyGenerationStream'
     hits = [i for i, ln in enumerate(lines) if ln.strip().startswith(REPORT_PREFIX)]
     if len(hits) != 1:
@@ -184,7 +179,6 @@ else:
     lines[ri:ri] = helper
     applied.append('helper')
 
-    # F. resumeCount before for loop
     TURN_ANCHOR = 'val turnStartMs = android.os.SystemClock.elapsedRealtime()'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == TURN_ANCHOR]
     if len(hits) != 1:
@@ -194,7 +188,6 @@ else:
     lines.insert(ti + 1, d + 'var resumeCount = 0 // ' + MARK)
     applied.append('resumeCount')
 
-    # G. resume logic in if(tools.isEmpty()) block
     BREAK_ANCHOR = '// no tool calls, break'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == BREAK_ANCHOR]
     if len(hits) != 1:
@@ -224,4 +217,4 @@ else:
     if balance(out) != bal0:
         fail('GH balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
     (ROOT / GH).write_text(out, encoding='utf-8')
-    print('batch118v3 GH: OK (' + ', '.join(applied) + ')')
+    print('batch118v4 GH: OK (' + ', '.join(applied) + ')')
