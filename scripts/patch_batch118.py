@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch118: #12 auto-resume after truncation (豆沙包 style)
+'''batch118 v2: #12 auto-resume after truncation
 
-When the model's response is truncated (finishReason=length/max_tokens/incomplete)
-or silently cut off (empty text, no finish reason), automatically append a
-"继续" user message and continue the generation loop.
+v1 failed: Message.kt anchor 'val translation: String? = null' exact match
+count=0. Root cause: batch65 (runs BEFORE 118) rewrote that line to add a
+trailing comma and inserted quotedMessageId after it. So in CI form the line
+is 'val translation: String? = null,' (with comma).
 
-3 files, 7 changes:
-  A. Message.kt: add finishReason field to UIMessage
-  B. StreamChunkHandler.kt Finish handler: store chunk.finishReason
-  C. StreamChunkHandler.kt handleTextGenerationResult: store result.finishReason
-  D. GenerationHandler.kt: add MAX_RESUMES constant
-  E. GenerationHandler.kt: add shouldResumeGeneration() + keyword sets
-  F. GenerationHandler.kt: add resumeCount before for loop
-  G. GenerationHandler.kt: resume logic in if(tools.isEmpty()) block
+v2 uses batch65's tolerant strategy: match strip() against BOTH forms
+(with/without trailing comma), ensure comma, insert after.
 
-Five checks + Python three checks done.
+This is the same anchor pattern batch65 proved works in CI.
 '''
 from pathlib import Path
 import sys
@@ -29,7 +24,7 @@ GH = 'app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt'
 
 
 def fail(msg, lines=None, around=-1, path=GH):
-    body = 'batch118 ' + str(msg)
+    body = 'batch118v2 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -49,46 +44,54 @@ def balance(text):
 
 
 # ============================================================
-# A. Message.kt: add finishReason field
+# A. Message.kt: add finishReason field (tolerant anchor)
 # ============================================================
 t = (ROOT / MSG).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch118 MSG: already applied')
+    print('batch118v2 MSG: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
-    ANCHOR = '    val translation: String? = null'
-    hits = [i for i, ln in enumerate(lines) if ln == ANCHOR]
-    if len(hits) != 1:
-        fail('translation anchor count=' + str(len(hits)), lines, hits[0] if hits else 0, path=MSG)
-    lines[hits[0]] = ANCHOR + ',' + NL + '    val finishReason: String? = null // ' + MARK
+    idx = -1
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if s == 'val translation: String? = null,' or s == 'val translation: String? = null':
+            idx = i
+            break
+    if idx < 0:
+        fail('translation field line not found', lines, 0, path=MSG)
+    if not lines[idx].rstrip().endswith(','):
+        lines[idx] = lines[idx].rstrip() + ','
+    d = ind(lines[idx])
+    insert = [
+        d + 'val finishReason: String? = null // ' + MARK,
+    ]
+    lines[idx + 1:idx + 1] = insert
     out = NL.join(lines)
     if 'finishReason' not in out:
         fail('MSG selfcheck missing finishReason', path=MSG)
     if balance(out) != bal0:
         fail('MSG balance changed', path=MSG)
     (ROOT / MSG).write_text(out, encoding='utf-8')
-    print('batch118 MSG: OK')
+    print('batch118v2 MSG: OK')
 
 
 # ============================================================
-# B+C. StreamChunkHandler.kt: store finishReason in both paths
+# B+C. StreamChunkHandler.kt
 # ============================================================
 t = (ROOT / SCH).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch118 SCH: already applied')
+    print('batch118v2 SCH: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
     applied = []
 
-    # B. Finish handler: find 'is StreamChunk.Finish -> copy(' then the finishedAt line
     FINISH_ANCHOR = 'is StreamChunk.Finish -> copy('
     hits = [i for i, ln in enumerate(lines) if ln.strip() == FINISH_ANCHOR]
     if len(hits) != 1:
         fail('Finish handler anchor count=' + str(len(hits)), lines, hits[0] if hits else 0, path=SCH)
     fi = hits[0]
-    # find the finishedAt line within the next 3 lines
     fa_idx = -1
     for j in range(fi + 1, min(fi + 4, len(lines))):
         if 'finishedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())' in lines[j]:
@@ -97,19 +100,16 @@ else:
     if fa_idx < 0:
         fail('Finish handler finishedAt not found', lines, fi, path=SCH)
     d = ind(lines[fa_idx])
-    # add comma if not present, then add finishReason line
     if not lines[fa_idx].rstrip().endswith(','):
         lines[fa_idx] = lines[fa_idx].rstrip() + ','
     lines.insert(fa_idx + 1, d + 'finishReason = chunk.finishReason // ' + MARK)
     applied.append('finish-handler')
 
-    # C. handleTextGenerationResult: find 'usage = result.usage,' then finishedAt after it
     USAGE_ANCHOR = 'usage = result.usage,'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == USAGE_ANCHOR]
     if len(hits) != 1:
         fail('usage=result anchor count=' + str(len(hits)), lines, hits[0] if hits else 0, path=SCH)
     ui = hits[0]
-    # find finishedAt within next 3 lines
     fa2 = -1
     for j in range(ui + 1, min(ui + 4, len(lines))):
         if 'finishedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())' in lines[j]:
@@ -118,7 +118,6 @@ else:
     if fa2 < 0:
         fail('handleTextGenerationResult finishedAt not found', lines, ui, path=SCH)
     d = ind(lines[fa2])
-    # this line already has a comma (it's not the last arg)
     lines.insert(fa2 + 1, d + 'finishReason = result.finishReason, // ' + MARK)
     applied.append('handleTextResult')
 
@@ -129,21 +128,20 @@ else:
     if balance(out) != bal0:
         fail('SCH balance changed', path=SCH)
     (ROOT / SCH).write_text(out, encoding='utf-8')
-    print('batch118 SCH: OK (' + ', '.join(applied) + ')')
+    print('batch118v2 SCH: OK (' + ', '.join(applied) + ')')
 
 
 # ============================================================
-# D-G. GenerationHandler.kt: resume logic
+# D-G. GenerationHandler.kt
 # ============================================================
 t = (ROOT / GH).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch118 GH: already applied')
+    print('batch118v2 GH: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
     applied = []
 
-    # D. MAX_RESUMES constant
     CONST_ANCHOR = 'private const val GENERATION_STREAM_RETRY_MAX_DELAY_MS = 4_000L'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == CONST_ANCHOR]
     if len(hits) != 1:
@@ -153,7 +151,6 @@ else:
     lines.insert(ci + 1, d + 'private const val MAX_RESUMES = 3 // ' + MARK)
     applied.append('const')
 
-    # E. shouldResumeGeneration + keyword sets before shouldReportEmptyGenerationStream
     REPORT_ANCHOR = 'internal fun shouldReportEmptyGenerationStream'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == REPORT_ANCHOR]
     if len(hits) != 1:
@@ -183,7 +180,6 @@ else:
     lines[ri:ri] = helper
     applied.append('helper')
 
-    # F. resumeCount before for loop
     TURN_ANCHOR = 'val turnStartMs = android.os.SystemClock.elapsedRealtime()'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == TURN_ANCHOR]
     if len(hits) != 1:
@@ -193,7 +189,6 @@ else:
     lines.insert(ti + 1, d + 'var resumeCount = 0 // ' + MARK)
     applied.append('resumeCount')
 
-    # G. resume logic in if(tools.isEmpty()) block
     BREAK_ANCHOR = '// no tool calls, break'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == BREAK_ANCHOR]
     if len(hits) != 1:
@@ -223,4 +218,4 @@ else:
     if balance(out) != bal0:
         fail('GH balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
     (ROOT / GH).write_text(out, encoding='utf-8')
-    print('batch118 GH: OK (' + ', '.join(applied) + ')')
+    print('batch118v2 GH: OK (' + ', '.join(applied) + ')')
