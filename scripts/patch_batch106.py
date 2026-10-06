@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch106 v3: LITE threshold 3MB + text/image type filter
+'''batch106 v4: includeImages read from config.liteAttachmentTypes
 
-v2 set LITE_MAX_FILE_SIZE = 5MB and added a maxFileSize param. v3:
-  - 5MB -> 3MB (user request)
-  - add an includeImages flag so LITE can skip images (text-only filter)
-
-backupFileEntries gains `includeImages: Boolean = true`; when false, image
-extensions are skipped. prepareBackupFile passes it from the LITE selection.
-
-The UI + data field (liteTypes / LiteAttachmentType) live in batch114.
+v3 hardcoded includeImages = true. v4 reads it from the WebDavConfig field
+added by batch114 (order: 106 < 114, both run in the same CI pass).
 '''
 from pathlib import Path
 import sys
@@ -21,7 +15,7 @@ WD = 'app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt'
 
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch106v3 ' + str(msg)
+    body = 'batch106v4 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -38,12 +32,12 @@ def ind(ln):
 
 t = (ROOT / WD).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch106v3: already applied')
+    print('batch106v4: already applied')
 else:
     lines = t.split(NL)
     applied = []
 
-    # A. const after COPY_BUFFER_SIZE (3MB)
+    # A. consts
     CONST_ANCHOR = 'private const val COPY_BUFFER_SIZE = 16 * 1024'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == CONST_ANCHOR]
     if len(hits) != 1:
@@ -51,12 +45,10 @@ else:
     ci = hits[0]
     d = ind(lines[ci])
     lines.insert(ci + 1, d + 'private const val LITE_MAX_FILE_SIZE = 3L * 1024 * 1024 // ' + MARK)
-    applied.append('const')
-    # image extension set for the type filter
     lines.insert(ci + 2, d + 'private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif") // ' + MARK)
-    applied.append('exts')
+    applied.append('consts')
 
-    # B. backupFileEntries signature: add maxFileSize + includeImages
+    # B. signature
     SIG_OLD = 'private fun backupFileEntries(full: Boolean): List<Pair<File, String>> = buildList {'
     SIG_NEW = 'private fun backupFileEntries(full: Boolean, maxFileSize: Long = Long.MAX_VALUE, includeImages: Boolean = true): List<Pair<File, String>> = buildList {'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == SIG_OLD]
@@ -65,7 +57,7 @@ else:
     lines[hits[0]] = ind(lines[hits[0]]) + SIG_NEW
     applied.append('signature')
 
-    # C. filter both walkTopDown lines: size + optional image skip
+    # C. filters
     OLD_FILTER = 'root.walkTopDown().filter(File::isFile).forEach { file ->'
     NEW_FILTER = 'root.walkTopDown().filter { it.isFile && it.length() <= maxFileSize && (includeImages || it.extension.lowercase() !in IMAGE_EXTS) }.forEach { file ->'
     replaced = 0
@@ -74,26 +66,26 @@ else:
             lines[i] = ind(lines[i]) + NEW_FILTER
             replaced += 1
     if replaced != 2:
-        fail('walkTopDown filter replaced count=' + str(replaced) + ' (expected 2)')
+        fail('walkTopDown filter replaced count=' + str(replaced))
     applied.append('filters(' + str(replaced) + ')')
 
-    # D. prepareBackupFile call site
+    # D. call site: read from config
     CALL_OLD = 'val fileEntries = if (includeFiles) backupFileEntries(full) else emptyList()'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == CALL_OLD]
     if len(hits) != 1:
         fail('fileEntries call anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
     d = ind(lines[hits[0]])
-    lines[hits[0]] = d + 'val includeImages = true // ' + MARK
+    lines[hits[0]] = d + 'val includeImages = config.liteAttachmentTypes.isEmpty() || WebDavConfig.LiteAttachmentType.IMAGE in config.liteAttachmentTypes // ' + MARK
     lines.insert(hits[0] + 1, d + 'val liteMax = if (format == BackupExportFormat.LITE) LITE_MAX_FILE_SIZE else Long.MAX_VALUE // ' + MARK)
     lines.insert(hits[0] + 2, d + 'val fileEntries = if (includeFiles) backupFileEntries(full, liteMax, includeImages) else emptyList()')
     applied.append('callsite')
 
     out = NL.join(lines)
-    for need in [MARK, 'LITE_MAX_FILE_SIZE', 'maxFileSize', 'includeImages', 'IMAGE_EXTS']:
+    for need in [MARK, 'LITE_MAX_FILE_SIZE', 'includeImages', 'IMAGE_EXTS', 'LiteAttachmentType.IMAGE']:
         if need not in out:
             fail('selfcheck missing: ' + need)
     if 'totalBytes' not in out:
-        fail('totalBytes missing after patch!')
+        fail('totalBytes missing')
 
     (ROOT / WD).write_text(out, encoding='utf-8')
-    print('batch106v3: OK (' + ', '.join(applied) + ')')
+    print('batch106v4: OK (' + ', '.join(applied) + ')')
