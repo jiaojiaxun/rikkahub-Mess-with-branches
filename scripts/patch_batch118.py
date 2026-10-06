@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch118 v4: fix Message.kt trailing comma
+'''batch118 v5: fix Finish handler trailing comma
 
-v3 compiled past MSG but failed at compile: Message.kt L27
-"Expecting comma or ')'". Root cause: my inserted field
-  val finishReason: String? = null // rhAutoResume
-has NO trailing comma, but batch65 already added quotedMessageId after
-translation, so finishReason is NOT the last field -> comma required.
+v4 fixed Message.kt but StreamChunkHandler.kt L295 still fails:
+generationMillis unresolved. Root cause: ANOTHER patch already added
+generationMillis to the Finish handler's copy() call, so finishedAt line
+ALREADY has a trailing comma in CI form. My code detected the comma and
+skipped adding one, then inserted 'finishReason = chunk.finishReason'
+WITHOUT trailing comma -> generationMillis line follows immediately ->
+syntax error (missing comma separator).
 
-v4: always append a trailing comma to the inserted field.
-
-Also needs to investigate StreamChunkHandler.kt L295 error
-('Expecting an element' / 'generationMillis') - likely pre-existing
-from another patch.
+v5: always append trailing comma to the inserted finishReason line.
+Kotlin allows trailing commas (1.4+), safe whether it's last arg or not.
 '''
 from pathlib import Path
 import sys
@@ -26,7 +25,7 @@ GH = 'app/src/main/java/me/rerere/rikkahub/data/ai/GenerationHandler.kt'
 
 
 def fail(msg, lines=None, around=-1, path=GH):
-    body = 'batch118v4 ' + str(msg)
+    body = 'batch118v5 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -45,12 +44,10 @@ def balance(text):
     return (text.count('(') - text.count(')')) + (text.count('{') - text.count('}'))
 
 
-# ============================================================
-# A. Message.kt (v4: add trailing comma)
-# ============================================================
+# A. Message.kt (same as v4, with trailing comma)
 t = (ROOT / MSG).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch118v4 MSG: already applied')
+    print('batch118v5 MSG: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
@@ -72,15 +69,13 @@ else:
     if balance(out) != bal0:
         fail('MSG balance changed', path=MSG)
     (ROOT / MSG).write_text(out, encoding='utf-8')
-    print('batch118v4 MSG: OK')
+    print('batch118v5 MSG: OK')
 
 
-# ============================================================
-# B+C. StreamChunkHandler.kt (unchanged from v3)
-# ============================================================
+# B+C. StreamChunkHandler.kt (v5: Finish handler line gets trailing comma)
 t = (ROOT / SCH).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch118v4 SCH: already applied')
+    print('batch118v5 SCH: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
@@ -101,7 +96,8 @@ else:
     d = ind(lines[fa_idx])
     if not lines[fa_idx].rstrip().endswith(','):
         lines[fa_idx] = lines[fa_idx].rstrip() + ','
-    lines.insert(fa_idx + 1, d + 'finishReason = chunk.finishReason // ' + MARK)
+    # v5: always trailing comma
+    lines.insert(fa_idx + 1, d + 'finishReason = chunk.finishReason, // ' + MARK)
     applied.append('finish-handler')
 
     USAGE_ANCHOR = 'usage = result.usage,'
@@ -127,15 +123,13 @@ else:
     if balance(out) != bal0:
         fail('SCH balance changed', path=SCH)
     (ROOT / SCH).write_text(out, encoding='utf-8')
-    print('batch118v4 SCH: OK (' + ', '.join(applied) + ')')
+    print('batch118v5 SCH: OK (' + ', '.join(applied) + ')')
 
 
-# ============================================================
-# D-G. GenerationHandler.kt (unchanged from v3)
-# ============================================================
+# D-G. GenerationHandler.kt (unchanged from v4)
 t = (ROOT / GH).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch118v4 GH: already applied')
+    print('batch118v5 GH: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
@@ -217,4 +211,4 @@ else:
     if balance(out) != bal0:
         fail('GH balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
     (ROOT / GH).write_text(out, encoding='utf-8')
-    print('batch118v4 GH: OK (' + ', '.join(applied) + ')')
+    print('batch118v5 GH: OK (' + ', '.join(applied) + ')')
