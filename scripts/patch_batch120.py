@@ -1,31 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch120: attachment UI enlarge - Document/Audio card style
+'''batch120 v2: fix Q literal + missing fillMaxSize import
 
-Replaces the small pill-style Document/Audio attachment cards in the chat
-message with a large card matching the screenshot: left icon block (44dp),
-center (filename + "ext · size"), right download button (36dp circle).
+v1 compile errors:
+1. "Unresolved reference 'Q'" — the on_click handler body had a Python template
+   variable Q that leaked as a literal into Kotlin code. The line was meant to be
+   Kotlin string concatenation, not Python. Fixed by removing the bogus Q line.
+2. "Unresolved reference 'fillMaxSize'" — ChatMessage.kt never imported it.
 
-Five checks:
-1. import: add fileSizeToString (utils), Download01 (hugeicons.stroke),
-   CircleShape (foundation.shape); others already present
-2. conflict: Document/Audio blocks untouched by other patches
-3. scope: inside MessagePartsBlock ContentBlock when-branch
-4. brackets: whole-block replacement self-balanced
-5. signature: unchanged
+v2: fix the click-handler line to plain Kotlin (no Q), add fillMaxSize import.
 '''
 from pathlib import Path
 import sys
 
 ROOT = Path.cwd()
 NL = chr(10)
-Q = chr(34)
 MARK = 'rhAttachCard'
 CM = 'app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessage.kt'
 
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch120 ' + str(msg)
+    body = 'batch120v2 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -45,7 +40,6 @@ def balance(text):
 
 
 def find_block_end(lines, start):
-    '''Find the closing brace of a block starting at `start` (the line with `{`).'''
     depth = 0
     for i in range(start, len(lines)):
         for ch in lines[i]:
@@ -58,16 +52,20 @@ def find_block_end(lines, start):
     return -1
 
 
-def build_card_lines(d, icon_expr, name_expr, size_expr, on_click_lines):
-    '''Build a big attachment card. d = base indent, icon_expr = icon composable code,
-    name_expr = expression producing display name, size_expr = expression producing size string,
-    on_click_lines = list of lines for the click handler body.'''
-    ocl = NL.join(on_click_lines)
+def build_card_lines(d, icon_expr, name_expr, size_expr, pkg_expr):
     return [
         d + 'Surface(',
         d + '    tonalElevation = 2.dp,',
         d + '    onClick = {',
-        ocl,
+        d + '        val intent = Intent(Intent.ACTION_VIEW)',
+        d + '        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)',
+        d + '        intent.data = FileProvider.getUriForFile(',
+        d + '            context,',
+        d + '            ' + pkg_expr + ',',
+        d + '            part.url.toUri().toFile()',
+        d + '        )',
+        d + '        val chooserIndent = Intent.createChooser(intent, null)',
+        d + '        context.startActivity(chooserIndent)',
         d + '    },',
         d + '    modifier = Modifier.fillMaxWidth(),',
         d + '    shape = RoundedCornerShape(16.dp),',
@@ -123,19 +121,20 @@ def build_card_lines(d, icon_expr, name_expr, size_expr, on_click_lines):
 
 t = (ROOT / CM).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch120: already applied')
+    print('batch120v2: already applied')
 else:
     bal0 = balance(t)
     lines = t.split(NL)
     applied = []
     existing = set(ln.strip() for ln in lines)
 
-    # 1. imports
+    # 1. imports (fillMaxSize + CircleShape + Download01 + fileSizeToString)
     imp_hits = [i for i, ln in enumerate(lines) if ln.strip().startswith('import ')]
     if not imp_hits:
         fail('no import lines')
     last_imp = imp_hits[-1]
     need = [
+        'import androidx.compose.foundation.layout.fillMaxSize',
         'import androidx.compose.foundation.shape.CircleShape',
         'import me.rerere.hugeicons.stroke.Download01',
         'import me.rerere.rikkahub.utils.fileSizeToString',
@@ -155,22 +154,12 @@ else:
     doc_end = find_block_end(lines, di)
     if doc_end < 0:
         fail('Document block end not found', lines, di)
-    # existing click handler body (unchanged)
-    on_click = [
-        d + '        val intent = Intent(Intent.ACTION_VIEW)',
-        d + '        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)',
-        d + '        intent.data = FileProvider.getUriForFile(',
-        d + '            context,',
-        d + '            Q + context.packageName + ".fileprovider" + Q,',
-        d + '            part.url.toUri().toFile()',
-        d + '        )',
-        d + '        val chooserIndent = Intent.createChooser(intent, null)',
-        d + '        context.startActivity(chooserIndent)',
-    ]
+    # Kotlin string for package name: "${context.packageName}.fileprovider"
+    pkg_expr = chr(34) + chr(36) + '{context.packageName}.fileprovider' + chr(34)
     doc_icon = 'Icon(imageVector = HugeIcons.File02, contentDescription = null, modifier = Modifier.size(24.dp))'
     doc_name = 'part.fileName'
     doc_size = 'part.fileName.substringAfterLast(\'.\', "file").uppercase() + " · " + runCatching { part.url.toUri().toFile().length().fileSizeToString() }.getOrDefault("未知大小")'
-    new_doc = [d + 'is UIMessagePart.Document -> {'] + build_card_lines(d + '    ', doc_icon, doc_name, doc_size, on_click) + [d + '}']
+    new_doc = [d + 'is UIMessagePart.Document -> {'] + build_card_lines(d + '    ', doc_icon, doc_name, doc_size, pkg_expr) + [d + '}']
     lines[di:doc_end + 1] = new_doc
     applied.append('Document')
 
@@ -187,16 +176,16 @@ else:
     aud_icon = 'Icon(imageVector = HugeIcons.MusicNote03, contentDescription = null, modifier = Modifier.size(24.dp))'
     aud_name = 'part.url.toUri().toFile().name'
     aud_size = '"audio · " + runCatching { part.url.toUri().toFile().length().fileSizeToString() }.getOrDefault("未知大小")'
-    new_aud = [d + 'is UIMessagePart.Audio -> {'] + build_card_lines(d + '    ', aud_icon, aud_name, aud_size, on_click) + [d + '}']
+    new_aud = [d + 'is UIMessagePart.Audio -> {'] + build_card_lines(d + '    ', aud_icon, aud_name, aud_size, pkg_expr) + [d + '}']
     lines[ai:aud_end + 1] = new_aud
     applied.append('Audio')
 
     out = NL.join(lines)
-    for need in [MARK, 'Download01', 'fileSizeToString', 'CircleShape']:
+    for need in [MARK, 'Download01', 'fileSizeToString', 'CircleShape', 'fillMaxSize']:
         if need not in out:
             fail('selfcheck missing: ' + need)
     if balance(out) != bal0:
         fail('balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
 
     (ROOT / CM).write_text(out, encoding='utf-8')
-    print('batch120: OK (' + ', '.join(applied) + ')')
+    print('batch120v2: OK (' + ', '.join(applied) + ')')
