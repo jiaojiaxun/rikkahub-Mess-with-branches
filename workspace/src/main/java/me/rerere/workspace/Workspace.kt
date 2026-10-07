@@ -4,14 +4,37 @@ data class Workspace(
     val id: String,
     val name: String,
     val root: String,
+    val shellStatus: WorkspaceShellStatus = WorkspaceShellStatus.DISABLED,
     val createdAt: Long,
     val updatedAt: Long,
     val lastAccessAt: Long? = null,
 )
 
+enum class WorkspaceShellStatus {
+    DISABLED,
+    INSTALLING,
+    READY,
+    BROKEN,
+}
+
 enum class WorkspaceStorageArea {
     FILES,
+    LINUX,
 }
+
+enum class RootfsInstallStage {
+    DOWNLOADING,
+    EXTRACTING,
+    INSTALLED,
+}
+
+data class RootfsInstallProgress(
+    val stage: RootfsInstallStage,
+    val bytesRead: Long = 0,
+    val totalBytes: Long? = null,
+    val entriesExtracted: Int = 0,
+    val currentEntry: String? = null,
+)
 
 data class WorkspaceConfig(
     val maxReadBytes: Long = 512 * 1024,
@@ -35,7 +58,7 @@ data class WorkspaceSearchMatch(
     val text: String,
 )
 
-/** 递归目录树的一个条目，[depth] 相对于树的起点目录，直接子项为 1。 */
+/** 递归目录树的一个条目, [depth] 相对于树的起点目录, 直接子项为 1 */
 data class WorkspaceTreeEntry(
     val path: String,
     val name: String,
@@ -47,4 +70,12 @@ data class WorkspaceTreeEntry(
 data class WorkspaceTreeResult(
     val entries: List<WorkspaceTreeEntry>,
     val truncated: Boolean,
+)
+
+data class WorkspaceCommandResult(
+    val exitCode: Int,
+    val stdout: String,
+    val stderr: String,
+    val timedOut: Boolean = false,
+    val truncated: Boolean = false,
 )
