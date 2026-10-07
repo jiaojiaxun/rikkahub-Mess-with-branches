@@ -10,10 +10,13 @@
 - 锚点: 以 'versionCode =' 与 'versionName =' 开头的行,精确计数各 1,否则 fail。
 
 【功能 B — 工具注册】app/src/main/java/me/rerere/rikkahub/service/ChatService.kt
-- 在 tools buildList 的 localTools.getTools(assistant.localTools, invocationCtx) 之后
-  插入 add(me.rerere...appVersionTool(context)),使主路径常驻拥有版本工具。
-- 酒馆模式在该行上方提前 return@buildList,因此酒馆不含它,保持"只留 4 样"的纯净。
-- marker: rhAppVersion ;锚点计数必须恰好 1,否则 dump 现场并 exit(1)。
+- ChatService 有 2 个工具装配点共用同一锚点行
+  addAll(localTools.getTools(assistant.localTools, invocationCtx)):
+    ① buildToolsForRerun (rerun 路径, 工具重跑时可用)
+    ② handleMessageComplete 主生成路径 (酒馆模式在其上方 return@buildList, 不包含)
+- 两个装配点都插入 add(...appVersionTool(context)), 保持 rerun 与主路径镜像一致。
+- context 为 ChatService 构造属性 (private val context: Application), 两处均可达。
+- marker: rhAppVersion ;锚点计数必须恰好 2, 结构校验失败即 dump 全部命中现场并 exit(1)。
 
 【五查+Python三查全覆盖】
 1.import清单: 工具调用用全限定名(免 import);versionName 自平衡(仅改引号内)。
@@ -114,7 +117,7 @@ def stamp_version() -> bool:
 
 # ===== 【功能 B: 工具注册到 ChatService.kt】 =====
 def register_tool() -> bool:
-    """注册 appVersionTool 到 ChatService 主路径;返回 True=已变更,False=已注册。"""
+    """注册 appVersionTool 到 ChatService 两个工具装配点;返回 True=已变更,False=已注册。"""
     cs_path = ROOT / 'app' / 'src' / 'main' / 'java' / 'me' / 'rerere' / 'rikkahub' / 'service' / 'ChatService.kt'
     text = cs_path.read_text(encoding='utf-8')
     if MARK in text:
@@ -122,42 +125,53 @@ def register_tool() -> bool:
         return False
 
     lines = text.split(NL)
-    # 锚点: 在 tools buildList 内,localTools.getTools(assistant.localTools, invocationCtx) 调用行
-    # (酒馆分支上方已 return@buildList,此行只在主路径被执行)
+    # 锚点: addAll(localTools.getTools(assistant.localTools, invocationCtx))
+    # CI 形态恰好 2 处:
+    #   ① buildToolsForRerun (rerun 路径, 工具重跑时可用)
+    #   ② handleMessageComplete 主生成路径 (酒馆模式在其上方 return@buildList, 不包含)
+    # 两处都插入, 保持 rerun 与主路径工具表镜像一致 (buildToolsForRerun 的文档明确说它镜像主路径)
     anchor = 'addAll(localTools.getTools(assistant.localTools, invocationCtx))'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == anchor]
-    # 收窄: 命中行上方 12 行内必须含 invocationCtx 定义,防止误中其他工具组装路径
-    scoped = []
-    for i in hits:
-        window = lines[max(0, i - 12):i]
-        found = False
-        for w in window:
-            if 'val invocationCtx =' in w:
-                found = True
-        if found:
-            scoped.append(i)
-    if len(scoped) != 1:
-        print('::error file=ChatService.kt::register_tool anchor count=' + str(len(scoped)) + ' (expected 1, raw=' + str(len(hits)) + ')')
-        if scoped:
-            i0 = max(0, scoped[0]-3)
-            print('  [context around first hit]:')
-            for j in range(i0, min(len(lines), scoped[0]+4)):
-                mark = ' <-- anchor' if j == scoped[0] else ''
-                print('    L' + str(j+1) + ': ' + lines[j] + mark)
+    if len(hits) != 2:
+        print('::error file=ChatService.kt::register_tool anchor count=' + str(len(hits)) + ' (expected 2: buildToolsForRerun + handleMessageComplete)')
+        for i in hits:
+            i0 = max(0, i - 3)
+            print('  [context around hit L' + str(i + 1) + ']:')
+            for j in range(i0, min(len(lines), i + 4)):
+                mark = ' <-- anchor' if j == i else ''
+                print('    L' + str(j + 1) + ': ' + lines[j] + mark)
         return sys.exit(1)
 
-    idx = scoped[0]
-    indent = lines[idx][:len(lines[idx]) - len(lines[idx].lstrip())]
-    # 插入两行: ①注释行 ②add(...) 调用
-    comment_line = indent + '// ' + MARK + ': 常驻版本查询工具(零副作用;酒馆模式在其之前 return,不包含)'
-    add_line = indent + 'add(me.rerere.rikkahub.data.ai.tools.local.appVersionTool(context))'
-    lines.insert(idx + 1, comment_line)
-    lines.insert(idx + 2, add_line)
+    # 结构校验: 每个命中行上方 15 行内须含 invocationCtx 定义, 下一行须是 pluginToolProvider
+    for i in hits:
+        window = lines[max(0, i - 15):i]
+        found_ctx = False
+        for w in window:
+            if 'val invocationCtx =' in w:
+                found_ctx = True
+        if not found_ctx:
+            print('::error file=ChatService.kt::register_tool hit L' + str(i + 1) + ' lacks invocationCtx above')
+            return sys.exit(1)
+        nxt = lines[i + 1].strip() if i + 1 < len(lines) else ''
+        if nxt != 'addAll(pluginToolProvider.getTools())':
+            print('::error file=ChatService.kt::register_tool hit L' + str(i + 1) + ' unexpected next: ' + nxt)
+            return sys.exit(1)
+
+    # 自下而上插入 (reversed 避免行号漂移)
+    for i in reversed(hits):
+        indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+        comment_line = indent + '// ' + MARK + ': 常驻版本查询工具(零副作用,不挂开关)'
+        add_line = indent + 'add(me.rerere.rikkahub.data.ai.tools.local.appVersionTool(context))'
+        lines.insert(i + 1, comment_line)
+        lines.insert(i + 2, add_line)
     out = concat_lines(lines)
 
-    # 自检: marker + 调用串必须出现
-    if MARK not in out or 'appVersionTool(context)' not in out:
-        print('::error file=ChatService.kt::register_tool selfcheck failed (marker or call missing)')
+    # 自检: 标记和调用各出现 2 次 (两个装配点)
+    if out.count('appVersionTool(context)') != 2:
+        print('::error file=ChatService.kt::register_tool selfcheck: appVersionTool refs=' + str(out.count('appVersionTool(context)')) + ' expected 2')
+        return sys.exit(1)
+    if out.count(MARK) != 2:
+        print('::error file=ChatService.kt::register_tool selfcheck: marker count=' + str(out.count(MARK)) + ' expected 2')
         return sys.exit(1)
     # 括号配平检验(全文件):插入行内括号平衡,全文差值不变
     def count_parens(s: str) -> tuple:
