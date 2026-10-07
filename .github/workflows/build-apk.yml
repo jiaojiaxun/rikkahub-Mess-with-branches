@@ -17,10 +17,14 @@ jobs:
         with:
           submodules: recursive
 
+      # The build requires a JDK 21 toolchain with vendor=JetBrains. Gradle used to
+      # auto-download it from Foojay, but api.foojay.io now answers HTTP 400 (3
+      # consecutive failed runs), so install JetBrains Runtime 21 directly and let
+      # Gradle detect it via JAVA_HOME - no toolchain download, no Foojay dependency.
       - uses: actions/setup-java@v5
         with:
-          distribution: temurin
-          java-version: '17'
+          distribution: jetbrains
+          java-version: '21'
 
       # :web needs bun (installWebUiDeps) and pnpm (buildWebUi on Linux).
       - uses: oven-sh/setup-bun@v2
