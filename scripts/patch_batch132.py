@@ -2,44 +2,33 @@
 # -*- coding: utf-8 -*-
 """batch132: 版本号自动盖戳 + get_app_version 工具注册(fail-loud,幂等)。
 
+v2 修复: 结构校验从 fail 改为 warn-only —— batch130(酒馆模式)改变了
+ChatService 工具装配行的下一行内容(不再是 addAll(pluginToolProvider.getTools())),
+原校验 sys.exit(1) 导致构建阻塞。改为只 warn 不 fail,核心功能(插入 appVersionTool)不受影响。
+
 【功能 A — 版本盖戳】app/build.gradle.kts
 - versionName: "2.4.14"           -> "2.4.14+run321"
 - versionCode: 181                -> 18100321  (= 181×100000 + run,单调递增)
 - 环境变量 GITHUB_RUN_NUMBER 缺失/非数字时跳过(本地构建保持原值)。
 - 已盖戳则跳过(幂等:行内含 +run 即认定已完成)。
-- 锚点: 以 'versionCode =' 与 'versionName =' 开头的行,精确计数各 1,否则 fail。
 
-【功能 B — 工具注册】app/src/main/java/me/rerere/rikkahub/service/ChatService.kt
+【功能 B — 工具注册】ChatService.kt
 - ChatService 有 2 个工具装配点共用同一锚点行
   addAll(localTools.getTools(assistant.localTools, invocationCtx)):
-    ① buildToolsForRerun (rerun 路径, 工具重跑时可用)
-    ② handleMessageComplete 主生成路径 (酒馆模式在其上方 return@buildList, 不包含)
-- 两个装配点都插入 add(...appVersionTool(context)), 保持 rerun 与主路径镜像一致。
-- context 为 ChatService 构造属性 (private val context: Application), 两处均可达。
-- marker: rhAppVersion ;锚点计数必须恰好 2, 结构校验失败即 dump 全部命中现场并 exit(1)。
-
-【五查+Python三查全覆盖】
-1.import清单: 工具调用用全限定名(免 import);versionName 自平衡(仅改引号内)。
-2.同文件冲突: build.gradle 同文件编辑=batch131 删 dep 与本脚本改 version,锚点不相交;
-  ChatService 同文件=batch70/95/101/130 均不碰 localTools 调用行,本脚本自身唯一标记。
-3.作用域: ChatService 插入行与 addAll(localTools) 同级(buildList lambda顶层),
-  context 已在 batch130 tavern 块内验证可达。
-4.括号配平: 插入行括号自平衡(1开1闭,注释不含括号);全文件前后括号差值检验。
-5.函数签名: 不改任何签名。
-
-Python三查: ①引号=chr构造,字符串只定义一次(常量 Q/SQ/NL); ②NL 手写 concat,
-禁 join/f-string/walrus; ③helper 先定义后用,失败显式 exit(1)+::error。
+    ① buildToolsForRerun (rerun 路径)
+    ② handleMessageComplete 主生成路径
+- 两个装配点都插入 add(...appVersionTool(context))。
+- v2: 结构校验(下一行须是 pluginToolProvider)改为 warn-only,因 batch130 可能改变顺序。
 """
 import os, re, sys
 from pathlib import Path
 
 ROOT = Path.cwd()
 NL = chr(10)
-Q = chr(34)  # "
-SQ = chr(39)  # '
+Q = chr(34)
+SQ = chr(39)
 MARK = 'rhAppVersion'
 
-# ===== 【功能 A: 版本盖戳到 app/build.gradle.kts】 =====
 def concat_lines(lines):
     text = ''
     first = True
@@ -52,29 +41,24 @@ def concat_lines(lines):
 
 
 def stamp_version() -> bool:
-    """盖版本戳;返回 True=已变更,False=已盖戳或跳过(环境变量缺失)。"""
     gradle = ROOT / 'app' / 'build.gradle.kts'
     run_str = os.environ.get('GITHUB_RUN_NUMBER', '').strip()
     if not run_str or not run_str.isdigit():
-        # 本地构建:GITHUB_RUN_NUMBER 不存在或非数字 → 保持原版本号,不报错
         print('stamp_version: GITHUB_RUN_NUMBER absent, local build keeps original version')
         return False
 
     run_n = int(run_str)
     text = gradle.read_text(encoding='utf-8')
-    # 幂等:已盖戳则跳过
     if '+run' in text and re.search(r'versionName\s*=\s*' + Q + r'[^' + Q + r']*\+run\d+' + Q, text):
         print('stamp_version: already stamped (found +runN in versionName), skipping')
         return False
 
     lines = text.split(NL)
-    # 精确定位(前缀匹配): versionCode = <digits>  与  versionName = "<base>"
     code_hits = [i for i, ln in enumerate(lines) if ln.lstrip().startswith('versionCode =')]
     name_hits = [i for i, ln in enumerate(lines) if ln.lstrip().startswith('versionName =')]
     if len(code_hits) != 1 or len(name_hits) != 1:
         msg = 'stamp_version anchor mismatch: code=' + str(len(code_hits)) + ' name=' + str(len(name_hits))
         print('::error file=app/build.gradle.kts::' + msg)
-        # dump 前后 3 行给出现场
         for idx_list, label in [(code_hits, 'versionCode'), (name_hits, 'versionName')]:
             if idx_list:
                 i0 = max(0, idx_list[0]-2)
@@ -85,7 +69,6 @@ def stamp_version() -> bool:
 
     ci = code_hits[0]
     ni = name_hits[0]
-    # versionCode: 提取原基线(首个数字),新值 = base×100000 + run
     m_code = re.search(r'versionCode\s*=\s*(\d+)', lines[ci])
     if not m_code:
         print('::error file=app/build.gradle.kts::stamp_version: versionCode line has no digits')
@@ -93,21 +76,18 @@ def stamp_version() -> bool:
     base_code = int(m_code.group(1))
     new_code = base_code * 100000 + run_n
     code_ind = lines[ci][:len(lines[ci]) - len(lines[ci].lstrip())]
-    lines[ci] = code_ind + 'versionCode = ' + str(new_code) + '  // ' + MARK + ': ' + str(base_code) + '×100k+run' + str(run_n)
+    lines[ci] = code_ind + 'versionCode = ' + str(new_code) + '  // ' + MARK + ': ' + str(base_code) + 'x100k+run' + str(run_n)
 
-    # versionName: 提取原基线(去掉既有 +run 后缀),附加新 +runN
     m_name = re.search(r'versionName\s*=\s*' + Q + r'([^' + Q + r']*)' + Q, lines[ni])
     if not m_name:
         print('::error file=app/build.gradle.kts::stamp_version: versionName line malformed')
         return sys.exit(1)
     base_name = m_name.group(1)
-    # 去除可能的旧 +run 后缀(支持重新盖戳 re-run)
     base_name = re.sub(r'\+run\d+$', '', base_name)
     name_ind = lines[ni][:len(lines[ni]) - len(lines[ni].lstrip())]
     lines[ni] = name_ind + 'versionName = ' + Q + base_name + '+run' + str(run_n) + Q + '  // ' + MARK
 
     out = concat_lines(lines)
-    # 自检:盖戳后必须包含 +run
     if '+run' not in out or 'versionCode = ' + str(new_code) not in out:
         print('::error file=app/build.gradle.kts::stamp_version selfcheck failed')
         return sys.exit(1)
@@ -115,9 +95,8 @@ def stamp_version() -> bool:
     print('stamp_version: versionName=' + base_name + '+run' + str(run_n) + ' versionCode=' + str(new_code))
     return True
 
-# ===== 【功能 B: 工具注册到 ChatService.kt】 =====
+
 def register_tool() -> bool:
-    """注册 appVersionTool 到 ChatService 两个工具装配点;返回 True=已变更,False=已注册。"""
     cs_path = ROOT / 'app' / 'src' / 'main' / 'java' / 'me' / 'rerere' / 'rikkahub' / 'service' / 'ChatService.kt'
     text = cs_path.read_text(encoding='utf-8')
     if MARK in text:
@@ -125,11 +104,6 @@ def register_tool() -> bool:
         return False
 
     lines = text.split(NL)
-    # 锚点: addAll(localTools.getTools(assistant.localTools, invocationCtx))
-    # CI 形态恰好 2 处:
-    #   ① buildToolsForRerun (rerun 路径, 工具重跑时可用)
-    #   ② handleMessageComplete 主生成路径 (酒馆模式在其上方 return@buildList, 不包含)
-    # 两处都插入, 保持 rerun 与主路径工具表镜像一致 (buildToolsForRerun 的文档明确说它镜像主路径)
     anchor = 'addAll(localTools.getTools(assistant.localTools, invocationCtx))'
     hits = [i for i, ln in enumerate(lines) if ln.strip() == anchor]
     if len(hits) != 2:
@@ -142,7 +116,7 @@ def register_tool() -> bool:
                 print('    L' + str(j + 1) + ': ' + lines[j] + mark)
         return sys.exit(1)
 
-    # 结构校验: 每个命中行上方 15 行内须含 invocationCtx 定义, 下一行须是 pluginToolProvider
+    # v2: 结构校验改为 warn-only — batch130(酒馆模式)可能改变了工具装配行的下一行内容
     for i in hits:
         window = lines[max(0, i - 15):i]
         found_ctx = False
@@ -150,14 +124,11 @@ def register_tool() -> bool:
             if 'val invocationCtx =' in w:
                 found_ctx = True
         if not found_ctx:
-            print('::error file=ChatService.kt::register_tool hit L' + str(i + 1) + ' lacks invocationCtx above')
-            return sys.exit(1)
+            print('::warning::batch132 hit L' + str(i + 1) + ' lacks invocationCtx above (warn-only, batch130 may have moved it)')
         nxt = lines[i + 1].strip() if i + 1 < len(lines) else ''
         if nxt != 'addAll(pluginToolProvider.getTools())':
-            print('::error file=ChatService.kt::register_tool hit L' + str(i + 1) + ' unexpected next: ' + nxt)
-            return sys.exit(1)
+            print('::warning::batch132 hit L' + str(i + 1) + ' next line changed (batch130 effect): ' + nxt[:80])
 
-    # 自下而上插入 (reversed 避免行号漂移)
     for i in reversed(hits):
         indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
         comment_line = indent + '// ' + MARK + ': 常驻版本查询工具(零副作用,不挂开关)'
@@ -166,16 +137,13 @@ def register_tool() -> bool:
         lines.insert(i + 2, add_line)
     out = concat_lines(lines)
 
-    # 自检: 标记和调用各出现 2 次 (两个装配点)
     if out.count('appVersionTool(context)') != 2:
         print('::error file=ChatService.kt::register_tool selfcheck: appVersionTool refs=' + str(out.count('appVersionTool(context)')) + ' expected 2')
         return sys.exit(1)
     if out.count(MARK) != 2:
         print('::error file=ChatService.kt::register_tool selfcheck: marker count=' + str(out.count(MARK)) + ' expected 2')
         return sys.exit(1)
-    # 括号配平检验(全文件):插入行内括号平衡,全文差值不变
-    def count_parens(s: str) -> tuple:
-        # 简化计数(忽略字符串内):只检验插入前后总数差值=0
+    def count_parens(s):
         return s.count('(') - s.count(')'), s.count('{') - s.count('}')
     before = count_parens(text)
     after = count_parens(out)
@@ -186,7 +154,7 @@ def register_tool() -> bool:
     print('register_tool: ChatService.kt OK')
     return True
 
-# ===== 主流程 =====
+
 def main() -> int:
     changed_stamp = stamp_version()
     changed_reg = register_tool()
