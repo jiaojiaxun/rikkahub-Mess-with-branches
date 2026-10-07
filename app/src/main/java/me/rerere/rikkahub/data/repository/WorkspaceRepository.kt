@@ -1,17 +1,26 @@
 package me.rerere.rikkahub.data.repository
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.db.dao.WorkspaceDAO
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.utils.JsonInstant
+import me.rerere.workspace.BackgroundStatus
+import me.rerere.workspace.RootfsInstallProgress
+import me.rerere.workspace.RootfsInstaller
+import me.rerere.workspace.WorkspaceCommandResult
 import me.rerere.workspace.WorkspaceFileEntry
 import me.rerere.workspace.WorkspaceManager
+import me.rerere.workspace.WorkspaceShellStatus
 import me.rerere.workspace.WorkspaceStorageArea
 import me.rerere.workspace.WorkspaceTreeResult
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import kotlin.uuid.Uuid
@@ -19,21 +28,31 @@ import kotlin.uuid.Uuid
 class WorkspaceRepository(
     private val dao: WorkspaceDAO,
     private val manager: WorkspaceManager,
+    private val rootfsInstaller: RootfsInstaller,
     private val settingsStore: SettingsStore,
 ) {
     fun listFlow(): Flow<List<WorkspaceEntity>> = dao.listFlow()
 
-    /**
-     * 备份恢复后只要数据库中有工作区记录，就重建其文件骨架；
-     * 文件目录不存在不再把工作区标记成 Linux shell BROKEN。
-     */
     suspend fun checkIntegrity() = withContext(Dispatchers.IO) {
-        dao.getAll().forEach { workspace ->
-            val directory = manager.workspaceDir(workspace.root)
-            if (!directory.exists()) {
-                Log.w(TAG, "Workspace directory missing, recreating: id=${workspace.id}, root=${workspace.root}")
+        val workspaces = dao.getAll()
+        for (workspace in workspaces) {
+            val dir = manager.workspaceDir(workspace.root)
+            if (!dir.exists()) {
+                // 目录缺失时不删除记录(例如恢复备份后工作区文件未随数据库一起恢复),
+                // 仅标记为 BROKEN 以保留记录与助手绑定, 避免误删用户工作区
+                Log.w(TAG, "Workspace directory missing, marking as broken: id=${workspace.id}, root=${workspace.root}")
+                if (workspace.shellStatus != WorkspaceShellStatus.BROKEN.name) {
+                    updateShellState(workspace.id, WorkspaceShellStatus.BROKEN.name)
+                }
+                continue
             }
-            manager.ensureWorkspace(workspace.root)
+            val statusName = workspace.shellStatus
+            if ((statusName == WorkspaceShellStatus.READY.name || statusName == WorkspaceShellStatus.INSTALLING.name)
+                && !manager.hasRootfs(workspace.root)
+            ) {
+                Log.w(TAG, "Rootfs missing, resetting shell status: id=${workspace.id}")
+                updateShellState(workspace.id, WorkspaceShellStatus.DISABLED.name)
+            }
         }
     }
 
@@ -67,13 +86,23 @@ class WorkspaceRepository(
         require(!isNameTaken(finalName, excludeId = id)) {
             "Workspace name already exists: $finalName"
         }
-        dao.upsert(workspace.copy(name = finalName, updatedAt = System.currentTimeMillis()))
+        dao.upsert(
+            workspace.copy(
+                name = finalName,
+                updatedAt = System.currentTimeMillis(),
+            )
+        )
         return true
     }
 
+    /** 名字是否已被其他 workspace 占用（trim 后精确匹配，排除 [excludeId] 自身） */
     suspend fun isNameTaken(name: String, excludeId: String?): Boolean {
         val target = name.trim()
         return dao.getAll().any { it.id != excludeId && it.name.trim() == target }
+    }
+
+    suspend fun setShellCompatibilityMode(id: String, enabled: Boolean) {
+        dao.setShellCompatibilityMode(id, enabled, System.currentTimeMillis())
     }
 
     suspend fun setToolApproval(id: String, toolName: String, needsApproval: Boolean): Boolean {
@@ -88,18 +117,52 @@ class WorkspaceRepository(
         return true
     }
 
-    suspend fun listFiles(
+    suspend fun installRootfs(
         id: String,
-        area: WorkspaceStorageArea = WorkspaceStorageArea.FILES,
-        path: String = "",
-    ): List<WorkspaceFileEntry> = withContext(Dispatchers.IO) {
-        requireFilesArea(area)
-        val workspace = dao.getById(id) ?: return@withContext emptyList()
-        manager.ensureWorkspace(workspace.root)
-        manager.listFiles(workspace.root, path)
+        url: String,
+        onProgress: (RootfsInstallProgress) -> Unit = {},
+    ): Boolean {
+        val workspace = dao.getById(id) ?: return false
+        updateShellState(workspace, WorkspaceShellStatus.INSTALLING.name)
+        try {
+            // runInterruptible 让协程取消转成线程中断, 打断 install 内阻塞的下载/解压循环
+            runInterruptible(Dispatchers.IO) {
+                rootfsInstaller.install(workspace.root, url, onProgress)
+            }
+            updateShellState(workspace, WorkspaceShellStatus.READY.name)
+            return true
+        } catch (e: CancellationException) {
+            withContext(NonCancellable) {
+                restoreShellState(workspace)
+            }
+            throw e
+        } catch (e: InterruptedException) {
+            withContext(NonCancellable) {
+                restoreShellState(workspace)
+            }
+            throw CancellationException("Rootfs install cancelled").also { it.initCause(e) }
+        } catch (e: Throwable) {
+            Log.e(TAG, "installRootfs failed: workspace=${workspace.id}, root=${workspace.root}, url=$url", e)
+            updateShellState(workspace, WorkspaceShellStatus.BROKEN.name)
+            throw e
+        }
     }
 
-    suspend fun readText(id: String, path: String): String = withContext(Dispatchers.IO) {
+    suspend fun listFiles(
+        id: String,
+        area: WorkspaceStorageArea,
+        path: String,
+        limit: Int? = null,
+    ): List<WorkspaceFileEntry> = withContext(Dispatchers.IO) {
+        val workspace = dao.getById(id) ?: return@withContext emptyList()
+        manager.ensureWorkspace(workspace.root)
+        manager.listFiles(workspace.root, path, area, limit)
+    }
+
+    suspend fun readText(
+        id: String,
+        path: String,
+    ): String = withContext(Dispatchers.IO) {
         val workspace = dao.getById(id) ?: error("Workspace not found: $id")
         manager.ensureWorkspace(workspace.root)
         manager.readText(workspace.root, path)
@@ -116,19 +179,31 @@ class WorkspaceRepository(
         manager.writeText(workspace.root, path, text, overwrite)
     }
 
+    /**
+     * 读取文本用于应用内预览/编辑, 支持两个存储区.
+     * FILES 区走 [WorkspaceManager.readText] (自带大小保护); LINUX 区通过 exportFile 读入内存,
+     * 因此这里对 LINUX 区显式做大小限制, 避免大文件撑爆内存.
+     */
     suspend fun readTextForPreview(
         id: String,
         area: WorkspaceStorageArea,
         path: String,
     ): String = withContext(Dispatchers.IO) {
-        requireFilesArea(area)
-        readText(id, path)
-    }
-
-    suspend fun createFolder(id: String, path: String): WorkspaceFileEntry = withContext(Dispatchers.IO) {
         val workspace = dao.getById(id) ?: error("Workspace not found: $id")
         manager.ensureWorkspace(workspace.root)
-        manager.createFolder(workspace.root, path)
+        when (area) {
+            WorkspaceStorageArea.FILES -> manager.readText(workspace.root, path)
+            WorkspaceStorageArea.LINUX -> {
+                val size = manager.fileSize(workspace.root, path, area)
+                require(size <= MAX_PREVIEW_BYTES) {
+                    "文件过大, 无法预览 (${size} bytes)"
+                }
+                ByteArrayOutputStream().use { out ->
+                    manager.exportFile(workspace.root, path, area, out)
+                    out.toString(Charsets.UTF_8.name())
+                }
+            }
+        }
     }
 
     suspend fun importFile(
@@ -138,18 +213,29 @@ class WorkspaceRepository(
         fileName: String,
         inputStream: InputStream,
     ): WorkspaceFileEntry = withContext(Dispatchers.IO) {
-        requireFilesArea(area)
         val workspace = dao.getById(id) ?: error("Workspace not found: $id")
         manager.ensureWorkspace(workspace.root)
-        manager.importFile(workspace.root, destinationPath, fileName, inputStream)
+        manager.importFile(workspace.root, destinationPath, area, fileName, inputStream)
     }
 
-    suspend fun fileSize(id: String, area: WorkspaceStorageArea, path: String): Long =
-        withContext(Dispatchers.IO) {
-            requireFilesArea(area)
-            val workspace = dao.getById(id) ?: error("Workspace not found: $id")
-            manager.fileSize(workspace.root, path)
-        }
+    suspend fun fileSize(
+        id: String,
+        area: WorkspaceStorageArea,
+        path: String,
+    ): Long = withContext(Dispatchers.IO) {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        manager.fileSize(workspace.root, path, area)
+    }
+
+    suspend fun resolveFile(
+        id: String,
+        area: WorkspaceStorageArea,
+        path: String,
+    ) = withContext(Dispatchers.IO) {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        manager.ensureWorkspace(workspace.root)
+        manager.resolveFile(workspace.root, path, area)
+    }
 
     suspend fun exportFile(
         id: String,
@@ -157,20 +243,39 @@ class WorkspaceRepository(
         path: String,
         outputStream: OutputStream,
     ) = withContext(Dispatchers.IO) {
-        requireFilesArea(area)
         val workspace = dao.getById(id) ?: error("Workspace not found: $id")
-        manager.exportFile(workspace.root, path, outputStream)
+        manager.exportFile(workspace.root, path, area, outputStream)
     }
 
-    suspend fun readFolderTree(
+    /** 按 Rootfs 内绝对路径读取文件大小, 支持 /workspace、bind mount 与 Rootfs 内部路径 */
+    suspend fun rootfsFileSize(
         id: String,
-        area: WorkspaceStorageArea = WorkspaceStorageArea.FILES,
-        path: String = "",
-    ): WorkspaceTreeResult = withContext(Dispatchers.IO) {
-        requireFilesArea(area)
+        path: String,
+    ): Long = withContext(Dispatchers.IO) {
         val workspace = dao.getById(id) ?: error("Workspace not found: $id")
         manager.ensureWorkspace(workspace.root)
-        manager.tree(workspace.root, path)
+        manager.rootfsFileSize(workspace.root, path)
+    }
+
+    /** 按 Rootfs 内绝对路径导出文件内容, 支持 /workspace、bind mount 与 Rootfs 内部路径 */
+    suspend fun exportRootfsFile(
+        id: String,
+        path: String,
+        outputStream: OutputStream,
+    ) = withContext(Dispatchers.IO) {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        manager.ensureWorkspace(workspace.root)
+        manager.exportRootfsFile(workspace.root, path, outputStream)
+    }
+
+    /** 按 Rootfs 内绝对路径递归列出目录树, 支持 /workspace、bind mount 与 Rootfs 内部路径 */
+    suspend fun readFolderTree(
+        id: String,
+        path: String,
+    ): WorkspaceTreeResult = withContext(Dispatchers.IO) {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        manager.ensureWorkspace(workspace.root)
+        manager.rootfsTree(workspace.root, path)
     }
 
     suspend fun deleteFile(
@@ -178,10 +283,12 @@ class WorkspaceRepository(
         area: WorkspaceStorageArea,
         path: String,
         recursive: Boolean,
-    ): Boolean = withContext(Dispatchers.IO) {
-        requireFilesArea(area)
-        val workspace = dao.getById(id) ?: return@withContext false
-        manager.deleteFile(workspace.root, path, recursive)
+    ): Boolean {
+        val deleted = withContext(Dispatchers.IO) {
+            val workspace = dao.getById(id) ?: return@withContext false
+            manager.deleteFile(workspace.root, path, recursive, area)
+        }
+        return deleted
     }
 
     suspend fun moveFile(
@@ -195,10 +302,68 @@ class WorkspaceRepository(
         manager.moveFile(workspace.root, source, target, overwrite)
     }
 
+    suspend fun executeCommand(
+        id: String,
+        command: String,
+        cwd: String = "",
+        timeoutMillis: Long = WorkspaceManager.DEFAULT_COMMAND_TIMEOUT_MS,
+        stdin: ByteArray? = null,
+    ): WorkspaceCommandResult {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        // runInterruptible 让协程取消转化为线程中断，从而打断阻塞的 Process.waitFor 并杀掉进程
+        return runInterruptible(Dispatchers.IO) {
+            manager.ensureWorkspace(workspace.root)
+            manager.executeCommand(
+                workspace.root, command, cwd, timeoutMillis, stdin,
+                shellCompatibilityMode = workspace.shellCompatibilityMode,
+            )
+        }
+    }
+
+    suspend fun startBackground(
+        id: String,
+        command: String,
+        cwd: String = "",
+    ): BackgroundStatus {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        // 与 executeCommand 用 runInterruptible 相反: 那里取消即意味着杀掉前台进程, 这里
+        // 进程是要在工具调用结束后继续跑的后台任务, 取消(例如外层 withTimeoutOrNull 的共享
+        // turn 预算到期)绝不能打断启动或丢弃刚拿到的 id, 否则进程已经起来(端口已绑定/名额
+        // 已占用), 但调用方永远拿不到 id 去查询或杀掉它。NonCancellable 让启动+注册这一步
+        // 不可被取消、结果不会被丢弃；Dispatchers.IO 仍然只是把阻塞的进程启动挪到后台线程。
+        return withContext(NonCancellable + Dispatchers.IO) {
+            manager.ensureWorkspace(workspace.root)
+            manager.startBackground(workspace.root, command, cwd)
+        }
+    }
+
+    suspend fun backgroundStatus(id: String, taskId: String): BackgroundStatus? {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        return withContext(Dispatchers.IO) {
+            manager.backgroundStatus(workspace.root, taskId)
+        }
+    }
+
+    suspend fun listBackground(id: String): List<BackgroundStatus> {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        return withContext(Dispatchers.IO) {
+            manager.listBackground(workspace.root)
+        }
+    }
+
+    suspend fun killBackground(id: String, taskId: String): Boolean {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        return withContext(Dispatchers.IO) {
+            manager.killBackground(workspace.root, taskId)
+        }
+    }
+
     suspend fun delete(id: String): Boolean {
         val workspace = dao.getById(id) ?: return false
         dao.deleteById(id)
-        withContext(Dispatchers.IO) { manager.deleteWorkspace(workspace.root) }
+        withContext(Dispatchers.IO) {
+            manager.deleteWorkspace(workspace.root)
+        }
         cleanupAssistantReferences(id)
         return true
     }
@@ -217,11 +382,28 @@ class WorkspaceRepository(
         }
     }
 
-    private fun requireFilesArea(area: WorkspaceStorageArea) {
-        require(area == WorkspaceStorageArea.FILES) { "Only the files workspace is available" }
+    private suspend fun restoreShellState(workspace: WorkspaceEntity) {
+        updateShellState(workspace.id, workspace.shellStatus)
+    }
+
+    private suspend fun updateShellState(
+        workspace: WorkspaceEntity,
+        shellStatus: String,
+    ) = updateShellState(workspace.id, shellStatus)
+
+    private suspend fun updateShellState(
+        workspaceId: String,
+        shellStatus: String,
+    ) {
+        dao.updateShellStatus(
+            id = workspaceId,
+            shellStatus = shellStatus,
+            updatedAt = System.currentTimeMillis(),
+        )
     }
 
     companion object {
         private const val TAG = "WorkspaceRepository"
+        private const val MAX_PREVIEW_BYTES = 512L * 1024
     }
 }
