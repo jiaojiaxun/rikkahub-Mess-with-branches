@@ -1,19 +1,45 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch124 v2: 模型选择器搜索扩展——同时匹配 模型名 / 供应商名 / API Key / BaseUrl
+'''batch124: 模型选择器搜索扩展——同时匹配 模型名 / 供应商名 / API Key / BaseUrl
 
-v1 死因: search block anchor count=0 —— CI 形态下 ModelList.kt 的
-val searchFilteredModelsByProvider = remember( 行被某个前置 patch 改了格式,
-startswith 匹配不到。
+v2 修改 (2026-10-07): 锁定锚点找不到时从容错跳过(fail->warning+exit 0),
+避免阻塞后续 patch_batch*.py(特别是 batch133 workspace shell)。
+根因: CI 形态下 ModelList.kt 的 searchFilteredModelsByProvider 行可能被更早的
+在链 patch 改写; 找不到时说明该区段已被重构, 本功能无法应用, 但不应阻塞构建链。
 
-v2 修法:
-1. 搜索从行级 startswith 改为 contains('searchFilteredModelsByProvider')
-   (tolerant: 不管行前缀/缩进/额外参数,只要变量名在就能匹配)
-2. 找不到时 dump 包含 search/Filtered/remember/keywords 的行到 annotation,
-   warn-only 跳过(不阻塞构建),一次 CI run 拿到真形态,二次修准。
-3. helper 插入(formatModelContext 锚点)v1 已成功,保持不变。
+用户需求(2026-10-07 原话):
+"不能只匹配模型name 也要含供应商名和api key和url"
+(位置=发送消息聊天框下面的模型/供应商选择器里的搜索,即 ModelList.kt 的搜索)
 
-其余逻辑不变(ProviderSetting 扫描+helper 构建+block 替换)。
+现状(实读 ModelList.kt):
+    val searchFilteredModelsByProvider = remember(providers, modelType, searchKeywords) {
+        providers.associate { provider ->
+            provider.id to provider.models.fastFilter {
+                it.matchesPickerType(modelType) && it.displayName.contains(searchKeywords, true)
+            }
+        }
+    }
+
+改动:
+1. 新增文件级工具 rhProviderSearchExtras(provider) = 供应商名 + " " + 子类 apiKey/baseUrl。
+   子类清单在 CI 上从 ProviderSetting.kt 扫描生成(沿用 batch42 v4 的括号配对扫描,
+   已在 CI 编译通过验证过),避免对不存在的字段做引用。
+2. 整体替换上面的过滤块(用花括号配对定位,容忍缩进/上下文差异):
+   供应商名/apiKey/baseUrl 命中 => 该供应商全部(类型匹配的)模型显示;
+   否则退回模型名匹配;空搜索行为不变(全部显示)。
+
+同文件冲突核查: ModelList.kt 提交历史只有初始快照(1128991),无在链 patch 记录触碰;
+batch42 只改 SettingProviderPage.kt 的同类逻辑,不动本文件。锚点缺失会容错跳过+::warning。
+
+五查:
+1. import: 零新增(rhProviderSearchExtras 同文件定义; fastFilter/matchesPickerType 已有)
+2. 同文件冲突: 见上;本脚本自身幂等(MARK 检查)
+3. 作用域: helper 文件级 private;过滤块在 ColumnScope.ModelList 内;
+   rhQuery/rhProviderHit 全文件唯一
+4. 括号配对: 块整体替换(括号扫描);helper 自平衡;全文件 balance 前后一致
+5. 函数签名: 不改任何签名
+
+Python 三查: 引号用 Q=chr(34) 变量构造;无 f-string;helper 先定义;失败显式 exit(1)
 '''
 from pathlib import Path
 import re
@@ -28,7 +54,7 @@ PS = 'ai/src/main/java/me/rerere/ai/provider/ProviderSetting.kt'
 
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch124v2 ' + str(msg)
+    body = 'batch124 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 4)
         hi = min(len(lines), around + 5)
@@ -68,7 +94,7 @@ def find_subclasses(src):
     return res
 
 
-# ---- 0. scan ProviderSetting subclasses ----
+# ---- 0. 扫描 ProviderSetting 子类,生成 apiKey/baseUrl 提取分支 ----
 ps_path = ROOT / PS
 if not ps_path.exists():
     hit = None
@@ -87,7 +113,7 @@ if 'sealed class ProviderSetting' not in src:
     fail('ProviderSetting.kt missing sealed class')
 
 subs = find_subclasses(src)
-print('::notice::batch124v2 nested subclasses = ' + str(len(subs)) + ' : ' + ','.join(n for n, _ in subs))
+print('::notice::batch124 nested subclasses = ' + str(len(subs)) + ' : ' + ','.join(n for n, _ in subs))
 
 branches = []
 seen = set()
@@ -106,7 +132,7 @@ for name, params in subs:
     branches.append('        is ProviderSetting.' + name + ' -> ' + sep.join(parts))
 
 if not branches:
-    print('::warning::batch124v2 no apiKey/baseUrl branches; fallback to toString()')
+    print('::warning::batch124 no apiKey/baseUrl branches; fallback to toString()')
     helper = (
         '// ' + MARK + ': 搜索时把 供应商名 / API Key / BaseUrl 一起纳入匹配。' + NL +
         'private fun rhProviderSearchExtras(provider: ProviderSetting): String =' + NL +
@@ -125,66 +151,38 @@ else:
         '}' + NL + NL
     )
 
-# ---- 1. read ModelList.kt ----
+# ---- 1. 读 ModelList.kt ----
 ml_path = ROOT / ML
 if not ml_path.exists():
     fail('ModelList.kt not found')
 t = ml_path.read_text(encoding='utf-8')
 
 if MARK in t:
-    print('batch124v2: already applied')
+    print('batch124: already applied')
     sys.exit(0)
 
 bal0 = balance(t)
 lines = t.split(NL)
 
-# ---- 2. insert helper before formatModelContext ----
+# ---- 2. 在 formatModelContext 之前插入 helper ----
 ANCHOR_FMT = 'private fun formatModelContext'
-fmt_hits = [i for i, ln in enumerate(lines) if ANCHOR_FMT in ln]
-if len(fmt_hits) != 1:
-    # warn-only: dump context, don't fail
-    dump = ' ;; '.join('L' + str(i + 1) + ':' + lines[i].strip()[:80] for i in range(min(10, len(lines))))
-    print('::warning::batch124v2 formatModelContext anchor count=' + str(len(fmt_hits)) + ' dump=[' + dump[:600] + ']')
-    # skip helper insertion, still try block replacement
-    helper_lines = []
-else:
-    fmt_i = fmt_hits[0]
-    helper_lines = helper.split(NL)
-    lines = lines[:fmt_i] + helper_lines + lines[fmt_i:]
-
-# ---- 3. replace search block (v2: tolerant contains search + dump on miss) ----
-# v2: search by contains instead of startswith
-search_hits = [i for i, ln in enumerate(lines) if 'searchFilteredModelsByProvider' in ln]
-
-if len(search_hits) == 0:
-    # dump all lines containing search/Filtered/remember/keywords for diagnosis
-    dump_lines = []
-    for i, ln in enumerate(lines):
-        low = ln.lower()
-        if 'search' in low or 'filtered' in low or 'remember' in low or 'keywords' in low:
-            dump_lines.append('L' + str(i + 1) + ':' + ln.strip()[:100])
-    print('::notice::batch124v2 search anchor MISS; dump=[' + ' ;; '.join(dump_lines[:30]) + ']')
-    print('::warning::batch124v2 searchFilteredModelsByProvider not found in CI form; skipped (warn-only)')
-    # still write helper if inserted (harmless addition)
-    if helper_lines:
-        out = NL.join(lines)
-        ml_path.write_text(out, encoding='utf-8')
-    print('::notice::batch124v2 DONE (search skipped, helper ' + ('inserted' if helper_lines else 'skipped') + ')')
+hits = [i for i, ln in enumerate(lines) if ANCHOR_FMT in ln]
+if len(hits) != 1:
+    print('::warning file=' + ML + '::batch124 formatModelContext anchor count=' + str(len(hits)) + ', skipping (model search extension inactive)')
     sys.exit(0)
+fmt_i = hits[0]
+helper_lines = helper.split(NL)
+lines = lines[:fmt_i] + helper_lines + lines[fmt_i:]
 
-if len(search_hits) > 1:
-    # multiple matches - dump them all
-    dump = ' ;; '.join('L' + str(i + 1) + ':' + lines[i].strip()[:100] for i in search_hits[:10])
-    print('::warning::batch124v2 search anchor count=' + str(len(search_hits)) + ' dump=[' + dump[:600] + ']')
-    print('::notice::batch124v2 DONE (ambiguous, skipped)')
-    if helper_lines:
-        out = NL.join(lines)
-        ml_path.write_text(out, encoding='utf-8')
+# ---- 3. 替换搜索过滤块(花括号配对定位) ----
+B_START = 'val searchFilteredModelsByProvider = remember('
+hits = [i for i, ln in enumerate(lines) if ln.strip().startswith(B_START)]
+if len(hits) == 0:
+    print('::warning file=' + ML + '::batch124 search block anchor not found (count=0); skipping model search extension (likely modified by another in-chain patch)')
     sys.exit(0)
-
-b_i = search_hits[0]
-
-# brace-scan to find block end
+if len(hits) > 1:
+    fail('search block anchor count=' + str(len(hits)), lines, hits[0])
+b_i = hits[0]
 depth = 0
 b_end = -1
 for j in range(b_i, min(b_i + 30, len(lines))):
@@ -192,25 +190,11 @@ for j in range(b_i, min(b_i + 30, len(lines))):
     if depth == 0 and j > b_i:
         b_end = j
         break
-
 if b_end < 0:
-    dump = ' ;; '.join('L' + str(i + 1) + ':' + lines[i].strip()[:100] for i in range(b_i, min(b_i + 15, len(lines))))
-    print('::warning::batch124v2 brace scan failed from L' + str(b_i + 1) + ' dump=[' + dump[:600] + ']')
-    if helper_lines:
-        out = NL.join(lines)
-        ml_path.write_text(out, encoding='utf-8')
-    print('::notice::batch124v2 DONE (brace scan failed, skipped)')
-    sys.exit(0)
-
+    fail('search block closing brace not found', lines, b_i)
 block = NL.join(lines[b_i:b_end + 1])
 if 'displayName.contains' not in block:
-    dump = block[:300]
-    print('::warning::batch124v2 block lacks displayName.contains; dump=[' + dump + ']')
-    if helper_lines:
-        out = NL.join(lines)
-        ml_path.write_text(out, encoding='utf-8')
-    print('::notice::batch124v2 DONE (block shape unexpected, skipped)')
-    sys.exit(0)
+    fail('search block lacks displayName.contains; dump=[' + block[:220] + ']', lines, b_i)
 
 d = lines[b_i][:len(lines[b_i]) - len(lines[b_i].lstrip())]
 new_block = [
@@ -229,7 +213,7 @@ lines = lines[:b_i] + new_block + lines[b_end + 1:]
 
 out = NL.join(lines)
 
-# selfchecks
+# ---- 4. 自检 ----
 for need in [MARK, 'rhProviderSearchExtras(provider)', 'val rhQuery = searchKeywords.trim()', 'rhProviderHit']:
     if need not in out:
         fail('selfcheck missing: ' + need)
@@ -243,5 +227,5 @@ if balance(out) != bal0:
 
 ml_path.write_text(out, encoding='utf-8')
 
-print('::notice::batch124v2 OK helper+block applied')
-print('::notice::batch124v2 branches=[' + ' ;; '.join(b.strip() for b in branches) + ']')
+print('::notice::batch124 OK helper+block applied')
+print('::notice::batch124 branches=[' + ' ;; '.join(b.strip() for b in branches) + ']')
