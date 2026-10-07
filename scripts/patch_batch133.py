@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch133 v2: workspace shell 移植配套 — AppDatabase 迁移改为 tolerant + dump + warn-only
+'''batch133 v3: workspace shell 移植配套 — 补 WorkspaceFileSystem 到 mirror 列表
 
-v1 死因: AppDatabase.kt 的 'version = 34,' 锚点在 CI 形态找不到(count=0)。
-某个前置 patch 已改了版本号。v2 改为:
-1. dump 所有 version/AutoMigration 行到 annotation(一次 CI run 拿到真形态)
-2. 用正则读当前 version,+1 后替换(不再硬编码 34->35)
-3. AutoMigration 插到最后一个 AutoMigration 行之后
-4. 找不到锚点时 warn-only 跳过,不阻塞构建
+v1 死因: AppDatabase.kt 'version = 34,' 锚点在 CI 形态找不到(count=0)。
+v2 改法: AppDatabase 部分改为 tolerant+dump+warn-only(正则读当前 version,+1 替换)。
+v3 修因: mirror 列表漏了 WorkspaceFileSystem.kt —— 上游给它加了 limit 参数,
+  WorkspaceManager.kt(mirror 后)调 list(root,path,limit) 3 参数,
+  fork 版 WorkspaceFileSystem 只有 list(root,path) 2 参数 → 编译 TOO_MANY_ARGUMENTS。
+  v3 把 WorkspaceFileSystem.kt 加入 MIRROR_FILES,让 CI 覆盖为上游版。
 
-其余部分(jniLibs/mirror/WorkspaceTools/toml/workspace-gradle)不变。
+其余部分不变。
 '''
 import os, re, sys, urllib.request
 from pathlib import Path
@@ -35,6 +35,7 @@ JNI_FILES = [
 MIRROR_FILES = [
     'workspace/src/main/java/me/rerere/workspace/Workspace.kt',
     'workspace/src/main/java/me/rerere/workspace/WorkspaceManager.kt',
+    'workspace/src/main/java/me/rerere/workspace/WorkspaceFileSystem.kt',
     'workspace/src/main/java/me/rerere/workspace/WorkspaceShellRunner.kt',
     'workspace/src/main/java/me/rerere/workspace/ProotShellRunner.kt',
     'workspace/src/main/java/me/rerere/workspace/RootfsInstaller.kt',
@@ -141,7 +142,7 @@ for abi, name in JNI_FILES:
 # =====================================================================
 # 2. 上游镜像校验
 # =====================================================================
-print('::notice::batch133 mirror check begin (10 files)')
+print('::notice::batch133 mirror check begin (11 files)')
 mirror_fixed = []
 mirror_skipped = []
 for rel in MIRROR_FILES + [WT]:
@@ -237,7 +238,6 @@ if 'AutoMigration(from = 34, to = 35)' in adb_text:
     print('::notice::batch133 AppDatabase already migrated (v35)')
 else:
     adb_lines = adb_text.split(NL)
-    # dump all version/AutoMigration lines to annotation for CI form diagnosis
     dump_lines = []
     for i, ln in enumerate(adb_lines):
         low = ln.lower()
@@ -259,12 +259,10 @@ else:
             if cur_ver >= 35:
                 print('::notice::batch133 AppDatabase version already ' + str(cur_ver) + ' (>=35), skipping bump')
             else:
-                # replace version
                 adb_lines[v_i] = adb_lines[v_i].replace(
                     'version = ' + str(cur_ver),
                     'version = ' + str(new_ver),
                 )
-                # find last AutoMigration line to insert after
                 am_hits = [i for i, ln in enumerate(adb_lines) if 'AutoMigration(from' in ln]
                 if am_hits:
                     last_am = am_hits[-1]
