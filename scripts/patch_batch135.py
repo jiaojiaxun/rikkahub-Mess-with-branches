@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch135 v2: WebDAV/S3 备份上传改用 AppScope（后台传输）
+'''batch135 v3: WebDAV/S3 备份上传改用 AppScope（后台传输）
 
-v1 死因: restore() 锚点 'suspend fun restore(' + 'item: WebDavBackupItem' 要求同一行,
-但 restore 签名是多行的 — suspend fun restore( 在一行, item: WebDavBackupItem 在下一行。
-复合条件永远不匹配。
+v2 死因: find_fn_end 的括号扫描逻辑 bug——suspend fun restore( 行没有 {,depth=0,
+下一行 item: WebDavBackupItem 也没有 {,depth=0 → 条件 depth==0 and j>start 立刻命中,
+返回了 start+1 而不是函数真正结尾。只删了 2 行插入了 15 行,原函数体的 } 全留着。
 
-v2 修法:
-1. restore/restoreFromS3 锚点改为: 先找 'suspend fun restore(' 行,再往下 5 行内
-   找 'WebDavBackupItem' 或 'S3BackupItem' 确认。
-2. backup()/backupToS3() 同理(先找函数名行,再验证体内容)。
-3. 已转换的跳过(检查 'fun backup()' 而非 'suspend fun backup()')。
-4. 全部 warn-only:任何锚点失败不阻塞构建,只 ::warning。
+v3 修法: find_fn_end 加 seen_brace 标志——必须先看到 { 才开始算 depth 归零。
+
+其余不变:AppScope 注入 + isBackingUp + 4 个函数转 AppScope + 全部 warn-only。
 '''
 import sys
 from pathlib import Path
@@ -24,7 +21,7 @@ VM = 'app/src/main/java/me/rerere/rikkahub/ui/pages/backup/BackupVM.kt'
 
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch135v2 ' + str(msg)
+    body = 'batch135v3 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -40,12 +37,12 @@ def balance(text):
 
 
 def warn(msg):
-    print('::warning file=' + VM + '::batch135v2 ' + str(msg))
+    print('::warning file=' + VM + '::batch135v3 ' + str(msg))
 
 
 t = (ROOT / VM).read_text(encoding='utf-8')
 if MARK in t and 'appScope.launch' in t and 'suspend fun backup()' not in t:
-    print('batch135v2: fully applied, skip')
+    print('batch135v3: fully applied, skip')
     sys.exit(0)
 
 bal0 = balance(t)
@@ -54,7 +51,6 @@ changed = 0
 
 
 def find_fn(lines, name_pattern, verify_pattern):
-    '''Find function: first find name_pattern line, then verify_pattern within next 8 lines.'''
     candidates = [i for i, ln in enumerate(lines) if name_pattern in ln]
     for i in candidates:
         window = lines[i:i + 8]
@@ -64,11 +60,14 @@ def find_fn(lines, name_pattern, verify_pattern):
 
 
 def find_fn_end(lines, start):
-    '''Brace-scan from start line to find closing brace.'''
+    '''v3 fix: must see { before checking depth==0'''
     depth = 0
+    seen_brace = False
     for j in range(start, min(start + 25, len(lines))):
         depth += lines[j].count('{') - lines[j].count('}')
-        if depth == 0 and j > start:
+        if '{' in lines[j]:
+            seen_brace = True
+        if seen_brace and depth == 0:
             return j
     return -1
 
@@ -81,7 +80,7 @@ if 'import me.rerere.rikkahub.AppScope' not in t:
     else:
         lines.insert(hits[0] + 1, 'import me.rerere.rikkahub.AppScope')
         changed += 1
-        print('batch135v2: AppScope import added')
+        print('batch135v3: AppScope import added')
 
 # ---- 2. constructor: add appScope param ----
 if 'private val appScope: AppScope' not in t:
@@ -93,7 +92,7 @@ if 'private val appScope: AppScope' not in t:
         indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
         lines.insert(i + 1, indent + 'private val appScope: AppScope,  // ' + MARK)
         changed += 1
-        print('batch135v2: appScope param added')
+        print('batch135v3: appScope param added')
 
 # ---- 3. add isBackingUp after progress declaration ----
 if 'isBackingUp' not in t:
@@ -105,25 +104,23 @@ if 'isBackingUp' not in t:
         indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
         lines.insert(i + 1, indent + 'val isBackingUp = MutableStateFlow(false)  // ' + MARK)
         changed += 1
-        print('batch135v2: isBackingUp added')
+        print('batch135v3: isBackingUp added')
 
 
 def convert_to_appscope(lines, fn_name_pattern, fn_verify_pattern, build_body_fn, label):
-    '''Convert a suspend fn to non-suspend + appScope.launch. Returns (lines, changed).'''
     i = find_fn(lines, fn_name_pattern, fn_verify_pattern)
     if i < 0:
         warn(label + ' anchor not found, skip')
         return lines, 0
     if 'appScope.launch' in NL.join(lines[i:i + 10]):
-        print('batch135v2: ' + label + ' already converted, skip')
+        print('batch135v3: ' + label + ' already converted, skip')
         return lines, 0
     end = find_fn_end(lines, i)
     if end < 0:
         warn(label + ' closing brace not found, skip')
         return lines, 0
-    body = NL.join(lines[i:end + 1])
     d = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
-    new_lines = build_body_fn(d, body)
+    new_lines = build_body_fn(d, NL.join(lines[i:end + 1]))
     lines[i:end + 1] = new_lines
     return lines, 1
 
@@ -235,7 +232,7 @@ changed += c
 
 # ---- write + selfcheck ----
 if changed == 0:
-    print('batch135v2: nothing changed (all anchors already applied or not found)')
+    print('batch135v3: nothing changed (all anchors already applied or not found)')
     sys.exit(0)
 
 out = NL.join(lines)
@@ -246,4 +243,4 @@ for need in ['appScope.launch']:
         fail('selfcheck missing: ' + need)
 
 (ROOT / VM).write_text(out, encoding='utf-8')
-print('::notice::batch135v2 OK - changed=' + str(changed) + ' (backup/restore/backupToS3/restoreFromS3 to AppScope)')
+print('::notice::batch135v3 OK - changed=' + str(changed) + ' (backup/restore/backupToS3/restoreFromS3 to AppScope)')
