@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch134: 补 androidx.exifinterface 依赖
+'''batch134 v2: 补 androidx.exifinterface 依赖
+
+v1 死因: 版本号 1.8.1 不存在 — Maven 仓库里 exifinterface 最新稳定版是 1.4.2 (2025-12-03)。
+v2 改法: 1.8.1 → 1.4.2
 
 编译错误: ImageUtils.kt 引用 ExifInterface/getAttributeInt 但依赖缺失
 (Unresolved reference 'ExifInterface')。上游移植加了引用但依赖没跟上。
 
 修法:
 1. gradle/libs.versions.toml:
-   - [versions] 加 exifinterface = "1.8.1"
+   - [versions] 加 exifinterface = "1.4.2"
    - [libraries] 加 androidx-exifinterface = { group="androidx.exifinterface", name="exifinterface", version.ref="exifinterface" }
 2. app/build.gradle.kts dependencies 加 implementation(libs.androidx.exifinterface)
 
@@ -61,7 +64,7 @@ lines = read_lines(TOML)
 if any('exifinterface' in ln for ln in lines):
     print('batch134: toml exifinterface already present')
 else:
-    ver_line = 'exifinterface = "1.8.1"'
+    ver_line = 'exifinterface = "1.4.2"'
     insert_after(
         TOML,
         lambda ln: ln.strip().startswith('metadataExtractor ='),
