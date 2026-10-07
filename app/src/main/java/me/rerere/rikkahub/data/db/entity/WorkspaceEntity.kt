@@ -6,6 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.workspace.Workspace
+import me.rerere.workspace.WorkspaceShellStatus
 
 @Entity(
     tableName = "workspaces",
@@ -21,15 +22,19 @@ data class WorkspaceEntity(
     val name: String,
     @ColumnInfo("root")
     val root: String,
+    @ColumnInfo("shell_status", defaultValue = "DISABLED")
+    val shellStatus: String = WorkspaceShellStatus.DISABLED.name,
     @ColumnInfo("created_at")
     val createdAt: Long,
     @ColumnInfo("updated_at")
     val updatedAt: Long,
     @ColumnInfo("last_access_at")
     val lastAccessAt: Long? = null,
-    // 工具审批的用户覆盖项 (toolName -> needsApproval)，未覆盖的工具沿用默认值。
+    // 工具审批的用户覆盖项 (toolName -> needsApproval)，未覆盖的工具沿用默认值
     @ColumnInfo("tool_approvals", defaultValue = "{}")
     val toolApprovals: String = "{}",
+    @ColumnInfo("shell_compatibility_mode", defaultValue = "0")
+    val shellCompatibilityMode: Boolean = false,
 ) {
     fun toolApprovalOverrides(): Map<String, Boolean> = runCatching {
         JsonInstant.decodeFromString<Map<String, Boolean>>(toolApprovals)
@@ -39,6 +44,8 @@ data class WorkspaceEntity(
         id = id,
         name = name,
         root = root,
+        shellStatus = runCatching { WorkspaceShellStatus.valueOf(shellStatus) }
+            .getOrDefault(WorkspaceShellStatus.DISABLED),
         createdAt = createdAt,
         updatedAt = updatedAt,
         lastAccessAt = lastAccessAt,
