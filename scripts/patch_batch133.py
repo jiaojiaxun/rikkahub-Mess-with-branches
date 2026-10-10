@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch133 v3: workspace shell 移植配套 — 补 WorkspaceFileSystem 到 mirror 列表
+'''batch133 v4: workspace shell 移植配套 — 修 AppDatabase 跳过逻辑
 
 v1 死因: AppDatabase.kt 'version = 34,' 锚点在 CI 形态找不到(count=0)。
 v2 改法: AppDatabase 部分改为 tolerant+dump+warn-only(正则读当前 version,+1 替换)。
-v3 修因: mirror 列表漏了 WorkspaceFileSystem.kt —— 上游给它加了 limit 参数,
-  WorkspaceManager.kt(mirror 后)调 list(root,path,limit) 3 参数,
-  fork 版 WorkspaceFileSystem 只有 list(root,path) 2 参数 → 编译 TOO_MANY_ARGUMENTS。
-  v3 把 WorkspaceFileSystem.kt 加入 MIRROR_FILES,让 CI 覆盖为上游版。
+v3 修因: mirror 列表漏了 WorkspaceFileSystem.kt。
+v4 修因: v3 的 'if cur_ver >= 35: skip' 是错误防御——batch55_1 已把 version 升到 35
+  (加了 Migration_34_35 给 ConversationEntity 加 parent_chat_id), 但那与我的 workspaces
+  列(shell_status/shell_compatibility_mode)无关。v3 的 skip 导致我的迁移被跳过,
+  运行时 Room schema 校验失败必崩。
+  v4 改为正确的幂等检查: 'AutoMigration(from = cur, to = cur+1)' 是否已存在。
 
-其余部分不变。
+其余部分(jniLibs/mirror/WorkspaceTools/toml/workspace-gradle/冲突扫描)不变。
 '''
 import os, re, sys, urllib.request
 from pathlib import Path
@@ -230,14 +232,28 @@ else:
     print('::notice::batch133 workspace gradle xz added')
 
 # =====================================================================
-# 6. AppDatabase.kt: v2 tolerant + dump + warn-only (was fail-loud on version=34)
+# 6. AppDatabase.kt: version 动态 +1 + AutoMigration(cur,cur+1)（v4 修正幂等检查）
 # =====================================================================
 adb_text = (ROOT / ADB).read_text(encoding='utf-8')
 adb_paren_before = paren_delta(adb_text)
-if 'AutoMigration(from = 34, to = 35)' in adb_text:
-    print('::notice::batch133 AppDatabase already migrated (v35)')
+
+adb_lines = adb_text.split(NL)
+v_hits = [i for i, ln in enumerate(adb_lines) if ln.strip().startswith('version =')]
+if len(v_hits) != 1:
+    fail('adb-version', 'version anchor count=' + str(len(v_hits)) + ' path=' + ADB)
+v_i = v_hits[0]
+m_ver = re.search(r'version\s*=\s*(\d+)', adb_lines[v_i])
+if not m_ver:
+    fail('adb-version', 'version line has no digits: ' + adb_lines[v_i].strip())
+cur_ver = int(m_ver.group(1))
+new_ver = cur_ver + 1
+print('::notice::batch133 AppDatabase current version=' + str(cur_ver) + ' -> target=' + str(new_ver))
+
+target_am = 'AutoMigration(from = ' + str(cur_ver) + ', to = ' + str(new_ver) + ')'
+if target_am in adb_text:
+    print('::notice::batch133 AppDatabase already migrated (v' + str(cur_ver) + '->' + str(new_ver) + ')')
 else:
-    adb_lines = adb_text.split(NL)
+    # dump 现有 version/AutoMigration 行（调试可见性）
     dump_lines = []
     for i, ln in enumerate(adb_lines):
         low = ln.lower()
@@ -245,41 +261,27 @@ else:
             dump_lines.append('L' + str(i + 1) + ':' + ln.strip()[:100])
     print('::notice::batch133 adb-dump v-lines: [' + ' ;; '.join(dump_lines[:20]) + ']')
 
-    v_hits = [i for i, ln in enumerate(adb_lines) if ln.strip().startswith('version =')]
-    if len(v_hits) != 1:
-        print('::warning::batch133 AppDatabase version anchor count=' + str(len(v_hits)) + ', skipping version bump (warn-only)')
-    else:
-        v_i = v_hits[0]
-        m_ver = re.search(r'version\s*=\s*(\d+)', adb_lines[v_i])
-        if not m_ver:
-            print('::warning::batch133 version line has no digits: ' + adb_lines[v_i].strip() + ' (warn-only skip)')
-        else:
-            cur_ver = int(m_ver.group(1))
-            new_ver = cur_ver + 1
-            if cur_ver >= 35:
-                print('::notice::batch133 AppDatabase version already ' + str(cur_ver) + ' (>=35), skipping bump')
-            else:
-                adb_lines[v_i] = adb_lines[v_i].replace(
-                    'version = ' + str(cur_ver),
-                    'version = ' + str(new_ver),
-                )
-                am_hits = [i for i, ln in enumerate(adb_lines) if 'AutoMigration(from' in ln]
-                if am_hits:
-                    last_am = am_hits[-1]
-                    indent = adb_lines[last_am][:len(adb_lines[last_am]) - len(adb_lines[last_am].lstrip())]
-                    adb_lines.insert(last_am + 1, indent + '// v' + str(new_ver) + ': workspace shell columns (shell_status / shell_compatibility_mode).')
-                    adb_lines.insert(last_am + 2, indent + 'AutoMigration(from = ' + str(cur_ver) + ', to = ' + str(new_ver) + '),')
-                    adb_out = NL.join(adb_lines)
-                    if 'version = ' + str(new_ver) in adb_out and ('AutoMigration(from = ' + str(cur_ver) + ', to = ' + str(new_ver) + ')') in adb_out:
-                        if paren_delta(adb_out) != adb_paren_before:
-                            print('::warning::batch133 AppDatabase paren balance changed (warn-only, not writing)')
-                        else:
-                            (ROOT / ADB).write_text(adb_out, encoding='utf-8')
-                            print('::notice::batch133 AppDatabase v' + str(new_ver) + ' + AutoMigration(' + str(cur_ver) + ',' + str(new_ver) + ') applied')
-                    else:
-                        print('::warning::batch133 AppDatabase migration insert failed (warn-only)')
-                else:
-                    print('::warning::batch133 no AutoMigration lines found (warn-only skip)')
+    # 版本 +1
+    adb_lines[v_i] = adb_lines[v_i].replace(
+        'version = ' + str(cur_ver),
+        'version = ' + str(new_ver),
+    )
+    # AutoMigration 插入到最后一个 AutoMigration 行之后
+    am_hits = [i for i, ln in enumerate(adb_lines) if 'AutoMigration(from' in ln]
+    if not am_hits:
+        fail('adb-automigration', 'no AutoMigration lines found')
+    last_am = am_hits[-1]
+    indent = adb_lines[last_am][:len(adb_lines[last_am]) - len(adb_lines[last_am].lstrip())]
+    adb_lines.insert(last_am + 1, indent + '// v' + str(new_ver) + ': workspace shell columns (shell_status / shell_compatibility_mode).')
+    adb_lines.insert(last_am + 2, indent + target_am + ',')
+    adb_out = NL.join(adb_lines)
+    # 自检
+    if ('version = ' + str(new_ver)) not in adb_out or target_am not in adb_out:
+        fail('adb-selfcheck', 'migration insert failed')
+    if paren_delta(adb_out) != adb_paren_before:
+        fail('adb-balance', 'paren balance changed')
+    (ROOT / ADB).write_text(adb_out, encoding='utf-8')
+    print('::notice::batch133 AppDatabase v' + str(cur_ver) + '->' + str(new_ver) + ' + AutoMigration applied')
 
 # =====================================================================
 # 7. 冲突扫描（不阻塞）
