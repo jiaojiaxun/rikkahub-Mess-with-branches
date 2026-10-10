@@ -1,33 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch136: 酒馆模式开关从标题下移到面板底部(分割线隔开)
+'''batch136 v2: 酒馆模式开关从标题下移到面板底部(分割线隔开)
 
-用户反馈(#7): "酒馆模式开关要移到分割线下面"
-当前(batch130 后): 标题 Column → [酒馆开关] → 等级图标 → Slider
-目标: 标题 Column → 等级图标 → Slider → [分割线] → [酒馆开关]
+v1 死因: selfcheck `out.find('HorizontalDivider')` 找到的是 import 行(文件顶部,
+idx_hd=2073),而不是实际调用位置——idx_hd < idx_sl(8153) 被误判为"divider 不在 slider 后"。
 
-改动(单文件 ReasoningPicker.kt):
-1. 删除 batch130 在原位置(标题 Column 后)插入的开关块(marker rhTavernMode 注释定位)。
-2. 在 Slider 块之后(面板底部)插入: HorizontalDivider + 开关块(marker rhTavernMove)。
-3. 补 import androidx.compose.material3.HorizontalDivider。
+v2 修法: `out.find('HorizontalDivider(')` 带左括号,不匹配 import 行。
+同时修正 'in out is False' 哑弹为 'not in out'(语义等价,更清晰)。
 
-安全设计:
-- 全部锚点先找齐再执行;任一找不到 → ::warning + skip(不阻塞构建,一次 run 拿 dump)。
-- 先插入(较后位置)再删除(较前位置),行号漂移安全(删除区在插入区之前)。
-- 开关块自平衡,全文件 balance 前后一致。
-
-五查:
-1. import 清单: HorizontalDivider 新增(精确行匹配);其余符号(Row/Column/Arrangement/
-   Alignment/Modifier/fillMaxWidth/Switch/MaterialTheme/Text/stringResource)均为
-   batch130 后已有(batch130 已引入 Switch 且三查通过)。
-2. 同文件冲突: ReasoningPicker.kt 在链 patch 只有 batch130 触碰(已实读其 D5 插入块),
-   本批锚点即 batch130 的产物注释;无其他 patch 记录。
-3. 作用域: 插入点在 ModalBottomSheet 内容 Column 内(与 Slider 同级);
-   tavernMode/onUpdateTavernMode 是 ReasoningPicker 参数,可见。
-4. 括号配对: 删除块自平衡(130 已证),插入块自平衡,H 行净变化=新增 import 单行=0。
-5. 函数签名: 零改动。
-
-Python 三查: 引号用 Q=chr(34) 构造;无 f-string;helper 先定义;失败显式 warn+skip 或 exit(1)。
+其余逻辑不变(删除原开关块 + Slider 后插分割线+开关 + 补 import)。
 '''
 import sys
 from pathlib import Path
@@ -121,7 +102,6 @@ if slider_end < 0:
     warn('Slider block closing not found; skip')
     sys.exit(0)
 
-# 删除区必须在插入区之前(从上到下: 开关块 → Slider),用于行号漂移安全断言
 if not (end_i < slider_end):
     warn('unexpected order block_end=' + str(end_i) + ' slider_end=' + str(slider_end) + '; skip')
     sys.exit(0)
@@ -183,9 +163,9 @@ if out.count('if (onUpdateTavernMode != null) {') != 1:
     fail('selfcheck: switch block count=' + str(out.count('if (onUpdateTavernMode != null) {')) + ' (expected 1)')
 if '// ' + OLD_MARK + ': 会话级酒馆模式开关' in out:
     fail('selfcheck: old block comment still present')
-if '// ' + MARK in out is False:
+if '// ' + MARK not in out:
     fail('selfcheck: new marker missing')
-idx_hd = out.find('HorizontalDivider')
+idx_hd = out.find('HorizontalDivider(')
 idx_sl = out.find('SliderDefaults.Track')
 if idx_sl < 0 or idx_hd < idx_sl:
     fail('selfcheck: divider not after slider (idx_hd=' + str(idx_hd) + ' idx_sl=' + str(idx_sl) + ')')
@@ -193,6 +173,4 @@ if balance(out) != bal0:
     fail('selfcheck: balance ' + str(bal0) + ' -> ' + str(balance(out)))
 
 (ROOT / RP).write_text(out, encoding='utf-8')
-print('::notice::batch136 OK - tavern switch moved below slider with divider')
-
-# 附注: 本脚本不阻塞——所有找不到分支均 warn+skip(exit 0)
+print('::notice::batch136v2 OK - tavern switch moved below slider with divider')
