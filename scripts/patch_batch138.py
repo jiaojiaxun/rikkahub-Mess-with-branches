@@ -221,7 +221,7 @@ applied.append('para_get')
 # ===================== 9. remember key 加 rpStyleRules =====================
 # 收窄到 Paragraph 函数体内
 # 注意: 实际行是 'val annotatedString = remember(content, enableLatexRendering, latexColorArgb) {'
-# 不是纯 'remember(...)',所以用 in 包含匹配
+# 不能整行替换(会吃掉 val annotatedString = 前缀),改用行内替换
 ri = -1
 for i in range(para_fn_idx, len(lines)):
     if 'remember(content, enableLatexRendering, latexColorArgb) {' in lines[i]:
@@ -231,8 +231,13 @@ for i in range(para_fn_idx, len(lines)):
         break
 if ri < 0:
     fail(MD, 'remember key not found in Paragraph function body', lines, para_fn_idx)
-rind = indent_of(lines[ri])
-lines[ri] = rind + 'remember(content, enableLatexRendering, latexColorArgb, rpStyleRules) { // ' + MARK
+# 行内替换: 'latexColorArgb) {' -> 'latexColorArgb, rpStyleRules) { // MARK'
+# 保留行首的 val annotatedString = 前缀
+old_frag = 'latexColorArgb) {'
+new_frag = 'latexColorArgb, rpStyleRules) { // ' + MARK
+if old_frag not in lines[ri]:
+    fail(MD, 'latexColorArgb) { not found in remember line', lines, ri)
+lines[ri] = lines[ri].replace(old_frag, new_frag, 1)
 applied.append('remember_key')
 
 # ===================== 10. 主调用传参 =====================
