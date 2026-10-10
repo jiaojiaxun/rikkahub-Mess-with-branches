@@ -1,204 +1,97 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch136 v2: 酒馆模式开关从标题下移到面板底部(分割线隔开) — 修 selfcheck
+'''batch136: 折叠条恢复原地展开(回滚 batch76 的弹窗点击)
 
-v2 修复: selfcheck 里 out.find('HorizontalDivider') 会命中 import 行(文件顶部),
-导致 idx_hd < idx_sl 误判 fail。改为 find('HorizontalDivider(modifier') 只匹配
-UI 调用行(Slider 之后的插入位置),排除 import 行。
+用户反馈: 工具调用折叠条点击后弹窗,不像原版那样原地展开,要求改回去。
 
-v1 功能不变: 酒馆模式开关从标题下移到面板底部(分割线隔开)。
+根因: batch76 把折叠条 onClick 从
+    .clickable { userExpanded = !expanded }
+  改成
+    .clickable { if (onShowSummary != null) onShowSummary() else userExpanded = !expanded }
+  导致点击折叠条时优先打开 ModalBottomSheet 弹窗,不再原地展开。
 
-用户反馈(#7): "酒馆模式开关要移到分割线下面"
-当前(batch130 后): 标题 Column → [酒馆开关] → 等级图标 → Slider
-目标: 标题 Column → 等级图标 → Slider → [分割线] → [酒馆开关]
+修复: 恢复为原地展开。onShowSummary 参数保留(有默认值 null,不碍事),
+弹窗代码(batch76/88)保留为死代码,以后想恢复弹窗只需改回这一行。
 
-改动(单文件 ReasoningPicker.kt):
-1. 删除 batch130 在原位置(标题 Column 后)插入的开关块(marker rhTavernMode 注释定位)。
-2. 在 Slider 块之后(面板底部)插入: HorizontalDivider + 开关块(marker rhTavernMove)。
-3. 补 import androidx.compose.material3.HorizontalDivider。
-
-安全设计:
-- 全部锚点先找齐再执行;任一找不到 → ::warning + skip(不阻塞构建,一次 run 拿 dump)。
-- 先插入(较后位置)再删除(较前位置),行号漂移安全(删除区在插入区之前)。
-- 开关块自平衡,全文件 balance 前后一致。
+只改 1 个文件 1 行,最小改动。
 
 五查:
-1. import 清单: HorizontalDivider 新增(精确行匹配);其余符号(Row/Column/Arrangement/
-   Alignment/Modifier/fillMaxWidth/Switch/MaterialTheme/Text/stringResource)均为
-   batch130 后已有(batch130 已引入 Switch 且三查通过)。
-2. 同文件冲突: ReasoningPicker.kt 在链 patch 只有 batch130 触碰(已实读其 D5 插入块),
-   本批锚点即 batch130 的产物注释;无其他 patch 记录。
-3. 作用域: 插入点在 ModalBottomSheet 内容 Column 内(与 Slider 同级);
-   tavernMode/onUpdateTavernMode 是 ReasoningPicker 参数,可见。
-4. 括号配对: 删除块自平衡(130 已证),插入块自平衡,H 行净变化=新增 import 单行=0。
-5. 函数签名: 零改动。
+1. import 清单: 不新增 import,不改 import 区
+2. 同文件冲突: ChainOfThought.kt 被 batch76 碰过(onShowSummary 参数+onClick);
+   本脚本只改 onClick 那一行,与 batch76 的参数行不重叠
+3. 作用域: onClick 在 ChainOfThought 函数体内的折叠条 Row 内
+4. 括号配对: 替换前后括号配平不变(同一行内替换)
+5. 函数签名: 不改
 
-Python 三查: 引号用 Q=chr(34) 构造;无 f-string;helper 先定义;失败显式 warn+skip 或 exit(1)。
+Python 三查: 无引号字面量 / 无 f-string/walrus/join / fail-loud
 '''
-import sys
 from pathlib import Path
+import sys
 
 ROOT = Path.cwd()
 NL = chr(10)
-Q = chr(34)
-MARK = 'rhTavernMove'
-OLD_MARK = 'rhTavernMode'
-RP = 'app/src/main/java/me/rerere/rikkahub/ui/components/ai/ReasoningPicker.kt'
+MARK = 'rhBatch136'
+
+COT = 'app/src/main/java/me/rerere/rikkahub/ui/components/ui/ChainOfThought.kt'
 
 
-def warn(msg):
-    print('::warning file=' + RP + '::batch136 ' + str(msg))
-
-
-def fail(msg):
-    print('::error file=' + RP + '::batch136 ' + str(msg))
+def fail(path, msg, lines=None, around=-1):
+    body = 'batch136 ' + str(msg)
+    if lines is not None and 0 <= around < len(lines):
+        lo = max(0, around - 2)
+        hi = min(len(lines), around + 3)
+        ctx = ' || '.join('L' + str(i + 1) + ':' + lines[i].strip()[:80] for i in range(lo, hi))
+        body = body + ' || ctx: ' + ctx
+    print('::error file=' + path + '::' + body[:1500])
     sys.stdout.flush()
     sys.exit(1)
 
 
-def balance(text):
-    return text.count('(') - text.count(')') + (text.count('{') - text.count('}'))
+def concat_lines(lines):
+    text = ''
+    first = True
+    for line in lines:
+        if not first:
+            text += NL
+        text += line
+        first = False
+    return text
 
 
-t = (ROOT / RP).read_text(encoding='utf-8')
-if MARK in t:
-    print('batch136: already applied')
-    sys.exit(0)
+cot_path = ROOT / COT
+text = cot_path.read_text(encoding='utf-8')
+if MARK in text:
+    print('batch136: ChainOfThought already applied')
+else:
+    lines = text.split(NL)
 
-if '// ' + OLD_MARK + ': 会话级酒馆模式开关' not in t:
-    warn('old tavern switch block marker not found (batch130 not applied?); skip')
-    sys.exit(0)
-
-bal0 = balance(t)
-lines = t.split(NL)
-
-# ---- 1. 定位原开关块(注释行 → if 块配平结束) ----
-mark_i = -1
-for i, ln in enumerate(lines):
-    if '// ' + OLD_MARK + ': 会话级酒馆模式开关' in ln:
-        mark_i = i
-        break
-if mark_i < 0:
-    warn('marker line not found; skip')
-    sys.exit(0)
-
-if_i = -1
-for j in range(mark_i, min(mark_i + 5, len(lines))):
-    if 'if (onUpdateTavernMode != null) {' in lines[j]:
-        if_i = j
-        break
-if if_i < 0:
-    warn('if-block after marker not found; skip')
-    sys.exit(0)
-
-depth = 0
-end_i = -1
-for j in range(if_i, min(if_i + 40, len(lines))):
-    depth += lines[j].count('{') - lines[j].count('}')
-    if depth == 0 and j > if_i:
-        end_i = j
-        break
-if end_i < 0:
-    warn('if-block closing brace not found; skip')
-    sys.exit(0)
-
-block_start = mark_i
-if block_start > 0 and lines[block_start - 1].strip() == '':
-    block_start -= 1
-
-# ---- 2. 定位 Slider 块结束(混配平扫描) ----
-sl_i = -1
-for i, ln in enumerate(lines):
-    if ln.strip() == 'Slider(':
-        sl_i = i
-        break
-if sl_i < 0:
-    warn('Slider( line not found; skip')
-    sys.exit(0)
-
-depth = 0
-slider_end = -1
-for j in range(sl_i, min(sl_i + 70, len(lines))):
-    depth += (lines[j].count('(') - lines[j].count(')')) + (lines[j].count('{') - lines[j].count('}'))
-    if depth == 0 and j > sl_i:
-        slider_end = j
-        break
-if slider_end < 0:
-    warn('Slider block closing not found; skip')
-    sys.exit(0)
-
-# 删除区必须在插入区之前(从上到下: 开关块 → Slider),用于行号漂移安全断言
-if not (end_i < slider_end):
-    warn('unexpected order block_end=' + str(end_i) + ' slider_end=' + str(slider_end) + '; skip')
-    sys.exit(0)
-
-# ---- 3. 先插入(面板底部) ----
-d = '            '
-new_block = [
-    '',
-    d + '// ' + MARK + ': 会话级酒馆模式开关——移到面板底部,与思考深度用分割线隔开',
-    d + 'if (onUpdateTavernMode != null) {',
-    d + '    HorizontalDivider(modifier = Modifier.fillMaxWidth())',
-    d + '    Row(',
-    d + '        modifier = Modifier.fillMaxWidth(),',
-    d + '        verticalAlignment = Alignment.CenterVertically,',
-    d + '        horizontalArrangement = Arrangement.SpaceBetween,',
-    d + '    ) {',
-    d + '        Column(modifier = Modifier.weight(1f)) {',
-    d + '            Text(',
-    d + '                text = stringResource(R.string.setting_tavern_mode),',
-    d + '                style = MaterialTheme.typography.titleSmall,',
-    d + '            )',
-    d + '            Text(',
-    d + '                text = stringResource(R.string.setting_tavern_mode_desc),',
-    d + '                style = MaterialTheme.typography.bodySmall,',
-    d + '                color = MaterialTheme.colorScheme.onSurfaceVariant,',
-    d + '            )',
-    d + '        }',
-    d + '        Switch(',
-    d + '            checked = tavernMode,',
-    d + '            onCheckedChange = { onUpdateTavernMode?.invoke(it) },',
-    d + '        )',
-    d + '    }',
-    d + '}',
-]
-lines = lines[:slider_end + 1] + new_block + lines[slider_end + 1:]
-
-# ---- 4. 再删除(原位置;删除区在插入区之前,坐标不受插入影响) ----
-lines = lines[:block_start] + lines[end_i + 1:]
-
-# ---- 5. 补 import ----
-out = NL.join(lines)
-if 'import androidx.compose.material3.HorizontalDivider' not in out:
-    lines = out.split(NL)
-    ip = -1
+    # 找 batch76 注入的弹窗点击行
+    old_click = '.clickable { if (onShowSummary != null) onShowSummary() else userExpanded = !expanded }'
+    hits = []
     for i, ln in enumerate(lines):
-        if ln.strip() == 'import androidx.compose.material3.Icon':
-            ip = i
-            break
-    if ip < 0:
-        warn('Icon import anchor not found; skip import (really weird); proceeding')
-    else:
-        lines.insert(ip + 1, 'import androidx.compose.material3.HorizontalDivider')
-        out = NL.join(lines)
+        if ln.strip().startswith(old_click):
+            hits.append(i)
+    if len(hits) != 1:
+        fail(COT, 'onClick anchor count=' + str(len(hits)), lines, hits[0] if hits else 0)
 
-# ---- 6. 自检 ----
-if 'HorizontalDivider' not in out:
-    fail('selfcheck: HorizontalDivider missing')
-if out.count('if (onUpdateTavernMode != null) {') != 1:
-    fail('selfcheck: switch block count=' + str(out.count('if (onUpdateTavernMode != null) {')) + ' (expected 1)')
-if '// ' + OLD_MARK + ': 会话级酒馆模式开关' in out:
-    fail('selfcheck: old block comment still present')
-if '// ' + MARK in out is False:
-    fail('selfcheck: new marker missing')
-idx_hd = out.find('HorizontalDivider(modifier')
-idx_sl = out.find('SliderDefaults.Track')
-if idx_sl < 0 or idx_hd < idx_sl:
-    fail('selfcheck: divider not after slider (idx_hd=' + str(idx_hd) + ' idx_sl=' + str(idx_sl) + ')')
-if balance(out) != bal0:
-    fail('selfcheck: balance ' + str(bal0) + ' -> ' + str(balance(out)))
+    idx = hits[0]
+    ind = lines[idx][:len(lines[idx]) - len(lines[idx].lstrip())]
+    lines[idx] = ind + '.clickable { userExpanded = !expanded } // ' + MARK + ': 恢复原地展开'
 
-(ROOT / RP).write_text(out, encoding='utf-8')
-print('::notice::batch136 v2 OK - tavern switch moved below slider with divider')
+    out = concat_lines(lines)
+    # 自检: 弹窗点击逻辑已移除,原地展开已恢复
+    if 'onShowSummary() else' in out:
+        fail(COT, 'onShowSummary onclick still present', lines, idx)
+    if 'userExpanded = !expanded' not in out:
+        fail(COT, 'userExpanded toggle missing', lines, idx)
+    if MARK not in out:
+        fail(COT, 'marker missing', lines, idx)
+    # 括号配平不变(同一行内替换)
+    if (text.count('(') - text.count(')')) != (out.count('(') - out.count(')')):
+        fail(COT, 'paren balance changed', lines, idx)
+    if (text.count('{') - text.count('}')) != (out.count('{') - out.count('}')):
+        fail(COT, 'brace balance changed', lines, idx)
+    cot_path.write_text(out, encoding='utf-8')
+    print('batch136: ChainOfThought OK')
 
-# 附注: 本脚本不阻塞——所有找不到分支均 warn+skip(exit 0); selfcheck 的 fail 保留(防止插入位置错)。
+print('batch136: ALL OK')
