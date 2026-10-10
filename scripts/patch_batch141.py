@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch141: ImportedDatabaseReconciler 跟上 v36 workspace schema（shell 列回归后）
+'''batch141 v2: ImportedDatabaseReconciler 跟上 v36 workspace schema（shell 列回归后）
+
+v2 修复: v1 的 expressions 锚点引号构造漏了一层——Kotlin 代码里
+  column == "tool_approvals" -> "'{}'"
+是【双引号+单引号+{}+单引号+双引号】结构, 我构造时丢了外层双引号。
+同样 shell_status 新分支也应是 -> "'DISABLED'" (双引号包单引号)。
+v2 修正 OLD_EX / NEW_EX 的引号构造。其余不变。
 
 背景：shell 恢复后 workspaces 表从 7 列变成 9 列（+shell_status +shell_compatibility_mode）。
 Reconciler 是裁剪版时代写的，它的“当前 workspace schema”判定写死了“绝不能有 shell_status”，
@@ -11,22 +17,20 @@ Reconciler 是裁剪版时代写的，它的“当前 workspace schema”判定�
 
 改动（单文件 ImportedDatabaseReconciler.kt，4 处）：
 1. isCurrentWorkspaceSchema: 去掉 && "shell_status" !in columns（允许 shell 列存在）
-2. CURRENT_WORKSPACE_COLUMNS 上方注释更新（去掉 "removed shell_status must never be present"）
+2. CURRENT_WORKSPACE_COLUMNS 上方注释更新
 3. createWorkspaceTable 与 rebuildWorkspaceTable 的 CREATE TABLE 各加 2 列
 4. rebuildWorkspaceTable 的 targetColumns 加 2 列 + expressions 加 2 个默认值分支
 
-EXPECTED_VERSION 不动：它停在 34 是合理的（stamp 后由 Room 迁移链 34->35->36 补齐，
-功能已验证正确；升到 36 需要同步 identity hash，而 hash 要编译期才知道，风险大于收益）。
+EXPECTED_VERSION 不动：它停在 34 是合理的（stamp 后由 Room 迁移链 34->35->36 补齐）。
 
 五查:
 1. import 清单: 无新增
-2. 同文件冲突: 本文件在链 patch 只有 batch89（改 FORK_ONLY 常量与 alreadyCurrent 行），
-   与本批 4 处区域不相交
+2. 同文件冲突: 本文件在链 patch 只有 batch89（改 FORK_ONLY 与 alreadyCurrent 行），区域不相交
 3. 作用域: object 内修改
 4. 括号配对: 插入行自平衡；全文 balance 前后一致
-5. 函数签名: 不改签名（isCurrentWorkspaceSchema 语义放宽，签名不变）
+5. 函数签名: 不改签名
 
-Python 三查: 引号用 Q/SQ 构造且同一字面量只拼一次; NL 手写 concat 禁 f-string; helper 先定义后用, 失败显式 exit(1)+::error
+Python 三查: 引号用 Q/SQ/BQ 构造且同一字面量只拼一次; NL 手写 concat 禁 f-string; helper 先定义后用, 失败显式 exit(1)+::error
 '''
 import sys
 from pathlib import Path
@@ -91,10 +95,11 @@ if OLD_TC not in t:
     fail('targetColumns anchor not found')
 t = t.replace(OLD_TC, NEW_TC, 1)
 
-OLD_EX = '            column == ' + Q + 'tool_approvals' + Q + ' -> ' + SQ + '{}' + SQ
+# Kotlin 代码: column == "tool_approvals" -> "'{}'"  (双引号包单引号包内容)
+OLD_EX = '            column == ' + Q + 'tool_approvals' + Q + ' -> ' + Q + SQ + '{}' + SQ + Q
 NEW_EX = (
     OLD_EX + NL +
-    '            column == ' + Q + 'shell_status' + Q + ' -> ' + SQ + 'DISABLED' + SQ + NL +
+    '            column == ' + Q + 'shell_status' + Q + ' -> ' + Q + SQ + 'DISABLED' + SQ + Q + NL +
     '            column == ' + Q + 'shell_compatibility_mode' + Q + ' -> ' + Q + '0' + Q
 )
 if OLD_EX not in t:
@@ -114,8 +119,10 @@ if NEW_TC not in t:
     fail('targetColumns not updated')
 if ('column == ' + Q + 'shell_compatibility_mode' + Q + ' -> ' + Q + '0' + Q) not in t:
     fail('expressions branch missing')
+if ('column == ' + Q + 'shell_status' + Q + ' -> ' + Q + SQ + 'DISABLED' + SQ + Q) not in t:
+    fail('shell_status expressions branch missing')
 if balance(t) != bal0:
     fail('balance changed')
 
 (ROOT / F).write_text(t, encoding='utf-8')
-print('::notice::batch141 OK - reconciler accepts shell columns (judge relaxed, DDL 9 cols, rebuild keeps shell cols)')
+print('::notice::batch141 v2 OK - reconciler accepts shell columns (judge relaxed, DDL 9 cols, rebuild keeps shell cols)')
