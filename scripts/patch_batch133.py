@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch133 v5: workspace shell 移植配套 — 改用 手写 Migration（放弃 AutoMigration）
+'''batch133 v6: workspace shell 移植配套 — 修 Migration_35_36 插入位置
 
-v1 死因: AppDatabase.kt 'version = 34,' 锚点在 CI 形态找不到(count=0)。
-v2 改法: AppDatabase 部分改为 tolerant+dump+warn-only(正则读当前 version,+1 替换)。
-v3 修因: mirror 列表漏了 WorkspaceFileSystem.kt。
-v4 修因: v3 的 'if cur_ver >= 35: skip' 是错误防御,改为正确的幂等检查。
-v5 修因: AutoMigration(35->36) 需要 schemas/35.json 做 schema 对比,但 batch55_1 的
-  version 35 升级是 CI 上做的(patch 不回写仓库),35.json 从未提交 → KSP PROCESSING_ERROR。
-  v5 改用手写 Migration_35_36(照 batch55_1 的 Migration_34_35 模板),不走 AutoMigration,
-  不需要 schema json。同时注册到 DataSourceModule 的 addMigrations 链尾。
+v5 死因: Migration_35_36 类被插到 object TokenUsageConverter { 后面(变成内部类),
+  DataSourceModule import 顶层 Migration_35_36 找不到 → Unresolved reference。
+v6 修因: 先清理错误位置(若在 TokenUsageConverter 内部),再在 TokenUsageConverter 前插入。
 
-手写 Migration 内容:
+v1-v4 演进见前几版注释。手写 Migration 内容:
   ALTER TABLE workspaces ADD COLUMN shell_status TEXT NOT NULL DEFAULT 'DISABLED'
   ALTER TABLE workspaces ADD COLUMN shell_compatibility_mode INTEGER NOT NULL DEFAULT 0
 
@@ -117,6 +112,20 @@ def insert_lines_after(path, pred, make_lines, label):
     return indent
 
 
+def insert_lines_before(path, pred, make_lines, label):
+    lines = read_lines(path)
+    hits = [i for i, ln in enumerate(lines) if pred(ln)]
+    if len(hits) != 1:
+        fail(label, 'anchor count=' + str(len(hits)) + ' path=' + path)
+    i = hits[0]
+    src = lines[i]
+    indent = src[:len(src) - len(src.lstrip())]
+    for offset, seg in enumerate(make_lines(indent)):
+        lines.insert(i + offset, seg)
+    write_lines(path, lines)
+    return indent
+
+
 def replace_unique_line(path, pred, new_line, label):
     lines = read_lines(path)
     hits = [i for i, ln in enumerate(lines) if pred(ln)]
@@ -124,6 +133,30 @@ def replace_unique_line(path, pred, new_line, label):
         fail(label, 'anchor count=' + str(len(hits)) + ' path=' + path)
     lines[hits[0]] = new_line
     write_lines(path, lines)
+
+
+def remove_class_block(text, class_name, label):
+    lines = text.split(NL)
+    hits = [i for i, ln in enumerate(lines) if ln.strip().startswith('class ' + class_name)]
+    if len(hits) == 0:
+        return text
+    if len(hits) != 1:
+        fail(label, class_name + ' count=' + str(len(hits)))
+    start = hits[0]
+    while start > 0 and lines[start - 1].strip().startswith('//'):
+        start -= 1
+    if start > 0 and lines[start - 1].strip() == '':
+        start -= 1
+    depth = 0
+    end = -1
+    for j in range(start, len(lines)):
+        depth += lines[j].count('{') - lines[j].count('}')
+        if depth == 0 and j > start:
+            end = j
+            break
+    if end < 0:
+        fail(label, class_name + ' closing brace not found')
+    return NL.join(lines[:start] + lines[end + 1:])
 
 
 def paren_delta(text):
@@ -237,20 +270,29 @@ else:
     print('::notice::batch133 workspace gradle xz added')
 
 # =====================================================================
-# 6. AppDatabase.kt: 手写 Migration_35_36（不走 AutoMigration）+ DataSourceModule 注册
+# 6. AppDatabase.kt: 手写 Migration_35_36（正确位置：TokenUsageConverter 前）+ DataSourceModule 注册
 # =====================================================================
 adb_text = (ROOT / ADB).read_text(encoding='utf-8')
 adb_paren_before = paren_delta(adb_text)
-adb_lines = adb_text.split(NL)
 
-# 6a. 清理 v4 可能插入的 AutoMigration(35,36)（它会挂 KSP）
+# 6a. 清理 v4/v5 的错误产物
 auto_am_35_36 = 'AutoMigration(from = 35, to = 36),'
 if auto_am_35_36 in adb_text:
-    adb_lines = [ln for ln in adb_lines if ln.strip() != auto_am_35_36]
-    adb_text = NL.join(adb_lines)
-    print('::notice::batch133 removed v4 AutoMigration(35,36) (KSP requires 35.json which is not committed)')
+    adb_lines_tmp = adb_text.split(NL)
+    adb_lines_tmp = [ln for ln in adb_lines_tmp if ln.strip() != auto_am_35_36]
+    adb_text = NL.join(adb_lines_tmp)
+    print('::notice::batch133 removed v4 AutoMigration(35,36)')
 
-# 6b. version 确保为 36（若 <36 则升）
+# 清理错误位置的 Migration_35_36（若在 TokenUsageConverter 内部）
+if 'class Migration_35_36' in adb_text:
+    tc_pos = adb_text.find('object TokenUsageConverter {')
+    m35_pos = adb_text.find('class Migration_35_36')
+    if tc_pos > 0 and m35_pos > tc_pos:
+        adb_text = remove_class_block(adb_text, 'Migration_35_36', 'adb-cleanup')
+        print('::notice::batch133 removed misplaced Migration_35_36 (was inside TokenUsageConverter)')
+
+# 6b. version 确保为 36
+adb_lines = adb_text.split(NL)
 v_hits = [i for i, ln in enumerate(adb_lines) if ln.strip().startswith('version =')]
 if len(v_hits) != 1:
     fail('adb-version', 'version anchor count=' + str(len(v_hits)) + ' path=' + ADB)
@@ -259,22 +301,19 @@ m_ver = re.search(r'version\s*=\s*(\d+)', adb_lines[v_i])
 if not m_ver:
     fail('adb-version', 'version line has no digits: ' + adb_lines[v_i].strip())
 cur_ver = int(m_ver.group(1))
-print('::notice::batch133 AppDatabase current version=' + str(cur_ver))
-
 if cur_ver < 36:
-    adb_lines[v_i] = adb_lines[v_i].replace(
-        'version = ' + str(cur_ver),
-        'version = 36',
-    )
+    adb_lines[v_i] = adb_lines[v_i].replace('version = ' + str(cur_ver), 'version = 36')
+    adb_text = NL.join(adb_lines)
+    (ROOT / ADB).write_text(adb_text, encoding='utf-8')
     print('::notice::batch133 AppDatabase version bumped to 36')
 
-# 6c. 加 Migration_35_36 类（文件尾 TokenUsageConverter 前）
+# 6c. 加 Migration_35_36 类（TokenUsageConverter 前）
 if 'class Migration_35_36' in adb_text:
     print('::notice::batch133 Migration_35_36 already present')
 else:
     migration_class = [
         '',
-        '// rhWsShell133 (batch133 v5): v36 adds shell_status / shell_compatibility_mode to workspaces.',
+        '// rhWsShell133 (batch133 v6): v36 adds shell_status / shell_compatibility_mode to workspaces.',
         '// Hand-written migration (not AutoMigration) because 35.json was never committed',
         '// (batch55_1 bumped version on CI without committing the schema export).',
         'class Migration_35_36 : Migration(35, 36) {',
@@ -284,22 +323,19 @@ else:
         '    }',
         '}',
     ]
-    insert_lines_after(
+    insert_lines_before(
         ADB,
         lambda ln: ln.strip() == 'object TokenUsageConverter {',
         lambda indent: migration_class,
         'adb-migration-class',
     )
-    adb_text = (ROOT / ADB).read_text(encoding='utf-8')
-    adb_lines = adb_text.split(NL)
-    print('::notice::batch133 Migration_35_36 class added')
+    print('::notice::batch133 Migration_35_36 class added (before TokenUsageConverter)')
 
 # 6d. DataSourceModule 注册 Migration_35_36
 dsm_text = (ROOT / DSM).read_text(encoding='utf-8')
 if 'Migration_35_36()' in dsm_text:
     print('::notice::batch133 DataSourceModule already registered')
 else:
-    # import
     if 'import me.rerere.rikkahub.data.db.Migration_35_36' not in dsm_text:
         insert_lines_after(
             DSM,
@@ -307,7 +343,6 @@ else:
             lambda indent: ['import me.rerere.rikkahub.data.db.Migration_35_36'],
             'dsm-import',
         )
-    # addMigrations 链尾
     dsm_text = (ROOT / DSM).read_text(encoding='utf-8')
     if 'Migration_34_35(), Migration_35_36())' in dsm_text:
         pass
@@ -318,13 +353,17 @@ else:
         dsm_text = dsm_text.replace('Migration_33_34())', 'Migration_33_34(), Migration_35_36())', 1)
         (ROOT / DSM).write_text(dsm_text, encoding='utf-8')
     else:
-        print('::warning::batch133 DataSourceModule addMigrations anchor not found (Migration_35_36 not registered)')
+        print('::warning::batch133 DataSourceModule addMigrations anchor not found')
     print('::notice::batch133 DataSourceModule registered Migration_35_36')
 
 # 自检
 adb_text2 = (ROOT / ADB).read_text(encoding='utf-8')
 if 'class Migration_35_36' not in adb_text2:
     fail('adb-selfcheck', 'Migration_35_36 class missing')
+tc_pos2 = adb_text2.find('object TokenUsageConverter {')
+m35_pos2 = adb_text2.find('class Migration_35_36')
+if not (m35_pos2 < tc_pos2):
+    fail('adb-selfcheck', 'Migration_35_36 still after TokenUsageConverter (position wrong)')
 if paren_delta(adb_text2) != paren_delta(adb_text):
     fail('adb-balance', 'paren balance changed')
 print('::notice::batch133 AppDatabase v36 + Migration_35_36 applied')
