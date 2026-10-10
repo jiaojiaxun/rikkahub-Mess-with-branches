@@ -1,30 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch142: 附件放大——AI 工作区产物文件也改大卡片(对齐 batch120 用户消息附件样式)
+'''batch142 v2: 附件放大——AI 工作区产物文件也改大卡片(对齐 batch120 用户消息附件样式)
 
-用户反馈(#2): "附件放大只对用户消息生效,AI生成产物的附件仍是旧样式"
+v1 死因: balance changed 0 -> -2。两个 bug:
+1. find_block_end 只数 {/} 不数 (/) —— Surface( 行 depth=0,下一行就误判结束
+2. FlowRow→Column 时没删 horizontalArrangement 参数 —— Column 不接受此参数,会编译错误
 
-根因: batch120v2 把 ChatMessage.kt 的 Document/Audio 分支改成了大卡片(fillMaxWidth+
-RoundedCornerShape(16)+图标+名字+大小+下载钮),但 AI 工作区产物渲染在
-EditedFilesList(ChatMessageEditedFiles.kt)里——还是 FlowRow 小圆片(RoundedCornerShape(50)
-+ 小图标+小文字),没被升级。
+v2 修法:
+1. find_block_end 同时数 ( { ) } 四种括号(混合配平),depth 从 1 开始(Surface( 的 ( )
+2. FlowRow→Column 时同时删除 horizontalArrangement 行
 
-改动(ChatMessageEditedFiles.kt 单文件):
-1. FlowRow → Column(spacedBy 8dp)——大卡片需要纵向排列
-2. 每个文件的 Surface 从 RoundedCornerShape(50) 小圆片改为 fillMaxWidth 大卡片
-   (RoundedCornerShape(16)+图标44dp+名字+说明+下载钮36dp,对齐 batch120 样式)
-3. "+N" 展开按钮同步改大卡片
-4. onClick 行为不变(仍打开 ModalBottomSheet 显示导出/删除)
-
-五查:
-1. import 清单: 需新增 fillMaxSize/CircleShape/Download01(精确行匹配);
-   Surface/Row/Column/Icon/Text/Modifier 等已有
-2. 同文件冲突: ChatMessageEditedFiles.kt 无在链 patch 触碰(list_commits 仅初始快照)
-3. 作用域: 全部在 EditedFilesList 函数体内;fileName/selectedPath 已有
-4. 括号配对: 替换块自平衡;全文件 balance 前后一致
-5. 函数签名: 不改
-
-Python 三查: 引号 Q=chr(34) 构造;NL 手写 concat;helper 先定义;失败显式 exit(1)
+其余逻辑不变(大卡片样式对齐 batch120,onClick 行为不变)。
 '''
 import sys
 from pathlib import Path
@@ -37,7 +23,7 @@ EF = 'app/src/main/java/me/rerere/rikkahub/ui/components/message/ChatMessageEdit
 
 
 def fail(msg, lines=None, around=-1):
-    body = 'batch142 ' + str(msg)
+    body = 'batch142v2 ' + str(msg)
     if lines is not None and 0 <= around < len(lines):
         lo = max(0, around - 3)
         hi = min(len(lines), around + 4)
@@ -57,12 +43,13 @@ def balance(text):
 
 
 def find_block_end(lines, start):
+    '''v2: 混合配平——同时数 ( { ) } 四种括号'''
     depth = 0
     for i in range(start, len(lines)):
         for ch in lines[i]:
-            if ch == '{':
+            if ch in '({':
                 depth += 1
-            elif ch == '}':
+            elif ch in ')}':
                 depth -= 1
         if depth <= 0 and i > start:
             return i
@@ -71,7 +58,7 @@ def find_block_end(lines, start):
 
 t = (ROOT / EF).read_text(encoding='utf-8')
 if MARK in t:
-    print('batch142: already applied')
+    print('batch142v2: already applied')
     sys.exit(0)
 
 bal0 = balance(t)
@@ -95,22 +82,27 @@ for j, imp in enumerate(missing):
 if missing:
     applied.append('imports+' + str(len(missing)))
 
-# ---- 2. FlowRow → Column ----
+# ---- 2. FlowRow → Column + 删 horizontalArrangement ----
 fr_hits = [i for i, ln in enumerate(lines) if ln.strip() == 'FlowRow(']
 if len(fr_hits) != 1:
     fail('FlowRow anchor count=' + str(len(fr_hits)), lines, fr_hits[0] if fr_hits else 0)
 fr_i = fr_hits[0]
 d = ind(lines[fr_i])
 lines[fr_i] = d + 'Column(  // ' + MARK + ': 大卡片需要纵向排列,不再 FlowRow 横排'
-applied.append('flowrow-to-column')
+# v2: 删除 horizontalArrangement 行(Column 不接受此参数)
+ha_hits = [i for i, ln in enumerate(lines) if 'horizontalArrangement = Arrangement.spacedBy(6.dp)' in ln]
+if len(ha_hits) == 1:
+    del lines[ha_hits[0]]
+    applied.append('flowrow-to-column+rm-harr')
+else:
+    # 找不到就只改 FlowRow→Column,不删 horizontalArrangement(可能已被删或格式不同)
+    applied.append('flowrow-to-column')
 
 # ---- 3. 文件 Surface → 大卡片 ----
-# 锚点: Surface( onClick = { selectedPath = path } 行(文件条目)
 surf_hits = [i for i, ln in enumerate(lines) if 'onClick = { selectedPath = path }' in ln]
 if len(surf_hits) != 1:
     fail('file Surface anchor count=' + str(len(surf_hits)), lines, surf_hits[0] if surf_hits else 0)
 si = surf_hits[0]
-# 往上找 Surface( 开始行
 surf_start = -1
 for j in range(si, max(0, si - 3), -1):
     if lines[j].strip() == 'Surface(':
@@ -119,7 +111,6 @@ for j in range(si, max(0, si - 3), -1):
 if surf_start < 0:
     fail('Surface( start not found above onClick', lines, si)
 d = ind(lines[surf_start])
-# 找 Surface 块配平结束
 surf_end = find_block_end(lines, surf_start)
 if surf_end < 0:
     fail('Surface block end not found', lines, surf_start)
@@ -186,7 +177,6 @@ lines[surf_start:surf_end + 1] = new_card
 applied.append('file-card')
 
 # ---- 4. "+N" 展开按钮同步改大卡片 ----
-# 锚点: Surface( onClick = { expanded = true } 行
 exp_hits = [i for i, ln in enumerate(lines) if 'onClick = { expanded = true }' in ln]
 if len(exp_hits) != 1:
     fail('expand Surface anchor count=' + str(len(exp_hits)), lines, exp_hits[0] if exp_hits else 0)
@@ -236,4 +226,4 @@ if balance(out) != bal0:
     fail('balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
 
 (ROOT / EF).write_text(out, encoding='utf-8')
-print('::notice::batch142 OK - ' + ', '.join(applied))
+print('::notice::batch142v2 OK - ' + ', '.join(applied))
