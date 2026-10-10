@@ -200,24 +200,41 @@ if not color_found:
 applied.append('code_span')
 
 # ===================== 8. Paragraph 获取 rpStyleRules =====================
-pi = find_unique(
-    lines,
-    'val enableLatexRendering = LocalSettings.current.displaySetting.enableLatexRendering',
-    'Paragraph enableLatexRendering',
-    MD,
-)
+# 收窄到 Paragraph 函数体内: 先找函数声明,再在函数体内找锚点
+# (enableLatexRendering 在 Markdown.kt 出现 3 次: Paragraph + INLINE_MATH 块 + 其他)
+para_fn_idx = find_unique(lines, 'private fun Paragraph(', 'Paragraph function decl', MD)
+# 找 Paragraph 函数体内的 enableLatexRendering 行
+pi = -1
+for i in range(para_fn_idx, len(lines)):
+    if lines[i].strip() == 'val enableLatexRendering = LocalSettings.current.displaySetting.enableLatexRendering':
+        pi = i
+        break
+    # 遇到下一个 @Composable 或 private fun 说明出了 Paragraph 范围,停止
+    if i > para_fn_idx and (lines[i].strip().startswith('@Composable') or lines[i].strip().startswith('private fun ')):
+        break
+if pi < 0:
+    fail(MD, 'Paragraph enableLatexRendering not found in function body', lines, para_fn_idx)
 pind = indent_of(lines[pi])
 lines.insert(pi + 1, pind + 'val rpStyleRules = LocalSettings.current.displaySetting.rpStyleRules // ' + MARK)
 applied.append('para_get')
 
 # ===================== 9. remember key 加 rpStyleRules =====================
-ri = find_unique(lines, 'remember(content, enableLatexRendering, latexColorArgb) {', 'remember key', MD)
+# 收窄到 Paragraph 函数体内
+ri = -1
+for i in range(para_fn_idx, len(lines)):
+    if lines[i].strip() == 'remember(content, enableLatexRendering, latexColorArgb) {':
+        ri = i
+        break
+    if i > para_fn_idx and (lines[i].strip().startswith('@Composable') or lines[i].strip().startswith('private fun ')):
+        break
+if ri < 0:
+    fail(MD, 'remember key not found in Paragraph function body', lines, para_fn_idx)
 rind = indent_of(lines[ri])
 lines[ri] = rind + 'remember(content, enableLatexRendering, latexColorArgb, rpStyleRules) { // ' + MARK
 applied.append('remember_key')
 
 # ===================== 10. 主调用传参 =====================
-# 从 remember 行往后找第一个 latexColorArgb = latexColorArgb, (主调用最后一个参数)
+# 收窄到 Paragraph 函数体内: 从 remember 行往后找第一个 latexColorArgb = latexColorArgb,
 call_idx = -1
 for i in range(ri, min(ri + 25, len(lines))):
     if lines[i].strip() == 'latexColorArgb = latexColorArgb,':
