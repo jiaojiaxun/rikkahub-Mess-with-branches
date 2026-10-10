@@ -220,9 +220,11 @@ applied.append('para_get')
 
 # ===================== 9. remember key 加 rpStyleRules =====================
 # 收窄到 Paragraph 函数体内
+# 注意: 实际行是 'val annotatedString = remember(content, enableLatexRendering, latexColorArgb) {'
+# 不是纯 'remember(...)',所以用 in 包含匹配
 ri = -1
 for i in range(para_fn_idx, len(lines)):
-    if lines[i].strip() == 'remember(content, enableLatexRendering, latexColorArgb) {':
+    if 'remember(content, enableLatexRendering, latexColorArgb) {' in lines[i]:
         ri = i
         break
     if i > para_fn_idx and (lines[i].strip().startswith('@Composable') or lines[i].strip().startswith('private fun ')):
