@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
-# batch148 v2: 酒馆模式开关移到分割线下面 (装机反馈 #7)
+# batch148 v2: 酒馆模式开关移到面板底部 (装机反馈 #7: 移到分割线下面)
 #
-# v2 修复: 自检 "HorizontalDivider( 恰好 1 个" 过严——CI 形态下该字符串
-# 可能已存在(文件原有/batch136 加过) 或数量不为 1, 导致 fail 阻塞构建链。
-# v2 改为 >= 1 只验证"确实插入了分割线", 不做全文件绝对计数;
-# 旧块找不到(batch136 已挪走)时 warn-only 跳过而非阻塞。
-#
-# batch130 把开关插在了思考深度面板标题正下方; 用户要求挪到分割线下面。
-# 本脚本在 CI 形态下:
-#   1) 移除 batch130 插入的旧位置开关块 (锚点 = batch130 的已知插入文本)
-#   2) 在 Slider 块之后重新插入 [HorizontalDivider + 开关]
-#      (面板原本没有分割线, 顺便补上, 正好对齐"分割线下面"的描述)
-# 幂等: 命中 rhTavernBelowDivider 即跳过。
-# 括号纪律: 用「与原始文件的差值」校验配平, 不做全文件绝对计数。
+# v1 死因: CI 形态 ReasoningPicker.kt 已有 HorizontalDivider(更早脚本加过),
+#   v1 断言 count("HorizontalDivider(")==1 撞上实际=2, fail-loud 拦下。
+#   这也印证了用户反馈里的"分割线"真实存在。
+# v2 改法: 不再加自带分割线(避免重复); 只把 batch130 插在标题下的开关块
+#   移到 Slider 块之后(面板底部, 自然位于已有分割线下方)。
+# 锚点: batch130 已知插入文本 + Slider 调用行(仓库态唯一)。
+# 幂等: 命中 rhTavernBelowDivider 即跳过。校验全用差值, 不做绝对计数。
 
 import io
 import sys
@@ -25,7 +20,7 @@ IF_LINE = "if (onUpdateTavernMode != null) {"
 
 
 def fail(msg):
-    print("::error file=" + PATH + "::batch148 " + msg)
+    print("::error file=" + PATH + "::batch148v2 " + msg)
     sys.exit(1)
 
 
@@ -47,20 +42,18 @@ def main():
     with io.open(PATH, "r", encoding="utf-8") as f:
         src = f.read()
     if MARK_NEW in src:
-        print("batch148: already applied, skip")
+        print("batch148v2: already applied, skip")
         return
     lines = src.split(NL)
 
-    # ---- 1. 定位并移除旧开关块 ----
+    # ---- 1. 定位并移除旧开关块(batch130 插在标题正下方) ----
     cmt = -1
     for i, ln in enumerate(lines):
         if OLD_MARK in ln:
             cmt = i
             break
     if cmt < 0:
-        # v2: 旧块已被别的脚本挪走(batch136)——warn-only 跳过而非阻塞
-        print("::warning file=" + PATH + "::batch148 old tavern block comment not found (batch136 already moved it?); skip")
-        return
+        fail("old tavern block comment not found; file unchanged")
     if_i = -1
     for j in range(cmt + 1, min(cmt + 4, len(lines))):
         if lines[j].strip() == IF_LINE:
@@ -78,7 +71,7 @@ def main():
             fail("removed block missing " + need + "; abort before write")
     del lines[block_start:if_end + 1]
 
-    # ---- 2. 在 Slider 块之后重新插入 ----
+    # ---- 2. 在 Slider 块之后重新插入(不带分割线; 已有分割线不动) ----
     slider_i = -1
     for i, ln in enumerate(lines):
         if ln.strip() == "Slider(":
@@ -90,9 +83,8 @@ def main():
     pad = "            "
     block = [
         "",
-        pad + "// rhTavernMode: 会话级酒馆模式开关(移到分割线下方) [" + MARK_NEW + "]",
+        pad + "// rhTavernMode: 会话级酒馆模式开关(移到面板底部, 已有分割线下方) [" + MARK_NEW + "]",
         pad + IF_LINE,
-        pad + "    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))",
         pad + "    Row(",
         pad + "        modifier = Modifier.fillMaxWidth(),",
         pad + "        verticalAlignment = Alignment.CenterVertically,",
@@ -121,13 +113,15 @@ def main():
 
     out = NL.join(lines)
 
-    # ---- 3. 自检(差值校验) ----
+    # ---- 3. 自检(全差值, 不做绝对计数) ----
     if out.count(MARK_NEW) != 1:
         fail("new marker count != 1")
-    if out.count("HorizontalDivider(") < 1:
-        fail("no divider after apply")
-    if out.count("R.string.setting_tavern_mode") < 2:
-        fail("tavern string refs < 2")
+    if OLD_MARK in out:
+        fail("old block comment still present")
+    if out.count("R.string.setting_tavern_mode") != 2:
+        fail("tavern string refs != 2 (title+desc)")
+    if out.count("HorizontalDivider(") != src.count("HorizontalDivider("):
+        fail("divider count changed (existing divider tampered?): " + str(src.count("HorizontalDivider(")) + " -> " + str(out.count("HorizontalDivider(")))
     if out.count("(") - src.count("(") != out.count(")") - src.count(")"):
         fail("paren delta mismatch")
     if out.count("{") != src.count("{") or out.count("}") != src.count("}"):
@@ -135,7 +129,7 @@ def main():
 
     with io.open(PATH, "w", encoding="utf-8") as f:
         f.write(out)
-    print("batch148 v2: tavern switch moved below divider (after Slider); divider count=" + str(out.count("HorizontalDivider(")))
+    print("batch148v2: tavern switch moved to bottom (after Slider), no new divider")
 
 
 if __name__ == "__main__":
