@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-# batch147: 移植上游 2.5.6 MCP 工具 schema $ref 内联修复 (rikkahub #1974 / 上游 cf79246b)
+# batch147 v2: 移植上游 2.5.6 MCP 工具 schema $ref 内联修复 (rikkahub #1974 / 上游 cf79246b)
+#
+# v1 死因: run #363 patch 步 45s 挂。自查根因 = 预检断言写错:
+#   registry.count(".toSchema()") 实际为 3 (mergeTools 2 处调用 + 尾部旧函数签名
+#   "private fun ToolSchema.toSchema()" 也含该子串), v1 误写成 != 2, fail-loud 正确拦下。
+# v2 改法: 预检计数 2->3, 并在注释里写明构成; 其余不变。
 #
 # 变更:
 #   1) 新增 app/src/main/java/me/rerere/rikkahub/data/ai/mcp/McpToolSchema.kt
@@ -332,8 +337,9 @@ def main():
         fail("batch147: InputSchema import count=" + str(registry.count(IMPORT_INPUTSCHEMA)))
     if registry.count(OLD_TAIL) != 1:
         fail("batch147: tail anchor count=" + str(registry.count(OLD_TAIL)))
-    if registry.count(".toSchema()") != 2:
-        fail("batch147: toSchema call count=" + str(registry.count(".toSchema()")) + " (expect 2)")
+    # 构成: mergeTools 内 2 处调用 + 尾部旧函数签名 1 处 = 3
+    if registry.count(".toSchema()") != 3:
+        fail("batch147: toSchema occurrence count=" + str(registry.count(".toSchema()")) + " (expect 3)")
 
     updated = registry.replace(IMPORT_TOOLSCHEMA, "")
     updated = updated.replace(IMPORT_INPUTSCHEMA, "")
@@ -344,7 +350,7 @@ def main():
     if "InputSchema" in updated:
         fail("batch147: InputSchema residue after edit")
     if updated.count(".toSchema()") != 2:
-        fail("batch147: toSchema calls lost after edit")
+        fail("batch147: toSchema call count after edit=" + str(updated.count(".toSchema()")) + " (expect 2)")
     if updated.count("(") != updated.count(")"):
         fail("batch147: paren imbalance after edit")
     if updated.count("{") != updated.count("}"):
