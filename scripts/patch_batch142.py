@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch142 v3: 附件放大——AI 工作区产物文件也改大卡片(对齐 batch120 用户消息附件样式)
+'''batch142 v4: 附件放大——AI 工作区产物文件也改大卡片(对齐 batch120 用户消息附件样式)
 
-v3 修复: v2 插入的大卡片代码用了 Box(modifier = Modifier.fillMaxSize(), ...) 但 imports
-清单里漏了 androidx.compose.foundation.layout.Box → 编译 Unresolved reference 'Box'。
-v3 在 need 清单补上 Box import。其余不变。
+v4 修复: v1-v3 把 FlowRow 改成 Column 但保留了 horizontalArrangement 参数行
+(horizontalArrangement 是 FlowRow 的参数, Column 没有——Column 纵向排列用 horizontalAlignment)。
+编译错: No parameter with name horizontalArrangement found (line 103)。
+v4 改法: FlowRow→Column 替换后,往下找 horizontalArrangement = Arrangement.spacedBy(...) 行删掉
+(Column 默认 horizontalAlignment=Start,水平间距对单列卡片无意义)。
 
-v2 修复: find_block_end 只数花括号不数圆括号, 在 'onClick = { selectedPath = path },'
-这种同行开关花括号的行 depth 归 0 误停 → 原 Surface 块被截断只删 2 行,
-新块 44 行插进去后括号配不平(balance 0 -> -2)。
-v2 改法: find_block_end 改为混合扫描圆括号+花括号(Surface(...) { ... } 的结构:
-参数圆括号先开,lambda 花括号后开,先关参数后关 lambda,混合 depth 正确配平)。
-
-v1 功能不变: 附件放大——AI 工作区产物文件也改大卡片(对齐 batch120 用户消息附件样式)
+v3 修复: 补 Box import。
+v2 修复: find_block_end 混合扫描圆括号+花括号。
+v1 功能: 附件放大——AI 工作区产物文件也改大卡片。
 
 用户反馈(#2): "附件放大只对用户消息生效,AI生成产物的附件仍是旧样式"
 
@@ -30,10 +28,10 @@ EditedFilesList(ChatMessageEditedFiles.kt)里——还是 FlowRow 小圆片(Roun
 
 五查:
 1. import 清单: 需新增 fillMaxSize/Box/CircleShape/Download01(精确行匹配+existing防重复);
-   Surface/Row/Column/Icon/Text/Modifier 等已有
+   Surface/Row/Column/Icon/Text/Modifier/Arrangement 等已有
 2. 同文件冲突: ChatMessageEditedFiles.kt 无在链 patch 触碰(list_commits 仅初始快照)
 3. 作用域: 全部在 EditedFilesList 函数体内;fileName/selectedPath 已有
-4. 括号配对: 替换块自平衡;全文件 balance 前后一致;find_block_end 混合扫描
+4. 括号配对: 替换块自平衡;删 horizontalArrangement 行(自平衡);全文件 balance 前后一致
 5. 函数签名: 不改
 
 Python 三查: 引号 Q=chr(34) 构造;NL 手写 concat;helper 先定义;失败显式 exit(1)
@@ -117,6 +115,12 @@ if len(fr_hits) != 1:
 fr_i = fr_hits[0]
 d = ind(lines[fr_i])
 lines[fr_i] = d + 'Column(  // ' + MARK + ': 大卡片需要纵向排列,不再 FlowRow 横排'
+# v4: Column 没有 horizontalArrangement 参数(FlowRow 才有)——往下找并删掉该行
+# Column 的参数是 verticalArrangement + horizontalAlignment;水平间距对单列卡片无意义,删即可
+for j in range(fr_i + 1, min(fr_i + 5, len(lines))):
+    if 'horizontalArrangement' in lines[j] and 'Arrangement.spacedBy' in lines[j]:
+        del lines[j]
+        break
 applied.append('flowrow-to-column')
 
 # ---- 3. 文件 Surface → 大卡片 ----
@@ -251,4 +255,4 @@ if balance(out) != bal0:
     fail('balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
 
 (ROOT / EF).write_text(out, encoding='utf-8')
-print('::notice::batch142 v3 OK - ' + ', '.join(applied))
+print('::notice::batch142 v4 OK - ' + ', '.join(applied))
