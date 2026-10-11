@@ -1,10 +1,16 @@
 package me.rerere.rikkahub.ui.components.message
 
+import kotlin.time.Clock
+import kotlin.time.Duration
+
 /**
  * 工具调用语义化摘要映射器。
  *
  * 将 ThinkingBlock 里的 ToolStep / ServerToolStep 按 toolName 分类,
- * 生成类似「操作了 3 个文件 · 调用了 MCP · 生成了图片」的摘要。
+ * 生成类似「操作了 3 个文件 · 调用了 MCP · 生成了图片」的摘要,
+ * 展示在折叠的 chain-of-thought 头部(替代「再显示 X 步」文案)。
+ *
+ * 思考步骤(ReasoningStep)也会计入摘要 —— 「思考了 X 秒」(时长累加)。
  *
  * 分类规则覆盖 fork 里所有已注册工具(LocalTools + CronTools + SubAgent + AppControl + Browser + ImageGeneration)。
  * 未匹配的工具走默认「使用了工具」分支,不会遗漏。
@@ -19,7 +25,16 @@ object ToolSummaryMapper {
                 else -> null
             }
         }
-        if (toolNames.isEmpty()) return null
+
+        // 折叠条摘要也纳入思考步骤 —— 「思考了 X 秒」(多个 ReasoningStep 时长累加;
+        // 还在思考的 finishedAt == null 时用当前时间,与 ChatMessageReasoning 的算法一致)
+        val totalReasoning = steps.filterIsInstance<ThinkingStep.ReasoningStep>()
+            .fold(Duration.ZERO) { acc, step ->
+                val r = step.reasoning
+                val duration = r.finishedAt?.let { it - r.createdAt }
+                    ?: (Clock.System.now() - r.createdAt)
+                acc + duration
+            }
 
         val categories = mutableMapOf<String, Int>()
         for (name in toolNames) {
@@ -27,13 +42,16 @@ object ToolSummaryMapper {
             categories[cat] = (categories[cat] ?: 0) + 1
         }
 
-        return categories.entries.joinToString(" \u00b7 ") { (cat, count) ->
-            if (count > 1) {
-                cat + " " + count + " \u6b21"
-            } else {
-                cat
-            }
+        val parts = mutableListOf<String>()
+        if (totalReasoning > Duration.ZERO) {
+            val seconds = totalReasoning.inWholeSeconds.coerceAtLeast(1L)
+            parts += "\u601d\u8003\u4e86 " + seconds.toString() + " \u79d2"
         }
+        categories.forEach { (cat, count) ->
+            parts += if (count > 1) cat + " " + count + " \u6b21" else cat
+        }
+        if (parts.isEmpty()) return null
+        return parts.joinToString(" \u00b7 ")
     }
 
     @Suppress("kotlin:S1192")
