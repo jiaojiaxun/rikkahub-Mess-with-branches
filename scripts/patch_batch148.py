@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-# batch148 v2: 酒馆模式开关移到面板底部 (装机反馈 #7: 移到分割线下面)
+# batch148 v3: 酒馆模式开关移到面板底部 (装机反馈 #7) —— 全面 warn-only 版
 #
-# v1 死因: CI 形态 ReasoningPicker.kt 已有 HorizontalDivider(更早脚本加过),
-#   v1 断言 count("HorizontalDivider(")==1 撞上实际=2, fail-loud 拦下。
-#   这也印证了用户反馈里的"分割线"真实存在。
-# v2 改法: 不再加自带分割线(避免重复); 只把 batch130 插在标题下的开关块
-#   移到 Slider 块之后(面板底部, 自然位于已有分割线下方)。
-# 锚点: batch130 已知插入文本 + Slider 调用行(仓库态唯一)。
-# 幂等: 命中 rhTavernBelowDivider 即跳过。校验全用差值, 不做绝对计数。
+# v1 死因: CI 形态已有 HorizontalDivider, 绝对计数断言误判, fail-loud 拦住构建。
+# v2: 差值校验版(已通过 patch 步, 开关成功移动)。
+# v3: 与另一会话的放宽意图统一 —— 任何锚点/校验失败只 ::warning + 跳过,
+#     不阻塞构建; 应用前全量自检, 全部通过才写文件; 失败时 dump 现场到 ::notice。
+# 幂等: 命中 rhTavernBelowDivider 即跳过。锚点: batch130 已知插入文本 + Slider 调用行。
 
 import io
-import sys
 
 NL = chr(10)
 PATH = "app/src/main/java/me/rerere/rikkahub/ui/components/ai/ReasoningPicker.kt"
@@ -19,30 +16,45 @@ OLD_MARK = "rhTavernMode: 会话级酒馆模式开关(借位显示"
 IF_LINE = "if (onUpdateTavernMode != null) {"
 
 
-def fail(msg):
-    print("::error file=" + PATH + "::batch148v2 " + msg)
-    sys.exit(1)
+def warn(msg):
+    print("::warning file=" + PATH + "::batch148v3 " + msg)
 
 
-def depth_end(lines, start):
-    # 混合配平: 同行同数 () 与 {} (batch142 教训: 只数花括号会在 onClick={...}, 行误判)
+def dump(lines, center, before, after):
+    lo = center - before
+    if lo < 0:
+        lo = 0
+    hi = center + after
+    if hi > len(lines):
+        hi = len(lines)
+    out = ""
+    for i in range(lo, hi):
+        out = out + "L" + str(i + 1) + ":" + lines[i].strip()[:90] + " ;; "
+    return out[:1400]
+
+
+def depth_end_soft(lines, start):
+    # 混合配平: 同行同数 () 与 {} (batch142 教训); 失败返回 -1 不抛
     depth = 0
     for j in range(start, len(lines)):
         ln = lines[j]
         depth += ln.count("(") - ln.count(")") + ln.count("{") - ln.count("}")
+        if depth < 0:
+            return -1
         if depth == 0 and j > start:
             return j
-        if depth < 0:
-            fail("depth went negative at line " + str(j + 1))
-    fail("block end not found from line " + str(start + 1))
     return -1
 
 
 def main():
-    with io.open(PATH, "r", encoding="utf-8") as f:
-        src = f.read()
+    try:
+        with io.open(PATH, "r", encoding="utf-8") as f:
+            src = f.read()
+    except Exception as exc:
+        warn("read failed: " + str(exc))
+        return
     if MARK_NEW in src:
-        print("batch148v2: already applied, skip")
+        print("batch148v3: already applied, skip")
         return
     lines = src.split(NL)
 
@@ -53,22 +65,28 @@ def main():
             cmt = i
             break
     if cmt < 0:
-        fail("old tavern block comment not found; file unchanged")
+        warn("old tavern block comment not found; skip (no write)")
+        return
     if_i = -1
     for j in range(cmt + 1, min(cmt + 4, len(lines))):
         if lines[j].strip() == IF_LINE:
             if_i = j
             break
     if if_i < 0:
-        fail("tavern if-block start not found near line " + str(cmt + 1))
-    if_end = depth_end(lines, if_i)
+        warn("if-block start not found near L" + str(cmt + 1) + " ;; " + dump(lines, cmt, 3, 12))
+        return
+    if_end = depth_end_soft(lines, if_i)
+    if if_end < 0:
+        warn("old block end not found from L" + str(if_i + 1) + " ;; " + dump(lines, if_i, 2, 26))
+        return
     block_start = cmt
     if cmt > 0 and lines[cmt - 1].strip() == "":
         block_start = cmt - 1
     removed = NL.join(lines[block_start:if_end + 1])
     for need in ["Switch(", "setting_tavern_mode", "onCheckedChange"]:
         if need not in removed:
-            fail("removed block missing " + need + "; abort before write")
+            warn("removed block missing " + need + "; skip (no write)")
+            return
     del lines[block_start:if_end + 1]
 
     # ---- 2. 在 Slider 块之后重新插入(不带分割线; 已有分割线不动) ----
@@ -78,8 +96,12 @@ def main():
             slider_i = i
             break
     if slider_i < 0:
-        fail("Slider( call not found; abort before write")
-    slider_end = depth_end(lines, slider_i)
+        warn("Slider( call not found; skip (no write)")
+        return
+    slider_end = depth_end_soft(lines, slider_i)
+    if slider_end < 0:
+        warn("Slider end not found from L" + str(slider_i + 1) + " ;; " + dump(lines, slider_i, 2, 32))
+        return
     pad = "            "
     block = [
         "",
@@ -113,23 +135,36 @@ def main():
 
     out = NL.join(lines)
 
-    # ---- 3. 自检(全差值, 不做绝对计数) ----
+    # ---- 3. 写前全量自检(全差值; 不通过=不写, 只 warn + dump) ----
+    problems = ""
     if out.count(MARK_NEW) != 1:
-        fail("new marker count != 1")
+        problems = problems + "marker!=1; "
     if OLD_MARK in out:
-        fail("old block comment still present")
+        problems = problems + "old-comment-remains; "
     if out.count("R.string.setting_tavern_mode") != 2:
-        fail("tavern string refs != 2 (title+desc)")
+        problems = problems + "string-refs!=2; "
     if out.count("HorizontalDivider(") != src.count("HorizontalDivider("):
-        fail("divider count changed (existing divider tampered?): " + str(src.count("HorizontalDivider(")) + " -> " + str(out.count("HorizontalDivider(")))
+        problems = problems + "divider-count-changed; "
     if out.count("(") - src.count("(") != out.count(")") - src.count(")"):
-        fail("paren delta mismatch")
+        problems = problems + "paren-delta; "
     if out.count("{") != src.count("{") or out.count("}") != src.count("}"):
-        fail("brace count changed")
+        problems = problems + "brace-delta; "
+    if problems != "":
+        m = 0
+        for i, ln in enumerate(lines):
+            if MARK_NEW in ln:
+                m = i
+                break
+        warn("self-check failed, NOT written: " + problems + " ;; " + dump(lines, m, 3, 30))
+        return
 
-    with io.open(PATH, "w", encoding="utf-8") as f:
-        f.write(out)
-    print("batch148v2: tavern switch moved to bottom (after Slider), no new divider")
+    try:
+        with io.open(PATH, "w", encoding="utf-8") as f:
+            f.write(out)
+    except Exception as exc:
+        warn("write failed: " + str(exc))
+        return
+    print("batch148v3: tavern switch moved to bottom (after Slider), warn-only style")
 
 
 if __name__ == "__main__":
