@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
-# batch149: 设置页"定时任务"重复行去重 (装机反馈 #6) —— 诊断优先, warn-only
+# batch149 v2: 设置页"定时任务"重复行去重 (装机反馈 #6) —— 诊断优先, warn-only
 #
-# 现象(用户截图): 设置-高级服务里有两行"定时任务",
-# 描述分别为"查看、开关和管理 AI 创建的定时任务"与"查看、开关、删除 AI 创建的定时任务"。
-# 已核实: 仓库态 SettingPage.kt 没有该行 —— 两行都是在链脚本在 CI 注入的, 注入源未定位。
-#
-# 策略(不自残优先, 全程 warn-only, 任何意外只 ::warning/::notice, 绝不 exit 1):
-#   1) 扫 values-zh/strings.xml 找含"定时任务"的字符串, 抽出 name key
-#   2) 在 SettingPage.kt 里按 key 引用(或硬编码中文)定位 item() 行块
-#   3) 恰好 2 块且导航目标相同 -> 删第二块; 否则只 dump 现场行到 annotation
-#   4) 设置搜索镜像 SettingsSearchIndex.kt 只 dump 不改
-# 跑一次 CI 即可拿到真形态; 下次按 dump 修准。
+# v1 回顾: 去重逻辑相同; 诊断 dump 用 ::notice —— 但 run annotations 里没露出来。
+#   推断: 工作流只回显每个脚本末 2 行, 且 ::notice 通道被前段脚本(batch121-141 的
+#   OK 通知)吃满, 后面的 notice 全被丢弃(另一会话的 batch165 诊断同样没露出来)。
+# v2 改法: 全部诊断合并成【一行 ::warning】放在脚本最后 —— warning 通道几乎没人用,
+#   且保证落在末 2 行内。去重逻辑不变, 行为不变。
+# 任何意外只 warning, 绝不 exit 1; 不满足条件不写文件。
 
 import io
 import os
-import sys
 
 NL = chr(10)
 Q = chr(34)
@@ -24,20 +19,20 @@ SI = "app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingsSearchIndex.
 NEEDLE = "定时任务"
 
 
-def warn(msg):
-    print("::warning::batch149 " + msg)
-
-
-def notice(msg):
-    print("::notice::batch149 " + msg)
+def emit(findings, tag):
+    line = "batch149v2[" + tag + "] "
+    for f in findings:
+        if len(line) > 1200:
+            break
+        line = line + f + " ;; "
+    print("::warning::" + line)
 
 
 def read(path):
     try:
         with io.open(path, "r", encoding="utf-8") as f:
             return f.read()
-    except Exception as exc:
-        warn("read failed " + path + " :: " + str(exc))
+    except Exception:
         return None
 
 
@@ -86,9 +81,10 @@ def nav_target(txt):
 
 
 def main():
+    findings = []
     zh = read(ZH)
     if zh is None:
-        notice("values-zh/strings.xml missing, skip")
+        emit(["values-zh missing"], "skip")
         return
     keys = []
     tag = "name=" + Q
@@ -102,15 +98,16 @@ def main():
     ks = ""
     for k in keys:
         if ks != "":
-            ks = ks + ", "
+            ks = ks + ","
         ks = ks + k
-    notice("keys from values-zh: [" + ks + "]")
+    findings.append("keys=[" + ks + "]")
     if not keys:
-        notice("no cron strings found in values-zh; nothing to do")
+        emit(findings, "no-cron-strings")
         return
 
     src = read(SP)
     if src is None:
+        emit(findings, "settingpage-missing")
         return
     lines = src.split(NL)
     hits = []
@@ -123,13 +120,14 @@ def main():
                 hits.append(i)
                 break
     blocks = find_blocks(lines, hits)
-    notice("SettingPage match lines=" + str(len(hits)) + " item-blocks=" + str(len(blocks)))
-    for idx, b in enumerate(blocks):
-        notice("block" + str(idx) + " lines " + str(b[0] + 1) + "-" + str(b[1] + 1) + " nav: " + nav_target(block_text(lines, b)))
+    findings.append("hits=" + str(len(hits)))
+    findings.append("blocks=" + str(len(blocks)))
 
     if len(blocks) == 2:
         s0 = nav_target(block_text(lines, blocks[0]))
         s1 = nav_target(block_text(lines, blocks[1]))
+        findings.append("nav0[" + s0 + "]")
+        findings.append("nav1[" + s1 + "]")
         if s0 != "" and s0 == s1:
             b = blocks[1]
             del_start = b[0]
@@ -138,24 +136,21 @@ def main():
             del lines[del_start:b[1] + 1]
             out = NL.join(lines)
             if out.count("(") - src.count("(") != out.count(")") - src.count(")"):
-                warn("paren delta mismatch after removal, NOT writing")
-                return
-            if out.count("{") - src.count("{") != out.count("}") - src.count("}"):
-                warn("brace delta mismatch after removal, NOT writing")
-                return
-            try:
-                with io.open(SP, "w", encoding="utf-8") as f:
-                    f.write(out)
-            except Exception as exc:
-                warn("write failed :: " + str(exc))
-                return
-            notice("duplicate cron row removed (was lines " + str(b[0] + 1) + "-" + str(b[1] + 1) + ")")
+                findings.append("action=skip-paren-delta")
+            elif out.count("{") - src.count("{") != out.count("}") - src.count("}"):
+                findings.append("action=skip-brace-delta")
+            else:
+                try:
+                    with io.open(SP, "w", encoding="utf-8") as f:
+                        f.write(out)
+                    findings.append("action=removed(was " + str(b[0] + 1) + "-" + str(b[1] + 1) + ")")
+                except Exception:
+                    findings.append("action=write-failed")
         else:
-            warn("two blocks navigate differently [" + s0 + "] vs [" + s1 + "], NOT removing; needs manual decision")
+            findings.append("action=skip-nav-differs")
     else:
-        notice("block count != 2, no removal (see dump above)")
+        findings.append("action=skip-blocks")
 
-    # 设置搜索镜像只 dump 不改
     if os.path.exists(SI):
         si = read(SI)
         if si is not None:
@@ -170,12 +165,19 @@ def main():
                         si_hits.append(i)
                         break
             if si_hits:
+                findings.append("mirror_hits=" + str(len(si_hits)))
+                shown = 0
                 for i in si_hits:
-                    notice("mirror hit L" + str(i + 1) + ": " + si_lines[i].strip()[:120])
+                    if shown >= 3:
+                        break
+                    findings.append("mL" + str(i + 1))
+                    shown += 1
             else:
-                notice("mirror index clean")
+                findings.append("mirror=clean")
     else:
-        notice("mirror file not found at " + SI)
+        findings.append("mirror=absent")
+
+    emit(findings, "done")
 
 
 if __name__ == "__main__":
