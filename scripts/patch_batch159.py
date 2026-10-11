@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-# batch159: 备份合并改造 10/10 —— WebDavTab / S3Tab 的 MERGE 按钮改接两阶段状态机
+# batch159 v2: 备份合并改造 10/10 —— WebDavTab / S3Tab 的 MERGE 按钮改接两阶段状态机
 # 变更:
 #   1) WebDavTab.kt: MERGE 按钮 vm.restore(item, MERGE) → vm.beginWebDavMerge(item)
+#      同时保留 batch9 的"先收起文件列表露出下载进度卡片"行为
 #   2) S3Tab.kt:     MERGE 按钮 vm.restoreFromS3(item, MERGE) → vm.beginS3Merge(item)
 # OVERWRITE 按钮完全不动。
-# 锚点: 两文件恢复对话框段落已读原文(2026-10-11); 含 MERGE 的调用行各唯一。
+# v2 修复: v1 锚点按仓库态写, 但 batch9 在 CI 时会先给 WebDavTab MERGE 块插入
+#   "rh-batch9 注释 + showBackupFiles=false + scrollState.scrollTo(0)" 5 行,
+#   导致 v1 的 OLD 块 count=0。v2 的 WD_OLD 按 batch9 后的 CI 形态逐行对齐。
+#   S3Tab 未被 batch9 触碰, 锚点保持仓库态。
 # 幂等: 命中 [batch159] 标记即跳过; 锚点失配 fail-loud + dump 现场。
 
 import io
@@ -17,9 +21,15 @@ Q = chr(34)
 WDTAB = "app/src/main/java/me/rerere/rikkahub/ui/pages/backup/tabs/WebDavTab.kt"
 S3TAB = "app/src/main/java/me/rerere/rikkahub/ui/pages/backup/tabs/S3Tab.kt"
 
+# batch9 之后的 CI 形态（含 rh-batch9 注释 + showBackupFiles + scrollState.scrollTo）
 WD_OLD = (
     "                        if (item != null) scope.launch {" + NL +
     "                            restoringItemId = item.displayName" + NL +
+    "                            // rh-batch9: close the sheet FIRST. It used to stay open for the whole" + NL +
+    "                            // restore and hide the WebDavProgressCard carrying the download" + NL +
+    "                            // progress. Scrolling back to the top puts that card on screen." + NL +
+    "                            showBackupFiles = false" + NL +
+    "                            scrollState.scrollTo(0)" + NL +
     "                            runCatching {" + NL +
     "                                vm.restore(item, BackupRestoreMode.MERGE)" + NL +
     "                                toaster.show(context.getString(R.string.backup_page_restore_success), type = ToastType.Success)" + NL +
@@ -35,7 +45,12 @@ WD_OLD = (
 
 WD_NEW = (
     "                        // [batch159] 合并走两阶段状态机：下载 → 扫描 → 差异确认 → 应用" + NL +
-    "                        if (item != null) vm.beginWebDavMerge(item)" + NL +
+    "                        // rh-batch9: 先收起文件列表露出下载进度卡片（保留 batch9 行为）" + NL +
+    "                        showBackupFiles = false" + NL +
+    "                        if (item != null) {" + NL +
+    "                            scope.launch { scrollState.scrollTo(0) }" + NL +
+    "                            vm.beginWebDavMerge(item)" + NL +
+    "                        }" + NL +
     "                    }) { Text(BackupRestoreMode.MERGE.displayName()) }"
 )
 
@@ -96,7 +111,7 @@ def patch_tab(path, old_block, new_block, check):
         print("batch159: already applied, skip " + path)
         return
     if src.count(old_block) != 1:
-        fail("batch159: anchor count=" + str(src.count(old_block)) + " in " + path + " :: " + dump_lines(src, "BackupRestoreMode.MERGE", 14))
+        fail("batch159: anchor count=" + str(src.count(old_block)) + " in " + path + " :: " + dump_lines(src, "BackupRestoreMode.MERGE", 16))
     out = src.replace(old_block, new_block, 1)
     if check not in out:
         fail("batch159: post-check missing in " + path + " :: " + check)
