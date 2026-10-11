@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# batch155: 备份合并改造 6/10 —— BackupArchiveRestorer 两阶段方法
+# batch155 v2: 备份合并改造 6/10 —— BackupArchiveRestorer 两阶段方法
 # 变更(唯一修改文件: BackupArchiveRestorer.kt):
 #   1) import 块追加 merge 包与 kotlinx.json 相关 import
 #   2) companion object 前插入三个新方法:
@@ -8,6 +8,10 @@
 #      - discardStagedMerge 放弃合并: 清理 staging
 #      另含 readFolderIds/applyMergeSettings/mergeItemArray/reconcileDeletedIds 四个私有辅助(P5 修复)
 #   3) 文件尾追加 StagedMergeBackup 顶层类
+# v2 修复: v1 编译挂(run #383 annotations) —— applyMergeSettings/mergeItemArray 用到
+#   JsonArray 与 jsonObject, 但 v1 的 NEW_IMPORTS 漏了这两个(误把 WebDavSync 的 import
+#   清单当成 Restorer 的)。v2 补 "import kotlinx.serialization.json.JsonArray" 与
+#   "import kotlinx.serialization.json.jsonObject"。锚点与其余内容不变。
 # 锚点: 按仓库态原文核对(2026-10-11); batch4 只改 restore() 内部与 normalizeEntryName,
 #       不动 import 锚点行与 companion object。
 # 幂等: 命中 [batch155] 标记即跳过; 锚点失配 fail-loud + dump 现场。
@@ -23,12 +27,14 @@ IMPORT_ANCHOR = "import me.rerere.rikkahub.data.sync.BackupRestoreMode"
 
 NEW_IMPORTS = (
     IMPORT_ANCHOR + NL +
+    "import kotlinx.serialization.json.JsonArray" + NL +
     "import kotlinx.serialization.json.JsonElement" + NL +
     "import kotlinx.serialization.json.JsonObject" + NL +
     "import kotlinx.serialization.json.JsonPrimitive" + NL +
     "import kotlinx.serialization.json.contentOrNull" + NL +
     "import kotlinx.serialization.json.decodeFromJsonElement" + NL +
     "import kotlinx.serialization.json.encodeToJsonElement" + NL +
+    "import kotlinx.serialization.json.jsonObject" + NL +
     "import me.rerere.rikkahub.data.sync.merge.BackupMergeScanner" + NL +
     "import me.rerere.rikkahub.data.sync.merge.MergeApplyResult" + NL +
     "import me.rerere.rikkahub.data.sync.merge.MergeDecisionApplier" + NL +
@@ -360,6 +366,8 @@ REQUIRED_AFTER = (
     "fun discardStagedMerge(",
     "class StagedMergeBackup(",
     "private suspend fun applyMergeSettings(",
+    "import kotlinx.serialization.json.JsonArray",
+    "import kotlinx.serialization.json.jsonObject",
 )
 
 
