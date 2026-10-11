@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch142 v2.1: 附件放大——AI 工作区产物文件也改大卡片(对齐 batch120 用户消息附件样式)
+'''batch142 v3: 附件放大——AI 工作区产物文件也改大卡片(对齐 batch120 用户消息附件样式)
 
-v2.1: 纯注释更新，用于重新触发 CI（上一次构建 run 38060622197 因 runner IP
-被 GitHub 限流挂在 setup-java 下载 JDK，非代码问题）。逻辑不变。
+v3 修复: v2 插入的大卡片代码用了 Box(modifier = Modifier.fillMaxSize(), ...) 但 imports
+清单里漏了 androidx.compose.foundation.layout.Box → 编译 Unresolved reference 'Box'。
+v3 在 need 清单补上 Box import。其余不变。
 
 v2 修复: find_block_end 只数花括号不数圆括号, 在 'onClick = { selectedPath = path },'
 这种同行开关花括号的行 depth 归 0 误停 → 原 Surface 块被截断只删 2 行,
@@ -28,7 +29,7 @@ EditedFilesList(ChatMessageEditedFiles.kt)里——还是 FlowRow 小圆片(Roun
 4. onClick 行为不变(仍打开 ModalBottomSheet 显示导出/删除)
 
 五查:
-1. import 清单: 需新增 fillMaxSize/CircleShape/Download01(精确行匹配);
+1. import 清单: 需新增 fillMaxSize/Box/CircleShape/Download01(精确行匹配+existing防重复);
    Surface/Row/Column/Icon/Text/Modifier 等已有
 2. 同文件冲突: ChatMessageEditedFiles.kt 无在链 patch 触碰(list_commits 仅初始快照)
 3. 作用域: 全部在 EditedFilesList 函数体内;fileName/selectedPath 已有
@@ -98,6 +99,7 @@ if not imp_hits:
 last_imp = imp_hits[-1]
 need = [
     'import androidx.compose.foundation.layout.fillMaxSize',
+    'import androidx.compose.foundation.layout.Box',
     'import androidx.compose.foundation.shape.CircleShape',
     'import me.rerere.hugeicons.stroke.Download01',
 ]
@@ -240,7 +242,7 @@ applied.append('expand-card')
 
 # ---- 5. 自检 ----
 out = NL.join(lines)
-for need in [MARK, 'fillMaxSize', 'Download01', 'CircleShape', 'Column(']:
+for need in [MARK, 'fillMaxSize', 'Download01', 'CircleShape', 'Column(', 'Box(']:
     if need not in out:
         fail('selfcheck missing: ' + need)
 if 'FlowRow(' in out and MARK + ': 大卡片需要纵向排列' not in out:
@@ -249,4 +251,4 @@ if balance(out) != bal0:
     fail('balance changed: ' + str(bal0) + ' -> ' + str(balance(out)))
 
 (ROOT / EF).write_text(out, encoding='utf-8')
-print('::notice::batch142 v2.1 OK - ' + ', '.join(applied))
+print('::notice::batch142 v3 OK - ' + ', '.join(applied))
