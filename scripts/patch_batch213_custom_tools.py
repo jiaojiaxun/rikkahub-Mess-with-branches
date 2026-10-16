@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch213: AI 自定义工具（高级功能）—— AI 可自行编写 / 调用 / 管理持久化 JS 工具
+'''batch213 v2: AI 自定义工具（高级功能）—— AI 可自行编写 / 调用 / 管理持久化 JS 工具
+
+v1 死因（run #400, patch 步骤 12s 挂）: 本文件头 docstring 里写了 r 前缀三引号的
+字面量示例, 把 docstring 提前终止 → SyntaxError(line 36) → python 退出码非 0 →
+工作流 if ! python3 触发 exit 1 → 整个构建链断。教训: docstring 内不得出现三连单引号。
+
+v2 变更:
+  1. docstring 去掉全部三连单引号字样(本文件内不出现三连单引号)
+  2. 每处编辑独立幂等 marker(LocalTools.enum / LocalTools.gate / Route.val /
+     Route.entry / AssistantPage / SettingRow / SearchIndex), 支持安全重跑
+  3. 注册块门控 enum 成功 + F_TOOLS 已写入(避免引用缺失符号导致编译红)
+  4. main 每阶段独立 try/except(单阶段崩溃不影响后续阶段, 全部 skip + 末尾正常退出)
 
 需求: 在「设置 -> 高级功能」里加 AI 自定义工具。AI 可以调用元工具创建/编写工具，
       之后直接按名字调用它创建的工具。
 
 架构（3 新文件 + 6 处编辑）:
   新文件:
-    data/ai/tools/custom/CustomToolStore.kt   —— 文件型存储(files/custom-tools/<id>/tool.json
+    data/ai/tools/custom/CustomToolStore.kt   —— 文件型存储(files/custom-tools/id/tool.json
                                                  为唯一事实源, index.html 为执行派生物)
     data/ai/tools/custom/CustomToolTools.kt   —— manage_custom_tool 元工具 + 动态注册 +
                                                  JsSkillRunner 执行(复用 WebView 引擎, 60s 超时)
@@ -18,10 +29,10 @@
     RouteActivity.kt          + Screen val(锚 batch37 行) + entry(锚 batch37 行)
     SettingPage.kt            + 高级功能入口 item(锚 batch37/149 后唯一的定时任务 item)
     SettingsSearchIndex.kt    + 搜索条目(锚定时任务条目; 依赖 strings 先成功)
-    values/strings.xml + values-zh/strings.xml + 2 个字符串(插在最后的 </resources> 前)
+    values/strings.xml + values-zh/strings.xml + 2 个字符串(插入最后的 resources 闭合标签前)
 
 warn-only: 任何锚点/校验失败只 ::warning + 跳过该阶段, 不阻塞构建。
-阶段门控(编译依赖): strings -> SI; Screen val -> entry/设置行/SI; enum -> 开关行;
+阶段门控(编译依赖): strings -> SI; Screen val -> entry/设置行/SI; enum -> 开关行/注册块;
                     F_TOOLS -> 注册块; F_PAGE -> entry。
 
 =========================== 五查 ===========================
@@ -31,11 +42,6 @@ warn-only: 任何锚点/校验失败只 ::warning + 跳过该阶段, 不阻塞�
 3. 作用域: enum 在 sealed class 内; 注册块在 getTools 函数体内; item 与既有 item 同级
 4. 括号配对: 每个编辑文件写入前断言 balance 不变
 5. 函数签名: 不改任何既有签名(新增均为独立文件/独立块)
-
-======================== Python 三查 ========================
-1. 引号: 大块 Kotlin 用 r''' 原始串(无 ''' 内嵌); 小片段用单引号串内嵌双引号
-2. 无 f-string / join / walrus; NL 手写 concat; 全程显式编码 utf-8
-3. helper 先定义后用; 无 sys.exit(1)(全部 skip + 末尾 exit(0))
 '''
 from pathlib import Path
 import sys
@@ -67,6 +73,14 @@ def ok(tag):
 
 def skip(tag, why):
     skipped.append(tag + '<' + str(why)[:90] + '>')
+
+
+def safe(name, fn, default=None):
+    try:
+        return fn()
+    except Exception as exc:
+        skip(name, 'crash:' + str(exc)[:70])
+        return default
 
 
 def ind(ln):
@@ -112,15 +126,13 @@ def write(path, text):
     p.write_text(text, encoding='utf-8')
 
 
-def find_blocks_end(lines, start):
+def find_item_end(lines, start):
     '''从 start 行(以 item( 开头)起按圆括号/花括号深度找闭合行。'''
     depth = 0
-    started = False
     for j in range(start, len(lines)):
         depth += lines[j].count('(') - lines[j].count(')')
         depth += lines[j].count('{') - lines[j].count('}')
-        started = True
-        if started and depth <= 0 and j > start:
+        if depth <= 0 and j > start:
             return j
     return -1
 
@@ -866,6 +878,7 @@ private fun formatToolTime(millis: Long): String =
     }
 '''
 
+
 # ============================================================
 # 阶段 1: 写 3 个新文件
 # ============================================================
@@ -894,72 +907,81 @@ def phase_new_files():
 
 
 # ============================================================
-# 阶段 2: LocalTools.kt —— enum + getTools 注册块
+# 阶段 2: LocalTools.kt —— enum + getTools 注册块（各自独立幂等 marker）
 # ============================================================
 def phase_local_tools(tools_file_ok):
     src = read(LT)
     if src is None:
         skip('LocalTools', 'missing')
         return (False, False)
-    if MARK in src:
-        ok('LocalTools-exists')
-        return (True, True)
-
     lines = src.split(NL)
     bal0 = balance(src)
     enum_ok = False
     gate_ok = False
+    changed = False
 
-    # --- enum 项：锚 batch87 注入行（fallback: Toast 行） ---
-    hits = [i for i, ln in enumerate(lines)
-            if 'data object Notification' in ln and 'rhSendNotification' in ln]
-    if len(hits) != 1:
-        hits = [i for i, ln in enumerate(lines)
-                if 'data object Toast' in ln and 'LocalToolOption()' in ln]
-    if len(hits) == 1:
-        ei = hits[0]
-        d = ind(lines[ei])
-        lines.insert(ei + 1, d + '@Serializable @SerialName("custom_tools") data object CustomTools : LocalToolOption() // rhCustomToolsEnum')
+    # --- enum 项（幂等: rhCustomToolsEnum） ---
+    if 'rhCustomToolsEnum' in src:
         enum_ok = True
+        ok('LocalTools.enum-exists')
     else:
-        skip('LocalTools.enum', 'anchor=' + str(len(hits)))
-
-    # --- 注册块：锚 batch96 注入块（fallback: 跳过） ---
-    hits = [i for i, ln in enumerate(lines) if 'rhNotifScope' in ln]
-    if len(hits) == 1:
-        gi = hits[0]
-        if gi + 2 < len(lines) and lines[gi + 1].strip().startswith('tools.add(notificationTool') and lines[gi + 2].strip() == '}':
-            d0 = ind(lines[gi])
-            block = [
-                d0 + 'if (options.contains(LocalToolOption.CustomTools)) { // rhCustomToolsGate (batch213)',
-                d0 + '    tools.addAll(me.rerere.rikkahub.data.ai.tools.custom.customTools(context, jsSkillRunner))',
-                d0 + '}',
-            ]
-            lines[gi + 3:gi + 3] = block
-            gate_ok = True
+        hits = [i for i, ln in enumerate(lines)
+                if 'data object Notification' in ln and 'rhSendNotification' in ln]
+        if len(hits) != 1:
+            hits = [i for i, ln in enumerate(lines)
+                    if 'data object Toast' in ln and 'LocalToolOption()' in ln]
+        if len(hits) == 1:
+            ei = hits[0]
+            d = ind(lines[ei])
+            lines.insert(ei + 1, d + '@Serializable @SerialName("custom_tools") data object CustomTools : LocalToolOption() // rhCustomToolsEnum')
+            enum_ok = True
+            changed = True
         else:
-            skip('LocalTools.gate', 'shape')
-    else:
-        skip('LocalTools.gate', 'anchor=' + str(len(hits)))
+            skip('LocalTools.enum', 'anchor=' + str(len(hits)))
 
+    # --- getTools 注册块（幂等: rhCustomToolsGate; 依赖 enum + F_TOOLS） ---
+    if 'rhCustomToolsGate' in src:
+        gate_ok = True
+        ok('LocalTools.gate-exists')
+    elif not tools_file_ok:
+        skip('LocalTools.gate', 'tools-file-missing')
+    elif not enum_ok:
+        skip('LocalTools.gate', 'enum-missing')
+    else:
+        hits = [i for i, ln in enumerate(lines) if 'rhNotifScope' in ln]
+        if len(hits) == 1:
+            gi = hits[0]
+            if gi + 2 < len(lines) and lines[gi + 1].strip().startswith('tools.add(notificationTool') and lines[gi + 2].strip() == '}':
+                d0 = ind(lines[gi])
+                block = [
+                    d0 + 'if (options.contains(LocalToolOption.CustomTools)) { // rhCustomToolsGate (batch213)',
+                    d0 + '    tools.addAll(me.rerere.rikkahub.data.ai.tools.custom.customTools(context, jsSkillRunner))',
+                    d0 + '}',
+                ]
+                lines[gi + 3:gi + 3] = block
+                gate_ok = True
+                changed = True
+            else:
+                skip('LocalTools.gate', 'shape')
+        else:
+            skip('LocalTools.gate', 'anchor=' + str(len(hits)))
+
+    if not changed:
+        return (enum_ok, gate_ok)
     out = concat(lines)
     if balance(out) != bal0:
         skip('LocalTools', 'balance')
         return (enum_ok, gate_ok)
     checks = []
-    if enum_ok and 'data object CustomTools : LocalToolOption()' not in out:
+    if enum_ok and 'rhCustomToolsEnum' not in out:
         checks.append('enum')
-    if gate_ok and 'customTools(context, jsSkillRunner)' not in out:
+    if gate_ok and 'rhCustomToolsGate' not in out:
         checks.append('gate')
     if checks:
         skip('LocalTools', 'selfcheck:' + joinlist(checks))
         return (enum_ok, gate_ok)
-    if enum_ok:
-        ok('LocalTools.enum')
-    if gate_ok:
-        ok('LocalTools.gate')
-    if enum_ok:
-        write(LT, out)
+    write(LT, out)
+    ok('LocalTools')
     return (enum_ok, gate_ok)
 
 
@@ -974,7 +996,7 @@ def phase_local_tool_page(enum_ok):
     if src is None:
         skip('AssistantPage', 'missing')
         return
-    if MARK in src:
+    if 'rhCustomToolsRow' in src:
         ok('AssistantPage-exists')
         return
     lines = src.split(NL)
@@ -1015,10 +1037,9 @@ def phase_local_tool_page(enum_ok):
     ]
     lines[oc + 4:oc + 4] = block
     out = concat(lines)
-    for need in ('rhCustomToolsRow', 'LocalToolOption.CustomTools'):
-        if need not in out:
-            skip('AssistantPage', 'selfcheck:' + need)
-            return
+    if 'rhCustomToolsRow' not in out or 'LocalToolOption.CustomTools' not in out:
+        skip('AssistantPage', 'selfcheck')
+        return
     if balance(out) != bal0:
         skip('AssistantPage', 'balance')
         return
@@ -1027,7 +1048,7 @@ def phase_local_tool_page(enum_ok):
 
 
 # ============================================================
-# 阶段 4: RouteActivity.kt —— Screen val + entry
+# 阶段 4: RouteActivity.kt —— Screen val + entry（各自独立幂等 marker）
 # ============================================================
 def phase_route(page_ok):
     src = read(RA)
@@ -1038,26 +1059,41 @@ def phase_route(page_ok):
     bal0 = balance(src)
     val_ok = False
     entry_ok = False
+    changed = False
 
-    # --- Screen val（锚 batch37） ---
-    hits = [i for i, ln in enumerate(lines) if ln.strip() == 'data object SettingScheduledJobs : Screen']
-    if len(hits) == 1:
-        vi = hits[0]
-        d = ind(lines[vi])
-        block = [
-            '',
-            d + '/** rhCustomTools */',
-            d + '@Serializable',
-            d + 'data object SettingCustomTools : Screen',
-        ]
-        lines[vi + 1:vi + 1] = block
+    # --- Screen val（幂等: data object SettingCustomTools） ---
+    if 'data object SettingCustomTools : Screen' in src:
         val_ok = True
+        ok('Route.val-exists')
     else:
-        skip('Route.val', 'anchor=' + str(len(hits)))
+        hits = [i for i, ln in enumerate(lines)
+                if ln.strip() == 'data object SettingScheduledJobs : Screen']
+        if len(hits) == 1:
+            vi = hits[0]
+            d = ind(lines[vi])
+            block = [
+                '',
+                d + '/** rhCustomTools */',
+                d + '@Serializable',
+                d + 'data object SettingCustomTools : Screen',
+            ]
+            lines[vi + 1:vi + 1] = block
+            val_ok = True
+            changed = True
+        else:
+            skip('Route.val', 'anchor=' + str(len(hits)))
 
-    # --- entry（锚 batch37；依赖 Screen val + 页面文件） ---
-    if val_ok and page_ok:
-        hits = [i for i, ln in enumerate(lines) if ln.strip() == 'entry<Screen.SettingScheduledJobs> {']
+    # --- entry（幂等: entry<Screen.SettingCustomTools>; 依赖 val + 页面文件） ---
+    if 'entry<Screen.SettingCustomTools>' in src:
+        entry_ok = True
+        ok('Route.entry-exists')
+    elif not val_ok:
+        skip('Route.entry', 'val-missing')
+    elif not page_ok:
+        skip('Route.entry', 'page-missing')
+    else:
+        hits = [i for i, ln in enumerate(lines)
+                if ln.strip() == 'entry<Screen.SettingScheduledJobs> {']
         if len(hits) == 1:
             ei = hits[0]
             if ei + 2 < len(lines) and 'SettingScheduledJobsPage()' in lines[ei + 1] and lines[ei + 2].strip() == '}':
@@ -1071,32 +1107,28 @@ def phase_route(page_ok):
                 ]
                 lines[ei + 3:ei + 3] = block
                 entry_ok = True
+                changed = True
             else:
                 skip('Route.entry', 'shape')
         else:
             skip('Route.entry', 'anchor=' + str(len(hits)))
-    else:
-        if not val_ok:
-            skip('Route.entry', 'val-missing')
-        else:
-            skip('Route.entry', 'page-missing')
 
+    if not changed:
+        return (val_ok, entry_ok)
     out = concat(lines)
     if balance(out) != bal0:
         skip('Route', 'balance')
         return (val_ok, entry_ok)
+    checks = []
     if val_ok and 'data object SettingCustomTools : Screen' not in out:
-        skip('Route', 'selfcheck-val')
-        return (val_ok, entry_ok)
+        checks.append('val')
     if entry_ok and 'entry<Screen.SettingCustomTools>' not in out:
-        skip('Route', 'selfcheck-entry')
+        checks.append('entry')
+    if checks:
+        skip('Route', 'selfcheck:' + joinlist(checks))
         return (val_ok, entry_ok)
-    if val_ok or entry_ok:
-        write(RA, out)
-    if val_ok:
-        ok('Route.val')
-    if entry_ok:
-        ok('Route.entry')
+    write(RA, out)
+    ok('Route')
     return (val_ok, entry_ok)
 
 
@@ -1111,7 +1143,7 @@ def phase_setting_page(val_ok, entry_ok):
     if src is None:
         skip('SettingRow', 'missing')
         return
-    if MARK in src:
+    if 'Screen.SettingCustomTools' in src:
         ok('SettingRow-exists')
         return
     lines = src.split(NL)
@@ -1129,7 +1161,7 @@ def phase_setting_page(val_ok, entry_ok):
     if item_start < 0:
         skip('SettingRow', 'item-start')
         return
-    item_end = find_blocks_end(lines, item_start)
+    item_end = find_item_end(lines, item_start)
     if item_end < 0 or (item_end - item_start) > 30:
         skip('SettingRow', 'item-end')
         return
@@ -1216,7 +1248,7 @@ def phase_search_index(val_ok, entry_ok, en_ok):
     if src is None:
         skip('SearchIndex', 'missing')
         return
-    if MARK in src:
+    if 'route = Screen.SettingCustomTools' in src:
         ok('SearchIndex-exists')
         return
     lines = src.split(NL)
@@ -1264,16 +1296,31 @@ def phase_search_index(val_ok, entry_ok, en_ok):
 
 
 # ============================================================
-# main
+# main（每阶段独立隔离）
 # ============================================================
 def main():
-    page_ok, tools_ok = phase_new_files()
-    enum_ok, gate_ok = phase_local_tools(tools_ok)
-    phase_local_tool_page(enum_ok)
-    val_ok, entry_ok = phase_route(page_ok)
-    phase_setting_page(val_ok, entry_ok)
-    en_ok, zh_ok = phase_strings()
-    phase_search_index(val_ok, entry_ok, en_ok)
+    r1 = safe('new-files', phase_new_files, (False, False))
+    page_ok = r1[0] if r1 else False
+    tools_ok = r1[1] if r1 else False
+
+    r2 = safe('LocalTools', lambda: phase_local_tools(tools_ok), (False, False))
+    enum_ok = r2[0] if r2 else False
+    gate_ok = r2[1] if r2 else False
+
+    safe('AssistantPage', lambda: phase_local_tool_page(enum_ok))
+
+    r3 = safe('Route', lambda: phase_route(page_ok), (False, False))
+    val_ok = r3[0] if r3 else False
+    entry_ok = r3[1] if r3 else False
+
+    safe('SettingRow', lambda: phase_setting_page(val_ok, entry_ok))
+
+    r4 = safe('strings', phase_strings, (False, False))
+    en_ok = r4[0] if r4 else False
+    zh_ok = r4[1] if r4 else False
+
+    safe('SearchIndex', lambda: phase_search_index(val_ok, entry_ok, en_ok))
+
     print(BATCH + ': applied=[' + joinlist(applied) + ']')
     print(':warning:' + BATCH + ' skipped=[' + joinlist(skipped) + ']')
 
