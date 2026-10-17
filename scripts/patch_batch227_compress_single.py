@@ -1,28 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch227: 压缩改单请求 —— 砍掉切块并发/多轮归并，一次请求等它完整输出
+'''batch227 v2: 压缩改单请求 —— 外科手术式三处行编辑（覆盖 v1）
 
-用户实测(请求日志): 手动点压缩 → 4 次并发请求(每个 max_tokens=256) → 一半直接消失。
-根因: generateAndStoreCompaction 的 map-reduce 把一次压缩拆成多个并发小请求 + 多轮归并,
-      并发批里一个超时/失败就 coroutineScope 连坐取消整批 → 用户看到"重复请求又取消"。
+v1 教训: 用「注释行 + while 深度扫描」做整段替换, 切进了别的函数, 编译红。
+v2 改法: 只做三处单行级编辑, 不动函数结构, 不做大段替换。
 
-用户要求: 只跑一个请求, 一直等到完整输出, 不做任何其他操作; 输出预算 = 用户输入的目标值。
+三处编辑(都在 ChatService.generateAndStoreCompaction 内):
+  1. 分块取消: `val fullSourceGroups = ContextCompactionPlanner.partitionSources(...)`(4行)
+     → `val fullSourceGroups = listOf(fullSources)` —— 全部内容一组, compressGroups 只发一次请求。
+  2. 输出预算: `modelSummaryTargetTokens.coerceAtMost(COMPACTION_MAX_REQUEST_OUTPUT_TOKENS)`
+     → `modelSummaryTargetTokens` —— 直接用用户输入的目标值(targetTokens), 不再被 16384 截。
+  3. 单请求超时: `withTimeout(COMPACTION_REQUEST_TIMEOUT_MS)`(3min)
+     → `withTimeout(COMPACTION_TOTAL_TIMEOUT_MS)`(8min) —— 单请求等它完整输出。
 
-修法(替换 generateAndStoreCompaction 的中间段, 不动开头/结尾):
-  删掉 [// Ordinary compression is a map pass...] 注释行 → while(finalSummary==null)循环结束
-  这一整段(fullSources/partition/compressGroups/reduction 循环), 换成:
-    val fullSource = messagesToCompress.map(sourceText).joinToString
-    val finalSummary = compressSources(listOf(fullSource), targetTokens)   // maxTokens=targetTokens
-  结尾段(boundary 校验 + ConversationCompaction 构造 + upsert)原样保留, 它只用 finalSummary
-  /toolDigest/rawContextRetentionReport —— 被删的变量(sourceGroups/usingMapPreviews/compressGroups
-  /reductionPasses)结尾都不引用, 已逐一核实。
-
-另把 compressSources 的 withTimeout 从 COMPACTION_REQUEST_TIMEOUT_MS(3min) 放宽到
-  COMPACTION_TOTAL_TIMEOUT_MS(8min) —— 单请求等它完整输出, 不再被 3 分钟砍掉。
-
-锚点: start='// Ordinary compression is a map pass' 注释行; end=while(finalSummary==null){}
-  用括号深度扫描定位其收尾 }; 替换区间 [startLine, whileEndLine]。
-幂等 marker rhSingleCompress; warn-only; 括号差值断言。
+效果: compressGroups 拿到单组 → 一次 generateText 请求 → 归并循环一轮即出。
+幂等 marker rhSingleCompress; 三处锚点均要求唯一; warn-only。
 '''
 from pathlib import Path
 import sys
@@ -32,6 +24,16 @@ NL = chr(10)
 BATCH = 'batch227'
 MARK = 'rhSingleCompress'
 CS = 'app/src/main/java/me/rerere/rikkahub/service/ChatService.kt'
+
+E1_ANCHOR = '        val fullSourceGroups = ContextCompactionPlanner.partitionSources('
+E1_TAIL = ('            sources = fullSources,', '            maxInputTokens = mapInputBudgetTokens,', '        )')
+E1_NEW = '        val fullSourceGroups = listOf(fullSources) // ' + MARK + ': 单请求不分块'
+
+E2_OLD = 'modelSummaryTargetTokens.coerceAtMost(COMPACTION_MAX_REQUEST_OUTPUT_TOKENS)'
+E2_NEW = 'modelSummaryTargetTokens // ' + MARK + ': 预算=目标值'
+
+E3_OLD = 'withTimeout(COMPACTION_REQUEST_TIMEOUT_MS)'
+E3_NEW = 'withTimeout(COMPACTION_TOTAL_TIMEOUT_MS) // ' + MARK + ': 单请求放宽到总量超时'
 
 applied = []
 skipped = []
@@ -80,88 +82,55 @@ def main():
     lines = src.split(NL)
     bal0 = balance(src)
 
-    # ① 删 map-reduce 段: 从 "// Ordinary compression is a map pass" 注释行
-    #    到 "while (finalSummary == null) {" 的收尾 }。
-    start = -1
+    # Edit 1: 分块 → 单组
+    idx = -1
     for i, ln in enumerate(lines):
-        if ln.strip().startswith('// Ordinary compression is a map pass'):
-            start = i
+        if ln == E1_ANCHOR:
+            idx = i
             break
-    if start < 0:
-        skipped.append('start-anchor-miss')
-        print('::error::' + BATCH + ' SKIP start-anchor-miss')
+    if idx < 0:
+        skipped.append('e1-anchor-miss')
+        print('::error::' + BATCH + ' SKIP e1-anchor-miss')
         return
-    # 找 while(finalSummary==null) 行
-    wline = -1
-    for j in range(start, min(start + 120, len(lines))):
-        if lines[j].strip().startswith('while (finalSummary == null)'):
-            wline = j
+    tail_ok = True
+    for k in range(3):
+        if idx + 1 + k >= len(lines) or lines[idx + 1 + k] != E1_TAIL[k]:
+            tail_ok = False
             break
-    if wline < 0:
-        skipped.append('while-anchor-miss')
-        print('::error::' + BATCH + ' SKIP while-anchor-miss')
+    if not tail_ok:
+        skipped.append('e1-tail-mismatch')
+        print('::error::' + BATCH + ' SKIP e1-tail-mismatch')
         return
-    # 深度扫描找 while 的收尾 }
-    depth = 0
-    wend = -1
-    began = False
-    for j in range(wline, len(lines)):
-        for ch in lines[j]:
-            if ch == '{':
-                depth += 1
-                began = True
-            elif ch == '}':
-                depth -= 1
-        if began and depth == 0:
-            wend = j
-            break
-    if wend < 0:
-        skipped.append('while-end-miss')
-        print('::error::' + BATCH + ' SKIP while-end-miss')
+    lines[idx:idx + 4] = [E1_NEW]
+
+    # Edit 2: 输出预算
+    src2 = NL.join(lines)
+    if src2.count(E2_OLD) != 1:
+        skipped.append('e2-count=' + str(src2.count(E2_OLD)))
+        print('::error::' + BATCH + ' SKIP e2-count=' + str(src2.count(E2_OLD)))
         return
+    src2 = src2.replace(E2_OLD, E2_NEW, 1)
 
-    new_block = [
-        '        // [batch227] ' + MARK + ': 单请求压缩 —— 不切块/不并发/不多轮, 一次请求等完整输出。',
-        '        // 输出预算直接用用户输入的目标值(targetTokens)。',
-        '        val rhCombinedSource = messagesToCompress',
-        '            .map(ContextCompactionPlanner::sourceText)',
-        '            .joinToString("\\n\\n")',
-        '        check(rhCombinedSource.isNotBlank()) { "No usable messages selected for compression" }',
-        '        Log.i(TAG, "Compaction single-request: model=" + model.modelId + ", targetTokens=" + targetTokens)',
-        '        val finalSummary = compressSources(listOf(rhCombinedSource), targetTokens)',
-    ]
-    lines[start:wend + 1] = new_block
-    out = concat = None
-    out = NL.join(lines)
+    # Edit 3: 超时
+    if src2.count(E3_OLD) != 1:
+        skipped.append('e3-count=' + str(src2.count(E3_OLD)))
+        print('::error::' + BATCH + ' SKIP e3-count=' + str(src2.count(E3_OLD)))
+        return
+    src2 = src2.replace(E3_OLD, E3_NEW, 1)
 
-    # ② compressSources 超时放宽: 3min → 8min(单请求等完整输出)
-    if 'withTimeout(COMPACTION_REQUEST_TIMEOUT_MS)' in out:
-        out = out.replace(
-            'withTimeout(COMPACTION_REQUEST_TIMEOUT_MS)',
-            'withTimeout(COMPACTION_TOTAL_TIMEOUT_MS) // ' + MARK + ': 单请求放宽到总量超时',
-            1,
-        )
-    else:
-        skipped.append('timeout-anchor-miss')
-
+    out = src2
     if balance(out) != bal0:
         skipped.append('balance')
         print('::error::' + BATCH + ' SKIP balance')
         return
-    for need in ('val finalSummary = compressSources(', MARK):
+    for need in ('listOf(fullSources)', MARK):
         if need not in out:
             skipped.append('selfcheck:' + need)
             print('::error::' + BATCH + ' SKIP selfcheck ' + need)
             return
-    # 被删变量不得在残留代码中被引用
-    for gone in ('compressGroups(', 'var reductionPasses', 'fullSourceGroups', 'var sourceGroups'):
-        if gone in out:
-            skipped.append('leftover-ref:' + gone)
-            print('::error::' + BATCH + ' SKIP leftover-ref ' + gone)
-            return
     write(CS, out)
-    applied.append('single-request')
-    print('::error::' + BATCH + ' OK applied single-request compression, timeout widened')
+    applied.append('e1,e2,e3')
+    print('::error::' + BATCH + ' OK applied single-request compression (e1 single-group, e2 budget=target, e3 timeout=8min)')
 
 
 if __name__ == '__main__':
