@@ -1,0 +1,24 @@
+# NOTICE
+
+本仓库是 [rikkahub/rikkahub](https://github.com/rikkahub/rikkahub) 的衍生作品；
+代码部分衍生自 [ExTV/rikkahub-agent](https://github.com/ExTV/rikkahub-agent) 与
+[AAAelina/rikkahub-agent](https://github.com/AAAelina/rikkahub-agent)（AGPL-3.0）。
+许可条款见 [LICENSE](LICENSE)。
+
+## 第三方二进制：proot
+
+`workspace/src/main/jniLibs/arm64-v8a/` 下的两个文件是 proot 二进制。
+仓库中不含这两个文件，由构建流程下载写入。
+
+| 文件 | 大小（bytes） | git blob sha1 |
+| --- | --- | --- |
+| `libproot_exec.so` | 233392 | `5e8d19a5dc065f5fdce6c33eb476e7f7fddf1c1c` |
+| `libproot_loader.so` | 18136 | `f123455e5037a5d49e0d64c9b330949ff64e4d25` |
+
+- 二进制取自 [AAAelina/rikkahub-agent](https://github.com/AAAelina/rikkahub-agent) 的
+  `workspace/src/main/jniLibs/arm64-v8a/`（公开仓库）。
+- 下载与 git blob sha1 校验逻辑见
+  [`scripts/patch_batch219_proot_port.py`](https://github.com/jiaojiaxun/rikkahub-Mess-with-branches/blob/fix/batch1/scripts/patch_batch219_proot_port.py)
+  （该脚本位于 `fix/batch1` 分支）。
+- proot 本体为 GNU General Public License v2.0（GPL-2.0）。
+  上游源码：https://github.com/proot-me/proot
