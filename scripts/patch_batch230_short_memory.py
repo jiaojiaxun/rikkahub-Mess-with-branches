@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch230 v2: 短期记忆(会话级私有) — 数据层 + 消费侧
+'''batch230 v3: 短期记忆(会话级私有) — 数据层 + 消费侧
 
 需求(用户 2026-10-17):
 - 新增「短期记忆」: 只针对单个会话, 会话之间互不可见(私有)
@@ -10,7 +10,7 @@
 
 改动(9 文件):
 1. MemoryEntity.kt: +conversation_id 列(空串=长期/全局)
-2. MemoryDAO.kt: 长期查询排除会话记忆; +会话查询/全短期查询
+2. MemoryDAO.kt: v3 整文件重写(1248B 小文件, 绕开锚点失配未解之谜; 长期查询排除会话记忆 +会话/全短期查询)
 3. MemoryRepository.kt: addMemory +conversationId; 映射带 conversationId; +会话/全短期方法
 4. Assistant.kt: Assistant +enableShortMemory; AssistantMemory +conversationId
 5. AppDatabase.kt: version 36->37; +Migration_36_37(手写, 延续 35_36 先例)
@@ -21,25 +21,24 @@
 
 互斥语义: UI 层互斥(batch231); 消费侧「短期优先」裁决兜底(双开时短期生效, 行为确定)。
 
-v1 -> v2 教训: v1 在 CI 上 patch_entity 成功后 patch_dao 起全部死亡, 但锚点在 snapshot 真实字节上
-模拟命中(count=1)。warn-only sed 把 exit(1) 吞成 exit(0), ::error 又超 annotation 50 条配额被丢弃,
-死因不可见。v2 架构升级:
-1. 失败不连坐: 每文件独立 SystemExit 捕获, 一个文件锚点挂不影响其余 8 个
-2. 物理诊断通道: 失败时把现场行写进 ci_diag_batch230.txt, 随 snapshot 推送可读, 绕开 annotation 配额
-3. 锚点不变(已验证), 失配时 dump 含 probe 关键词的实际行
+v1 -> v2 -> v3 演进:
+- v1: patch_entity 成功后 patch_dao 起全死; warn-only sed 吞 exit(1), ::error 超 annotation 配额被丢弃
+- v2: 失败不连坐(每文件独立 SystemExit 捕获) + ci_diag dump 通道。
+  run440 结果: 仅 dao 失败(编译错 MemoryRepository 调 DAO 不存在的方法), 其余 8 文件全建成
+  (repo/model 都成功——编译无 enableShortMemory unresolved)。锚点在 snapshot 真实字节模拟命中但 CI 失败,
+  fail 点在 balance/count 检查(无 dump_probe 输出), 死因不可见。
+- v3: patch_dao 整文件重写(绕开锚点), 重写前 dump CI 真实原文进 ci_diag(复盘留证)。
+  snapshot 已验证 MemoryDAO 与仓库态 SHA 相同(无在链 patch), 重写无覆盖风险。
 
 五查:
-1. import 清单: DataSourceModule +Migration_36_37; 其余文件无新 import
-2. 同文件冲突: MemoryEntity/MemoryDAO/MemoryRepository/MemoryTools snapshot 与仓库态 SHA 相同(无在链 patch);
-   Assistant.kt 差异在 batch28 注释与 localTools 行, 锚点区域不相交;
-   ChatService.kt 与并行会话 batch232(A3 模型链替换)锚点不相交(我动 memories 装配, 它动 getAssistantById/findModelById)
-3. 作用域: conversationId 在 handleMessageComplete 参数与 .also 块内可用;
-   generateText 新参数在 flow 块内(toolsInternal 装配处)可用
-4. 括号配对: 每文件改后 balance 自检
+1. import 清单: DataSourceModule +Migration_36_37; 其余文件无新 import; dao 重写保持原 import 清单
+2. 同文件冲突: 目标文件 snapshot 与仓库态 SHA 相同(无在链 patch); ChatService 与并行 batch232 锚点不相交
+3. 作用域: conversationId 在 handleMessageComplete 参数与 .also 块内可用; generateText 新参数在 flow 块内可用
+4. 括号配对: 每文件改后 balance 自检(dao 重写后全文 balance)
 5. 函数签名: buildMemoryTools/generateText/addMemory 新参数均带默认值, 既有调用方兼容
 
-Python 三查: 引号一律 Q/SQ 变量构造且同一字面量只拼一次抽常量; NL 手写 concat 禁 join/f-string/walrus;
-helper 先定义后用; fail-loud + dump 现场
+Python 三查: 引号一律 Q/SQ 变量构造且同一字面量只拼一次抽常量(dao 整文件用三引号块, 非拼接, 无引号闭合风险);
+NL 手写 concat 禁 join/f-string/walrus; helper 先定义后用; fail-loud + dump 现场
 '''
 import sys
 from pathlib import Path
@@ -160,42 +159,80 @@ def patch_entity():
     note('MemoryEntity OK')
 
 
+DAO_FULL = '''package me.rerere.rikkahub.data.db.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
+import me.rerere.rikkahub.data.db.entity.MemoryEntity
+
+@Dao
+interface MemoryDAO {
+    // rhShortMem: 长期/全局查询只看 conversation_id 为空的记录, 会话私有记忆不走这里
+    @Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = ''")
+    fun getMemoriesOfAssistantFlow(assistantId: String): Flow<List<MemoryEntity>>
+
+    @Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = ''")
+    suspend fun getMemoriesOfAssistant(assistantId: String): List<MemoryEntity>
+
+    // rhShortMem: 单个会话的短期记忆(生成时注入用)
+    @Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = :conversationId")
+    fun getMemoriesOfConversationFlow(assistantId: String, conversationId: String): Flow<List<MemoryEntity>>
+
+    @Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = :conversationId")
+    suspend fun getMemoriesOfConversation(assistantId: String, conversationId: String): List<MemoryEntity>
+
+    // rhShortMem: 该助手名下全部短期记忆(管理页按会话分组用)
+    @Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id != ''")
+    fun getSessionMemoriesOfAssistantFlow(assistantId: String): Flow<List<MemoryEntity>>
+
+    @Query("SELECT * FROM memoryentity")
+    fun getAllMemoriesFlow(): Flow<List<MemoryEntity>>
+
+    @Query("SELECT * FROM memoryentity")
+    suspend fun getAllMemories(): List<MemoryEntity>
+
+    @Query("SELECT * FROM memoryentity WHERE id = :id")
+    suspend fun getMemoryById(id: Int): MemoryEntity?
+
+    @Insert
+    suspend fun insertMemory(memory: MemoryEntity): Long
+
+    @Update
+    suspend fun updateMemory(memory: MemoryEntity)
+
+    @Query("DELETE FROM memoryentity WHERE id = :id")
+    suspend fun deleteMemory(id: Int)
+
+    @Query("DELETE FROM memoryentity WHERE assistant_id = :assistantId")
+    suspend fun deleteMemoriesOfAssistant(assistantId: String)
+}
+'''
+
+
 def patch_dao():
     rel = 'app/src/main/java/me/rerere/rikkahub/data/db/dao/MemoryDAO.kt'
     t = load(rel)
     if MARK in t:
         note(rel + ' already applied')
         return
-    bal0 = balance(t)
-    old_flow = ('    @Query(' + Q + 'SELECT * FROM memoryentity WHERE assistant_id = :assistantId' + Q + ')' + NL
-                + '    fun getMemoriesOfAssistantFlow(assistantId: String): Flow<List<MemoryEntity>>')
-    new_flow = ('    // ' + MARK + ': 长期/全局查询只看 conversation_id 为空的记录, 会话私有记忆不走这里' + NL
-                + '    @Query(' + Q + 'SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = ' + SQ + SQ + Q + ')' + NL
-                + '    fun getMemoriesOfAssistantFlow(assistantId: String): Flow<List<MemoryEntity>>')
-    t = replace_once(t, old_flow, new_flow, 'MemoryDAO flow', rel)
-
-    old_suspend = ('    @Query(' + Q + 'SELECT * FROM memoryentity WHERE assistant_id = :assistantId' + Q + ')' + NL
-                   + '    suspend fun getMemoriesOfAssistant(assistantId: String): List<MemoryEntity>')
-    new_suspend = ('    @Query(' + Q + 'SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = ' + SQ + SQ + Q + ')' + NL
-                   + '    suspend fun getMemoriesOfAssistant(assistantId: String): List<MemoryEntity>' + NL
-                   + NL
-                   + '    // ' + MARK + ': 单个会话的短期记忆(生成时注入用)' + NL
-                   + '    @Query(' + Q + 'SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = :conversationId' + Q + ')' + NL
-                   + '    fun getMemoriesOfConversationFlow(assistantId: String, conversationId: String): Flow<List<MemoryEntity>>' + NL
-                   + NL
-                   + '    @Query(' + Q + 'SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = :conversationId' + Q + ')' + NL
-                   + '    suspend fun getMemoriesOfConversation(assistantId: String, conversationId: String): List<MemoryEntity>' + NL
-                   + NL
-                   + '    // ' + MARK + ': 该助手名下全部短期记忆(管理页按会话分组用)' + NL
-                   + '    @Query(' + Q + 'SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id != ' + SQ + SQ + Q + ')' + NL
-                   + '    fun getSessionMemoriesOfAssistantFlow(assistantId: String): Flow<List<MemoryEntity>>')
-    t = replace_once(t, old_suspend, new_suspend, 'MemoryDAO suspend', rel)
-    if balance(t) != bal0:
-        fail('MemoryDAO: balance changed')
-    if t.count('conversation_id') != 5:
-        fail('MemoryDAO: conversation_id count=' + str(t.count('conversation_id')) + ' (expected 5)')
-    save(rel, t)
-    note('MemoryDAO OK')
+    # v3: dump CI 真实原文(复盘留证: 锚点模拟命中但 CI 失败, 死因留档)
+    dump = ['=== batch230 dao CI 原文(' + str(len(t)) + ' chars) ===']
+    for ln in t.split(NL):
+        dump.append(ln[:150])
+    diag_write(dump)
+    # 整文件重写(文件仅 1248B, 绕开锚点失配; snapshot 已验证与仓库态 SHA 相同, 无在链 patch, 重写无覆盖风险)
+    save(rel, DAO_FULL)
+    t2 = load(rel)
+    if balance(t2) != 0:
+        fail('MemoryDAO rewrite: balance != 0')
+    if t2.count('conversation_id') != 5:
+        fail('MemoryDAO rewrite: conversation_id count=' + str(t2.count('conversation_id')) + ' (expected 5)')
+    if 'getSessionMemoriesOfAssistantFlow' not in t2:
+        fail('MemoryDAO rewrite: session method missing')
+    note('MemoryDAO OK (v3 full rewrite)')
 
 
 def patch_repo():
@@ -514,10 +551,10 @@ def main():
     run_patch('tools', patch_tools)
     run_patch('service', patch_service)
     if FAILED:
-        diag_write(['=== batch230 FAILED files: ' + ', '.join(FAILED)])
+        diag_write(['=== batch230 v3 FAILED files: ' + ', '.join(FAILED)])
         print('::error::batch230 FAILED: ' + ', '.join(FAILED))
     else:
-        print('::notice::batch230 v2 OK - short-term(session-scoped) memory: entity+dao+repo+model+db37+di+handler+tools+service')
+        print('::notice::batch230 v3 OK - short-term(session-scoped) memory: entity+dao+repo+model+db37+di+handler+tools+service')
 
 
 main()
