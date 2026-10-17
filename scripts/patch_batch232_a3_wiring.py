@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch232: A3 —— ChatService 接线：会话级配置接管读助手/选模型（全局换旧分辨率链）
+'''batch232 v2: A3 —— ChatService 接线（修 v1 的两个 bug）
 
-A 移植第三批(用户已定方案①合并: 会话级模型并进 ConversationConfig, 收编旧字段)。
-上游接法: 读助手=settings.getAssistantOf(conversation), 选模型=settings.getChatModelOf(conversation)。
-fork 旧链(多处出现): 读助手=settings.getAssistantById(X.assistantId) ?: settings.getCurrentAssistant(),
-  选模型=settings.findModelById(X.chatModelId ?: assistant.chatModelId ?: settings.chatModelId)。
+v1 编译红根因(读 run439 annotation 自查):
+  ① import 补 getAssistantOf/getChatModelOf 时, 最后一个新 import 没加换行 →
+     下一行原有的 `import ...ConversationCompaction` 被并进注释 → ChatService 找不到
+     ConversationCompaction → 编译红。修法: 新 import 块末尾补 NL。
+  ② 模型链 findModelById(...) 是多行调用(findModelById(\n X.chatModelId... \n)),
+     v1 的单行锚点没中 → 模型链没换成。修法: 改用正则(空白容忍)匹配整个调用。
 
-本批对 ChatService.kt 做全局替换(X ∈ conversation/initialConversation/currentConversation):
-  1. getAssistantById 链 → getAssistantOf(X)
-  2. findModelById 链 → getChatModelOf(X)
-  3. import 区补 getAssistantOf + getChatModelOf(锚 import ...data.model.Conversation 之后)
-报告替换处数(走 ::error, 不占 warning 配额)。幂等 marker rhA3Wiring。warn-only。
+v1 的助手链(getAssistantById 链 → getAssistantOf)已验证单行可换, 保留。
+其余不变: 全局换链 X∈conversation/initialConversation/currentConversation;
+  报告替换处数走 ::error。幂等 marker rhA3Wiring。warn-only。只动 ChatService.kt。
 
-注意: 只动 ChatService.kt。ChatVM/UI 的选择器写入侧在 A4。
+注: run439 另有一组不归本批的错误(AssistantDetailVM 的 rhShortMemUI 短期记忆,
+  enableShortMemory/getSessionMemoriesOfAssistantFlow 未定义)——那是并行会话的未完成工作,
+  与本批无关, 需他们补字段/方法。
 '''
 from pathlib import Path
+import re
 import sys
 
 ROOT = Path.cwd()
@@ -23,6 +26,10 @@ NL = chr(10)
 BATCH = 'batch232'
 MARK = 'rhA3Wiring'
 CS = 'app/src/main/java/me/rerere/rikkahub/service/ChatService.kt'
+
+MODEL_CHAIN_RE = re.compile(
+    r'settings\.findModelById\(\s*(\w+)\.chatModelId\s*\?:\s*assistant\.chatModelId\s*\?:\s*settings\.chatModelId\s*\)'
+)
 
 applied = []
 skipped = []
@@ -71,21 +78,21 @@ def main():
     bal0 = balance(src)
     out = src
 
-    # ① import 补 getAssistantOf + getChatModelOf
+    # ① import 补 getAssistantOf + getChatModelOf(末尾补 NL, 不再吃掉下一行 import)
     imp_anchor = 'import me.rerere.rikkahub.data.model.Conversation\n'
     if out.count(imp_anchor) == 1:
         out = out.replace(
             imp_anchor,
             imp_anchor +
             'import me.rerere.rikkahub.data.model.getAssistantOf // ' + MARK + NL +
-            'import me.rerere.rikkahub.data.model.getChatModelOf // ' + MARK,
+            'import me.rerere.rikkahub.data.model.getChatModelOf // ' + MARK + NL,
             1,
         )
         applied.append('imports')
     else:
         skipped.append('import-anchor=' + str(out.count(imp_anchor)))
 
-    # ② 读助手链 → getAssistantOf(X)
+    # ② 读助手链 → getAssistantOf(X)（单行, 已验证可换）
     n_assistant = 0
     for var in ('initialConversation', 'currentConversation', 'conversation'):
         old = 'settings.getAssistantById(' + var + '.assistantId) ?: settings.getCurrentAssistant()'
@@ -97,13 +104,10 @@ def main():
     else:
         skipped.append('assistant-none')
 
-    # ③ 选模型链 → getChatModelOf(X)
-    n_model = 0
-    for var in ('initialConversation', 'currentConversation', 'conversation'):
-        old = 'settings.findModelById(' + var + '.chatModelId ?: assistant.chatModelId ?: settings.chatModelId)'
-        new = 'settings.getChatModelOf(' + var + ') // ' + MARK
-        n_model += out.count(old)
-        out = out.replace(old, new)
+    # ③ 选模型链 → getChatModelOf(X)（正则, 空白/换行容忍）
+    def _model_sub(m):
+        return 'settings.getChatModelOf(' + m.group(1) + ') // ' + MARK
+    out, n_model = MODEL_CHAIN_RE.subn(_model_sub, out)
     if n_model > 0:
         applied.append('model x' + str(n_model))
     else:
@@ -116,7 +120,12 @@ def main():
         return
     if n_assistant == 0 and n_model == 0:
         skipped.append('no-op')
-        print('::error::' + BATCH + ' SKIP no-op (0 replacements)')
+        print('::error::' + BATCH + ' SKIP no-op')
+        return
+    # 确认没有残留被并进注释的 import(v1 的坑)
+    if '// rhA3Wiringimport ' in out:
+        skipped.append('import-merge-check')
+        print('::error::' + BATCH + ' SKIP import-merge-check')
         return
     write(CS, out)
     print('::error::' + BATCH + ' OK applied=[' + joinlist(applied) + '] skipped=[' + joinlist(skipped) + ']')
