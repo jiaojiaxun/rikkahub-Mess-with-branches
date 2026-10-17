@@ -48,7 +48,7 @@ jobs:
       # On failure the offending script's tail output is surfaced as a check annotation,
       # because anonymous log download is not available for this repo.
       #
-      # warn-only policy (2026-10-11): sed converts all scripts' exit(1) -> exit(0)
+      # warn-only policy (2026-10-11): sed converts all scripts' exit(1) → exit(0)
       # before execution, so anchor mismatches never block the build chain.
       # tee (2026-10-17): script output is teed to the Actions stream AND
       # .patch_out.log, so a script's own "::error::" lines reach GitHub and become
@@ -84,8 +84,10 @@ jobs:
       # runner would discard it otherwise. The branch is not in on.push.branches and
       # GITHUB_TOKEN pushes do not trigger workflows, so no build loop. if: always()
       # so even a failed run leaves its state behind (the most valuable one).
+      # continue-on-error: a transient push failure must never block the compile chain.
       - name: Snapshot patched sources
         if: always()
+        continue-on-error: true
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
