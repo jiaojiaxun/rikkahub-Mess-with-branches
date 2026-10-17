@@ -220,6 +220,8 @@ Stands on the shoulders of giants:
 
 This fork is unaffiliated with upstream RikkaHub maintainers. All credit for the underlying chat client, provider abstraction, and UI design goes to the upstream team.
 
+代码部分衍生自 [ExTV/rikkahub-agent](https://github.com/ExTV/rikkahub-agent) 与 [AAAelina/rikkahub-agent](https://github.com/AAAelina/rikkahub-agent)（AGPL-3.0）。
+
 ---
 
 ## License
