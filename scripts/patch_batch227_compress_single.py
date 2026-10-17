@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch227 v2: 压缩改单请求 —— 外科手术式三处行编辑（覆盖 v1）
+'''batch227 v3: 压缩改单请求 —— 修 v1/v2 的同一个 bug
 
-v1 教训: 用「注释行 + while 深度扫描」做整段替换, 切进了别的函数, 编译红。
-v2 改法: 只做三处单行级编辑, 不动函数结构, 不做大段替换。
+v1/v2 编译红的根因(读 CI 真形态发现): compressSources 在 CI 里是 batch3 加的流式版本
+  `val summaryText = withTimeout(COMPACTION_REQUEST_TIMEOUT_MS) { ...流式+兜底... }`。
+  我的超时编辑把行尾注释 `// rhSingleCompress: ...` 加在 `withTimeout(...) {` 后面,
+  把那个 `{` 注释掉了 → withTimeout 没了函数体块 → "Missing return statement"/
+  "Expecting member declaration"。v1/v2 是同一个注释 bug, 不是锚点问题。
 
-三处编辑(都在 ChatService.generateAndStoreCompaction 内):
-  1. 分块取消: `val fullSourceGroups = ContextCompactionPlanner.partitionSources(...)`(4行)
-     → `val fullSourceGroups = listOf(fullSources)` —— 全部内容一组, compressGroups 只发一次请求。
-  2. 输出预算: `modelSummaryTargetTokens.coerceAtMost(COMPACTION_MAX_REQUEST_OUTPUT_TOKENS)`
-     → `modelSummaryTargetTokens` —— 直接用用户输入的目标值(targetTokens), 不再被 16384 截。
-  3. 单请求超时: `withTimeout(COMPACTION_REQUEST_TIMEOUT_MS)`(3min)
-     → `withTimeout(COMPACTION_TOTAL_TIMEOUT_MS)`(8min) —— 单请求等它完整输出。
+v3: E3 去掉行尾注释(不碰 `{`)。E1/E2 已在 run424 验证落地, 保持不动。
+  1. 分块 partitionSources → listOf(fullSources) 一组(单请求)
+  2. 输出预算 coerceAtMost(16384) → modelSummaryTargetTokens(=用户目标值)
+  3. 单请求超时 3min → 8min(等完整输出) —— 不带行尾注释
 
-效果: compressGroups 拿到单组 → 一次 generateText 请求 → 归并循环一轮即出。
-幂等 marker rhSingleCompress; 三处锚点均要求唯一; warn-only。
+幂等 marker rhSingleCompress(由 E1/E2 行尾注释提供); 三处锚点要求唯一; warn-only; 括号差值断言。
 '''
 from pathlib import Path
 import sys
@@ -33,19 +32,10 @@ E2_OLD = 'modelSummaryTargetTokens.coerceAtMost(COMPACTION_MAX_REQUEST_OUTPUT_TO
 E2_NEW = 'modelSummaryTargetTokens // ' + MARK + ': 预算=目标值'
 
 E3_OLD = 'withTimeout(COMPACTION_REQUEST_TIMEOUT_MS)'
-E3_NEW = 'withTimeout(COMPACTION_TOTAL_TIMEOUT_MS) // ' + MARK + ': 单请求放宽到总量超时'
+E3_NEW = 'withTimeout(COMPACTION_TOTAL_TIMEOUT_MS)'
 
 applied = []
 skipped = []
-
-
-def joinlist(items):
-    t = ''
-    for i, s in enumerate(items):
-        if i > 0:
-            t += ','
-        t += s
-    return t
 
 
 def read(path):
@@ -103,15 +93,16 @@ def main():
         return
     lines[idx:idx + 4] = [E1_NEW]
 
-    # Edit 2: 输出预算
     src2 = NL.join(lines)
+
+    # Edit 2: 输出预算=目标值
     if src2.count(E2_OLD) != 1:
         skipped.append('e2-count=' + str(src2.count(E2_OLD)))
         print('::error::' + BATCH + ' SKIP e2-count=' + str(src2.count(E2_OLD)))
         return
     src2 = src2.replace(E2_OLD, E2_NEW, 1)
 
-    # Edit 3: 超时
+    # Edit 3: 超时放宽(不带行尾注释, 不碰 withTimeout 的 {)
     if src2.count(E3_OLD) != 1:
         skipped.append('e3-count=' + str(src2.count(E3_OLD)))
         print('::error::' + BATCH + ' SKIP e3-count=' + str(src2.count(E3_OLD)))
@@ -123,14 +114,14 @@ def main():
         skipped.append('balance')
         print('::error::' + BATCH + ' SKIP balance')
         return
-    for need in ('listOf(fullSources)', MARK):
+    for need in ('listOf(fullSources)', 'withTimeout(COMPACTION_TOTAL_TIMEOUT_MS) {', MARK):
         if need not in out:
             skipped.append('selfcheck:' + need)
             print('::error::' + BATCH + ' SKIP selfcheck ' + need)
             return
     write(CS, out)
     applied.append('e1,e2,e3')
-    print('::error::' + BATCH + ' OK applied single-request compression (e1 single-group, e2 budget=target, e3 timeout=8min)')
+    print('::error::' + BATCH + ' OK applied single-request compression (v3: fixed comment-eats-brace bug)')
 
 
 if __name__ == '__main__':
