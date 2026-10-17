@@ -48,9 +48,11 @@ jobs:
       # On failure the offending script's tail output is surfaced as a check annotation,
       # because anonymous log download is not available for this repo.
       #
-      # warn-only policy (2026-10-11): sed converts all scripts' exit(1) → exit(0)
-      # before execution, so anchor mismatches produce annotations but never block
-      # the build chain.
+      # warn-only policy (2026-10-11): sed converts all scripts' exit(1) -> exit(0)
+      # before execution, so anchor mismatches never block the build chain.
+      # tee (2026-10-17): script output is teed to the Actions stream AND
+      # .patch_out.log, so a script's own "::error::" lines reach GitHub and become
+      # annotations (the plain redirect swallowed them; anchor misses were silent).
       - name: Convert scripts to warn-only (exit(1) → exit(0))
         run: |
           sed -i 's/exit(1)/exit(0)/g' scripts/patch_*.py
@@ -68,15 +70,28 @@ jobs:
           do
             if [ -f "$f" ]; then
               echo "== applying $f"
-              if ! python3 "$f" > .patch_out.log 2>&1; then
+              if ! python3 "$f" 2>&1 | tee .patch_out.log; then
                 msg=$(tail -n 15 .patch_out.log | tr '\n' ' ' | head -c 800)
                 echo "::error title=Patch failed: $f::$msg"
-                cat .patch_out.log
                 exit 1
               fi
               tail -n 2 .patch_out.log || true
             fi
           done
+
+      # Snapshot: the patched tree is the "true form" that later anchors must match.
+      # Push it to refs/heads/snapshot so it is readable via the contents API; the
+      # runner would discard it otherwise. The branch is not in on.push.branches and
+      # GITHUB_TOKEN pushes do not trigger workflows, so no build loop. if: always()
+      # so even a failed run leaves its state behind (the most valuable one).
+      - name: Snapshot patched sources
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "snapshot: run ${{ github.run_number }}" --quiet || true
+          git push --force origin HEAD:refs/heads/snapshot
 
       - name: Compile Kotlin (release)
         id: compile
