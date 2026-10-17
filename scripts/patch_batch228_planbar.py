@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # batch228: YuiHub PlanBar 移植 —— 既有文件接线(4 个新文件由同一提交直接入库)
+# v2: 思考链标题对齐文档 §8「更新计划 (n/m)」,strings 补 chat_message_todo_update。
 #
 # 接线内容:
 #  A ChatService.kt     在两个工具装配点(buildToolsForRerun + handleMessageComplete)
@@ -10,7 +11,7 @@
 #  D SettingPreferencesUIPage.kt 显示设置加开关行(锚=batch3 的折叠开关 item 块)
 #  E ChatPage.kt        hazeState 后计算 rhPlanTodos(setting.displaySetting.showPlanBar 门控)
 #                        + bottomBar Column 内挂 PlanBar(优先 quotePreview 前,回退 ChatInput( 前)
-#  F strings.xml en+zh  7 条文案(插入 </resources> 前,batch3/91/130 同款)
+#  F strings.xml en+zh  8 条文案(插入 </resources> 前,batch3/91/130 同款)
 #
 # warn-only(近期惯例): 任何锚点失败只记录 skipped + 末尾借 ::error 空通道汇总,不 exit(1)。
 # 注意: strings 若失败会导致新文件引用缺失编译红,汇总里会显式标出。
@@ -314,6 +315,7 @@ ZH = 'app/src/main/res/values-zh/strings.xml'
 
 EN_BLOCK = [
     '    <string name=' + Q + 'chat_message_todo_title' + Q + '>Plan</string> <!-- ' + MARK + ' -->',
+    '    <string name=' + Q + 'chat_message_todo_update' + Q + '>Update plan</string>',
     '    <string name=' + Q + 'chat_message_todo_all_done' + Q + '>All steps completed</string>',
     '    <string name=' + Q + 'chat_message_todo_count_hint' + Q + ' formatted=' + Q + 'true' + Q + '>%1$d of %2$d completed</string>',
     '    <string name=' + Q + 'chat_message_todo_collapse' + Q + '>Collapse</string>',
@@ -323,6 +325,7 @@ EN_BLOCK = [
 ]
 ZH_BLOCK = [
     '    <string name=' + Q + 'chat_message_todo_title' + Q + '>计划</string> <!-- ' + MARK + ' -->',
+    '    <string name=' + Q + 'chat_message_todo_update' + Q + '>更新计划</string>',
     '    <string name=' + Q + 'chat_message_todo_all_done' + Q + '>全部步骤已完成</string>',
     '    <string name=' + Q + 'chat_message_todo_count_hint' + Q + ' formatted=' + Q + 'true' + Q + '>已完成 %1$d / %2$d</string>',
     '    <string name=' + Q + 'chat_message_todo_collapse' + Q + '>收起</string>',
@@ -335,9 +338,19 @@ ZH_BLOCK = [
 def add_strings(path, block):
     p = ROOT / path
     s = p.read_text(encoding='utf-8')
-    if 'plan_bar_expand' in s:
+    if 'chat_message_todo_update' in s:
         note('strings already: ' + path)
         return
+    if 'plan_bar_expand' in s:
+        # v1 已上过但缺 update 键:只补差量
+        missing = []
+        for b in block:
+            if 'chat_message_todo_update' in b:
+                missing.append(b)
+        if not missing:
+            note('strings already: ' + path)
+            return
+        block = missing
     lines = s.split(NL)
     ri = -1
     for i, ln in enumerate(lines):

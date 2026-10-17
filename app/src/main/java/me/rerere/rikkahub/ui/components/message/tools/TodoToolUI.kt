@@ -32,8 +32,8 @@ object TodoToolUI : ToolUIRenderer {
     override fun title(context: ToolUIContext): String {
         val todos = remember(context.arguments) { parseTodoArguments(context.arguments) }
         val completed = todos.count { it.second == "completed" }
-        // 标题形如「计划 (2/5)」(文档8)
-        return stringResource(R.string.chat_message_todo_title) +
+        // 标题形如「更新计划 (2/5)」(文档8: TodoToolUI.title)
+        return stringResource(R.string.chat_message_todo_update) +
             " (" + completed + "/" + todos.size + ")"
     }
 
