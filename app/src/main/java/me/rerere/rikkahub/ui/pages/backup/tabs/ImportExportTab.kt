@@ -46,6 +46,10 @@ import me.rerere.rikkahub.ui.pages.backup.BackupVM
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import androidx.compose.material3.MultiChoiceSegmentedButtonRow // rhBackupItemPick
+import androidx.compose.material3.SegmentedButton // rhBackupItemPick
+import androidx.compose.material3.SegmentedButtonDefaults // rhBackupItemPick
+import me.rerere.rikkahub.data.datastore.WebDavConfig // rhBackupItemPick
 
 @Composable
 fun ImportExportTab(
@@ -56,6 +60,7 @@ fun ImportExportTab(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val progress by vm.progress.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle() // rhBackupItemPick
     var isExporting by remember { mutableStateOf(false) }
     var selectedExportFormat by remember { mutableStateOf(BackupExportFormat.FULL) }
     var isRestoring by remember { mutableStateOf(false) }
@@ -171,6 +176,54 @@ fun ImportExportTab(
         progress?.let { value ->
             item { BackupProgressCard(value) }
         }
+        item(key = "backup_items") { // rhBackupItemPick
+            CardGroup(modifier = Modifier.padding(horizontal = 0.dp), title = { Text("备份项") }) {
+                item(
+                    headlineContent = { Text("选择要备份的内容") },
+                    supportingContent = {
+                        MultiChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            WebDavConfig.BackupItem.entries.forEachIndexed { index, item ->
+                                SegmentedButton(
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = WebDavConfig.BackupItem.entries.size),
+                                    onCheckedChange = { checked ->
+                                        val cur = settings.webDavConfig.items
+                                        val next = if (checked) (cur + item).distinct() else cur - item
+                                        vm.updateSettings(settings.copy(webDavConfig = settings.webDavConfig.copy(items = next)))
+                                    },
+                                    checked = item in settings.webDavConfig.items,
+                                ) {
+                                    Text(if (item == WebDavConfig.BackupItem.DATABASE) "聊天记录" else "文件")
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+        }
+        item(key = "lite_types") { // rhLiteTypesIE
+            CardGroup(modifier = Modifier.padding(horizontal = 0.dp), title = { Text("轻量备份附件") }) {
+                item(
+                    headlineContent = { Text("选择轻量备份包含的附件类型") },
+                    supportingContent = {
+                        MultiChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            WebDavConfig.LiteAttachmentType.entries.forEachIndexed { index, item ->
+                                SegmentedButton(
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = WebDavConfig.LiteAttachmentType.entries.size),
+                                    onCheckedChange = { checked ->
+                                        val cur = settings.webDavConfig.liteAttachmentTypes
+                                        val next = if (checked) (cur + item).distinct() else cur - item
+                                        vm.updateSettings(settings.copy(webDavConfig = settings.webDavConfig.copy(liteAttachmentTypes = next)))
+                                    },
+                                    checked = item in settings.webDavConfig.liteAttachmentTypes,
+                                ) {
+                                    Text(if (item == WebDavConfig.LiteAttachmentType.TEXT) "文本" else "图片")
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+        }
         stickyHeader { StickyHeader { Text(stringResource(R.string.backup_page_local_backup_export)) } }
         item {
             CardGroup {
@@ -191,6 +244,27 @@ fun ImportExportTab(
                     },
                     leadingContent = {
                         if (isExporting && selectedExportFormat == BackupExportFormat.OFFICIAL) {
+                            CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
+                        } else Icon(HugeIcons.File01, null)
+                    },
+                )
+                item(
+                    onClick = if (!isExporting && !isRestoring) {
+                        {
+                            selectedExportFormat = BackupExportFormat.LITE
+                            createDocumentLauncher.launch("rikkahub_lite_backup.zip")
+                        }
+                    } else null,
+                    headlineContent = { Text("轻量备份（不含附件）") },
+                    supportingContent = {
+                        Text(
+                            if (isExporting && selectedExportFormat == BackupExportFormat.LITE) {
+                                "正在导出：${progress?.detail.orEmpty()}"
+                            } else "只备份对话数据和设置，不含 uploads/ 附件，体积小"
+                        )
+                    },
+                    leadingContent = {
+                        if (isExporting && selectedExportFormat == BackupExportFormat.LITE) {
                             CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
                         } else Icon(HugeIcons.File01, null)
                     },
@@ -280,7 +354,9 @@ fun ImportExportTab(
                         val file = pendingRestoreFile
                         pendingRestoreFile = null
                         showRestoreMode = false
-                        if (file != null) restoreLocal(file, BackupRestoreMode.MERGE)
+                        isRestoring = false
+                        // [batch158] 合并走两阶段状态机：扫描 → 差异确认 → 应用
+                        if (file != null) vm.beginLocalMerge(file)
                     }) { Text(BackupRestoreMode.MERGE.displayName()) }
                     Button(onClick = {
                         val file = pendingRestoreFile

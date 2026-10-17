@@ -1,5 +1,16 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -100,7 +111,7 @@ fun ChainOfThoughtScope.ChatMessageServerToolStep(tool: UIMessagePart.ServerTool
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.shimmer(isLoading = loading),
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         },
@@ -118,6 +129,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
     onToolApproval: ((toolCallId: String, approved: Boolean, reason: String, scope: me.rerere.rikkahub.service.ChatService.ApprovalScope, toolName: String) -> Unit)? = null,
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)? = null,
     onRerunTool: (suspend (toolCallId: String) -> me.rerere.rikkahub.service.ChatService.RerunToolResult)? = null,
+    stepNumber: Int? = null,
 ) {
     // ask_user 是交互式问答流程, 不走注册式渲染框架
     if (tool.toolName == ASK_USER_TOOL_NAME) {
@@ -145,7 +157,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
 
     var showResult by remember { mutableStateOf(false) }
     var showDenyDialog by remember { mutableStateOf(false) }
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
     val isPending = tool.approvalState is ToolApprovalState.Pending
     val isDenied = tool.approvalState is ToolApprovalState.Denied
     val images = tool.output.filterIsInstance<UIMessagePart.Image>()
@@ -158,7 +170,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
 
     // Summary detection is delegated to the registered renderer; image output, webview
     // cards, and denial reasons are common to all tools.
-    val hasExtraContent = renderer.hasSummary(context) || isDenied || images.isNotEmpty() || webviewParts.isNotEmpty()
+    val hasExtraContent = true // rhToolCallLine: 工具调用本身始终可见
 
     ControlledChainOfThoughtStep(
         expanded = expanded,
@@ -178,12 +190,13 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
             }
         },
         label = {
+            val titleText = if (stepNumber != null) "$stepNumber. " + renderer.title(context) else renderer.title(context)
             Text(
-                text = renderer.title(context),
+                text = titleText,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.shimmer(isLoading = loading),
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         },
@@ -214,17 +227,17 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                             )
                         }
                     }
-                    // Four-button row: Allow / Always Allow / Allow for this chat / Deny.
+                    // rh-batch1:approval - two large buttons; scopes and deny reason via long-press.
                     // Keep the order stable so the approval decision is easy to scan.
                     // Tools listed in ToolApprovalDefaults.NO_ALWAYS_ALLOW (e.g. mcp_add /
                     // mcp_update — adding an MCP server is a privilege-escalation surface)
                     // drop the Always-Allow button so each call requires fresh confirmation.
                     val allowAlwaysButton = me.rerere.rikkahub.data.ai.tools.ToolApprovalDefaults
                         .allowsAlwaysAllow(tool.toolName)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (inFlight) return@FilledTonalIconButton
+                    ToolApprovalButtons(
+                            enabled = !inFlight,
+                            allowAlways = allowAlwaysButton,
+                            onAllowOnce = {
                                 inFlight = true
                                 onToolApproval(
                                     tool.toolCallId, true, "",
@@ -232,35 +245,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                                     tool.toolName,
                                 )
                             },
-                            enabled = !inFlight,
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                imageVector = HugeIcons.Tick01,
-                                contentDescription = stringResource(R.string.chat_message_tool_approve),
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                        if (allowAlwaysButton) {
-                            FilledTonalIconButton(
-                                onClick = {
-                                    if (inFlight) return@FilledTonalIconButton
-                                    inFlight = true
-                                    onToolApproval(
-                                        tool.toolCallId, true, "",
-                                        me.rerere.rikkahub.service.ChatService.ApprovalScope.Always,
-                                        tool.toolName,
-                                    )
-                                },
-                                enabled = !inFlight,
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                Text("∞", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (inFlight) return@FilledTonalIconButton
+                            onAllowChat = {
                                 inFlight = true
                                 onToolApproval(
                                     tool.toolCallId, true, "",
@@ -268,26 +253,24 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                                     tool.toolName,
                                 )
                             },
-                            enabled = !inFlight,
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Text("💬", style = MaterialTheme.typography.labelSmall)
-                        }
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (inFlight) return@FilledTonalIconButton
-                                showDenyDialog = true
+                            onAllowAlways = {
+                                inFlight = true
+                                onToolApproval(
+                                    tool.toolCallId, true, "",
+                                    me.rerere.rikkahub.service.ChatService.ApprovalScope.Always,
+                                    tool.toolName,
+                                )
                             },
-                            enabled = !inFlight,
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                imageVector = HugeIcons.Cancel01,
-                                contentDescription = stringResource(R.string.chat_message_tool_deny),
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                    }
+                            onDeny = {
+                                inFlight = true
+                                onToolApproval(
+                                    tool.toolCallId, false, "",
+                                    me.rerere.rikkahub.service.ChatService.ApprovalScope.Once,
+                                    tool.toolName,
+                                )
+                            },
+                            onDenyWithReason = { showDenyDialog = true },
+                        )
                 }
             }
         } else {
@@ -301,6 +284,29 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
         content = if (hasExtraContent) {
             {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // rhToolCallLine: 折叠区显示工具调用本身(名称+入参截断)
+                    Text(
+                        // rhToolCallClean (batch81): 清爽单行 toolName(key=value, ...)
+                        text = buildString {
+                            append(tool.toolName)
+                            append("(")
+                            val argsObj = context.arguments as? JsonObject
+                            if (argsObj != null) {
+                                argsObj.entries.take(3).forEachIndexed { i, entry ->
+                                    if (i > 0) append(", ")
+                                    append(entry.key)
+                                    append("=")
+                                    append(entry.value.toString().trim('"').take(40))
+                                }
+                                if (argsObj.entries.size > 3) append(", ...")
+                            }
+                            append(")")
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     renderer.Summary(context)
                     webviewParts.forEach { webviewPart ->
                         SkillWebviewCardOrNull(part = webviewPart)
@@ -508,7 +514,7 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.shimmer(isLoading = loading),
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         },
@@ -710,4 +716,122 @@ private fun ToolDenyReasonDialog(
             }
         }
     )
+}
+
+// rh-batch1:approval - large two-button approval row.
+// Tap Allow = allow once; long-press Allow = "allow for this chat" / "always allow"
+// (unless the tool forbids it). Tap Deny = deny; long-press Deny = deny with a reason.
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ToolApprovalButtons(
+    enabled: Boolean,
+    allowAlways: Boolean,
+    onAllowOnce: () -> Unit,
+    onAllowChat: () -> Unit,
+    onAllowAlways: () -> Unit,
+    onDeny: () -> Unit,
+    onDenyWithReason: () -> Unit,
+) {
+    var showScopes by remember { mutableStateOf(false) }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                ApprovalBigButton(
+                    label = stringResource(R.string.chat_message_tool_approve),
+                    icon = HugeIcons.Tick01,
+                    container = MaterialTheme.colorScheme.primary,
+                    content = MaterialTheme.colorScheme.onPrimary,
+                    enabled = enabled,
+                    onClick = onAllowOnce,
+                    onLongClick = { showScopes = true },
+                )
+                DropdownMenu(
+                    expanded = showScopes,
+                    onDismissRequest = { showScopes = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_tool_approval_allow_chat)) },
+                        onClick = {
+                            showScopes = false
+                            onAllowChat()
+                        },
+                    )
+                    if (allowAlways) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_tool_approval_allow_always)) },
+                            onClick = {
+                                showScopes = false
+                                onAllowAlways()
+                            },
+                        )
+                    }
+                }
+            }
+            ApprovalBigButton(
+                label = stringResource(R.string.chat_message_tool_deny),
+                icon = HugeIcons.Cancel01,
+                container = MaterialTheme.colorScheme.errorContainer,
+                content = MaterialTheme.colorScheme.onErrorContainer,
+                enabled = enabled,
+                onClick = onDeny,
+                onLongClick = onDenyWithReason,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            text = stringResource(R.string.chat_tool_approval_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ApprovalBigButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    container: Color,
+    content: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clip(shape)
+            .background(if (enabled) container else container.copy(alpha = 0.4f))
+            .combinedClickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = label,
+            color = content,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+    }
 }

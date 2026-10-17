@@ -34,6 +34,7 @@ import me.rerere.rikkahub.di.viewModelModule
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.service.WebServerService
+import me.rerere.rikkahub.service.ChatNotificationManager
 import me.rerere.rikkahub.utils.CrashHandler
 import me.rerere.rikkahub.utils.DatabaseUtil
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
@@ -73,6 +74,7 @@ const val CHAT_LIVE_UPDATE_NOTIFICATION_CHANNEL_ID = "chat_live_update"
 const val WEB_SERVER_NOTIFICATION_CHANNEL_ID = "web_server"
 const val MUSIC_PLAYER_NOTIFICATION_CHANNEL_ID = "plugin_music"
 const val POMODORO_NOTIFICATION_CHANNEL_ID = "plugin_pomodoro"
+const val CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID = "chat_completed" // rhNotifMgr
 
 class RikkaHubApp : Application() {
     override fun onCreate() {
@@ -121,6 +123,12 @@ class RikkaHubApp : Application() {
         // LifecycleRegistry.addObserver, which must run on the main thread; without this
         // priming, a background caller can make Koin build ChatService on an IO thread.
         eagerlyInitChatService()
+        ChatNotificationManager(
+            this,
+            get<me.rerere.rikkahub.AppScope>(),
+            get<me.rerere.rikkahub.data.event.AppEventBus>(),
+            get<me.rerere.rikkahub.data.datastore.SettingsStore>()
+        ) // rhNotifMgr (batch99v3)
 
         AppStartupProgressTracker.update(75, AppStartupStage.LoadingServices)
 
@@ -129,6 +137,13 @@ class RikkaHubApp : Application() {
         // sandbox for `.learnings/`, scratch files, and skill state without scoped-
         // storage friction. The directory is private and persistent inside app storage.
         me.rerere.rikkahub.data.ai.tools.local.AgentWorkspace.init(this)
+
+        // Dual-mode chat: initialise the global HTML skin store before any UI or tool
+        // reads it. Same early-init pattern as AgentWorkspace above.
+        me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.init(
+            context = this,
+            scope = get<AppScope>(),
+        )
 
         // Copy any default skills bundled in assets/default-skills/* into the user's skills
         // dir on first launch. SkillManager guards via a per-skill .seeded sentinel so this
@@ -392,6 +407,14 @@ class RikkaHubApp : Application() {
             .setShowBadge(false)
             .build()
         notificationManager.createNotificationChannel(pluginPomodoroChannel)
+        
+        // rhNotifMgr (batch99): 生成完成通知渠道
+        val chatCompletedChannel = NotificationChannelCompat
+            .Builder(CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_DEFAULT)
+            .setName(getString(R.string.notification_channel_chat_live_update))
+            .setVibrationEnabled(true)
+            .build()
+        notificationManager.createNotificationChannel(chatCompletedChannel)
     }
 
     override fun onTerminate() {

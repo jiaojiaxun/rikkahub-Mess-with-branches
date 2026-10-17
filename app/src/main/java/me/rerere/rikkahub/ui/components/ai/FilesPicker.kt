@@ -62,6 +62,7 @@ import me.rerere.hugeicons.stroke.Image02
 import me.rerere.hugeicons.stroke.MusicNote03
 import me.rerere.hugeicons.stroke.Package
 import me.rerere.hugeicons.stroke.Package01
+import me.rerere.hugeicons.stroke.Pulse01
 import me.rerere.hugeicons.stroke.Settings02
 import me.rerere.hugeicons.stroke.Video01
 import me.rerere.rikkahub.R
@@ -76,6 +77,7 @@ import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.ui.components.ui.ExtensionSelector
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionCamera
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionManager
@@ -110,6 +112,9 @@ internal fun FilesPicker(
     val provider = settings.getCurrentChatModel()?.findProvider(providers = settings.providers)
     val navController = LocalNavController.current
     val workspaceRepository: WorkspaceRepository = koinInject()
+    // rh-batch8:truncate-only - FilesPicker has no view model, so the "delete instead of
+    // summarise" action is resolved straight from Koin (same container ChatVM uses).
+    val chatService: ChatService = koinInject()
     val workspaces by workspaceRepository.listFlow().collectAsState(initial = emptyList())
 
     Column(
@@ -206,6 +211,30 @@ internal fun FilesPicker(
                 },
         )
 
+        // rhHeartRate: live heart-rate broadcast entry
+        var showHeartRateDialog by remember { mutableStateOf(false) }
+        ListItem(
+            leadingContent = {
+                Icon(
+                    imageVector = HugeIcons.Pulse01,
+                    contentDescription = stringResource(R.string.heart_rate_title),
+                )
+            },
+            headlineContent = {
+                Text(stringResource(R.string.heart_rate_title))
+            },
+            colors = ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            ),
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.large)
+                .clickable {
+                    showHeartRateDialog = true
+                },
+        )
+        if (showHeartRateDialog) {
+            HeartRateDialog(onDismiss = { showHeartRateDialog = false })
+        }
         // Compress History Button
         ListItem(
             leadingContent = {
@@ -288,6 +317,15 @@ internal fun FilesPicker(
     // Compress Context Dialog
     if (showCompressDialog) {
         CompressContextDialog(
+            // rh-batch8:truncate-only - no model request, just drop the older messages.
+            onTruncate = { keepRecentMessages ->
+                chatService.truncateConversationToRecentAsync(
+                    conversationId = conversation.id,
+                    keepRecentMessages = keepRecentMessages,
+                )
+            },
+
+            conversationId = conversation.id,
             defaultTargetTokens = settings.getContextCompactionTargetTokens(
                 settings.getCompactionContextLength(settings.getCurrentChatModel()),
             ),

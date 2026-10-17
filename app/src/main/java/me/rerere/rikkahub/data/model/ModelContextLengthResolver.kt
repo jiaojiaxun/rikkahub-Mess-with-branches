@@ -3,9 +3,12 @@ package me.rerere.rikkahub.data.model
 import androidx.annotation.VisibleForTesting
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import me.rerere.ai.registry.ModelRegistry
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -23,6 +26,10 @@ class ModelContextLengthResolver(
     private val client: OkHttpClient,
 ) {
     private val cache = mutableMapOf<String, Int?>()
+    // rhModelsDev: models.dev 目录缓存(App 生命周期内存缓存,避免重复拉取大 JSON)
+    private var modelsDevCatalog: Map<String, Int>? = null
+    private var modelsDevFetchAttempted = false
+    private val modelsDevMutex = Mutex() // rhModelsDevLock: 保护目录拉取
 
     suspend fun resolve(modelId: String?, declared: Int?): Int? {
         declared?.takeIf { it > 0 }?.let { return it }
@@ -32,6 +39,13 @@ class ModelContextLengthResolver(
         synchronized(cache) {
             if (cache.containsKey(key)) return cache[key]
         }
+        // rhRegistryTier (batch56): per-model registry (80 models, fine-grained) beats the
+        // coarse family table - e.g. glm5.1=200K vs glm5.2=1M differ within one family.
+        val registryLength = ModelRegistry.MODEL_CONTEXT_LENGTH.getData(raw)
+        if (registryLength != null && registryLength > 0) {
+            synchronized(cache) { cache[key] = registryLength }
+            return registryLength
+        }
         // The built-in family table is authoritative for the families it covers. A public
         // catalog can be stale or expose a route-specific value, so it is only consulted for
         // models the table does not know.
@@ -40,7 +54,61 @@ class ModelContextLengthResolver(
         return result
     }
 
-    private suspend fun queryPublicCatalog(modelId: String): Int? = withContext(Dispatchers.IO) {
+    // rhModelsDev: 兜底查询 = models.dev 目录 -> OpenRouter(未命中时)
+    private suspend fun queryPublicCatalog(modelId: String): Int? =
+        queryModelsDev(modelId) ?: queryOpenRouter(modelId)
+
+    // rhModelsDev: 查 models.dev 目录(首次拉取 api.json 并解析成 normalizedKey -> contextLength)
+    private suspend fun queryModelsDev(modelId: String): Int? = withContext(Dispatchers.IO) {
+        runCatching {
+            val catalog = modelsDevMutex.withLock { // rhModelsDevLock
+                if (!modelsDevFetchAttempted) {
+                    modelsDevFetchAttempted = true
+                    modelsDevCatalog = fetchModelsDevCatalog()
+                }
+                modelsDevCatalog
+            }
+            modelsDevCatalog?.get(ModelNameNormalizer.key(modelId))
+        }.getOrNull()
+    }
+
+    private fun fetchModelsDevCatalog(): Map<String, Int>? = runCatching {
+        val request = Request.Builder()
+            .url("https://models.dev/api.json")
+            .header("Accept", "application/json")
+            .get()
+            .build()
+        val call = client.newCall(request)
+        call.timeout().timeout(20, TimeUnit.SECONDS)
+        call.execute().use { response ->
+            if (!response.isSuccessful) return@use null
+            val body = response.body?.string().orEmpty()
+            if (body.length > MODELS_DEV_MAX_CHARS) return@use null
+            parseModelsDevCatalog(body)
+        }
+    }.getOrNull()
+
+    private fun parseModelsDevCatalog(body: String): Map<String, Int>? = runCatching {
+        val root = JSONObject(body)
+        val result = mutableMapOf<String, Int>()
+        val providers = root.keys()
+        while (providers.hasNext()) {
+            val provider = root.optJSONObject(providers.next()) ?: continue
+            val models = provider.optJSONObject("models") ?: continue
+            val modelIds = models.keys()
+            while (modelIds.hasNext()) {
+                val m = models.optJSONObject(modelIds.next()) ?: continue
+                val ctx = m.optJSONObject("limit")?.optInt("context", 0) ?: 0
+                if (ctx <= 0) continue
+                val mid = m.optString("id").ifBlank { m.optString("name") }
+                if (mid.isBlank()) continue
+                result[ModelNameNormalizer.key(mid)] = ctx
+            }
+        }
+        if (result.isEmpty()) null else result
+    }.getOrNull()
+
+    private suspend fun queryOpenRouter(modelId: String): Int? = withContext(Dispatchers.IO) { // rhModelsDev: renamed from queryPublicCatalog
         runCatching {
             val urlBuilder = HttpUrl.Builder()
                 .scheme("https")
@@ -104,6 +172,7 @@ class ModelContextLengthResolver(
 
     companion object {
         private const val MAX_RESPONSE_CHARS = 512 * 1024
+        private const val MODELS_DEV_MAX_CHARS = 8 * 1024 * 1024 // rhModelsDev
 
         private val CONTEXT_RULES: List<ContextRule> = listOf(
             // ---- DeepSeek -------------------------------------------------------
@@ -130,12 +199,23 @@ class ModelContextLengthResolver(
             ContextRule(listOf("chatgpt"), 128_000),
 
             // ---- Anthropic ------------------------------------------------------
-            ContextRule(listOf("claude"), 200_000),
+            // rh-batch10: Claude Opus 5.5 / Sonnet 5.5. Matched before the generic "claude" rule;
+        // the normalised key folds dots and dashes, so opus-5.5 / opus-5-5 / opus5.5 all match.
+        ContextRule(listOf("opus5"), 200_000),
+        ContextRule(listOf("sonnet5"), 200_000),
+            // rhRegistryTier: Claude 4.6+ ships 1M (documented); older Claude stays 200K.
+            ContextRule(listOf("claude", "46"), 1_000_000),
+            ContextRule(listOf("claude", "47"), 1_000_000),
+            ContextRule(listOf("claude", "48"), 1_000_000),
+            ContextRule(listOf("claude", "5"), 1_000_000),
+        ContextRule(listOf("claude"), 200_000),
 
             // ---- Google ---------------------------------------------------------
             ContextRule(listOf("gemini", "15", "pro"), 2_097_152),
             ContextRule(listOf("gemini", "15", "flash"), 1_048_576),
-            ContextRule(listOf("gemini"), 1_048_576),
+            // rh-batch10: Gemini 4 family (before the generic "gemini" rule).
+        ContextRule(listOf("gemini4"), 1_048_576),
+        ContextRule(listOf("gemini"), 1_048_576),
 
             // ---- Meta -----------------------------------------------------------
             ContextRule(listOf("llama4", "scout"), 10_000_000),
@@ -152,6 +232,11 @@ class ModelContextLengthResolver(
             ContextRule(listOf("qwen"), 131_072),
 
             // ---- Zhipu ----------------------------------------------------------
+            ContextRule(listOf("glm47"), 200_000),
+            // rhRegistryTier: GLM 5.2+ ships 1M; 5/5.1 stay 200K (documented).
+            ContextRule(listOf("glm52"), 1_000_000),
+            ContextRule(listOf("glm53"), 1_000_000),
+            ContextRule(listOf("glm5"), 200_000),
             ContextRule(listOf("glm46"), 200_000),
             ContextRule(listOf("glm45"), 128_000),
             ContextRule(listOf("glm4"), 128_000),
@@ -159,10 +244,16 @@ class ModelContextLengthResolver(
             ContextRule(listOf("glm"), 128_000),
 
             // ---- Moonshot -------------------------------------------------------
-            ContextRule(listOf("kimi"), 262_144),
+            // rhRegistryTier: Kimi K3=1M, K2.5/K2.6=256K, plain K2=128K (documented).
+            ContextRule(listOf("kimik3"), 1_000_000),
+            ContextRule(listOf("kimik26"), 262_144),
+            ContextRule(listOf("kimik25"), 262_144),
+            ContextRule(listOf("kimik2"), 262_144), // rhKimiK2Fix
+            ContextRule(listOf("kimi"), 131_072),
             ContextRule(listOf("moonshot"), 131_072),
 
             // ---- Mistral --------------------------------------------------------
+            ContextRule(listOf("mimo"), 1_048_576), // rhMimoCtx (batch98): 小米 MiMo 2.5+ 实际 1M(用户确认)
             ContextRule(listOf("magistral"), 1_048_576),
             ContextRule(listOf("codestral"), 262_144),
             ContextRule(listOf("mistral"), 131_072),

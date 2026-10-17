@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -28,6 +29,8 @@ fun ChatMessageUserAvatar(
     avatar: Avatar,
     nickname: String,
     modifier: Modifier = Modifier,
+    onChangeAvatar: ((Avatar) -> Unit)? = null,
+    onEditNickname: (() -> Unit)? = null, // rhUserAvatarEdit
 ) {
     val settings = LocalSettings.current
     if (message.role == MessageRole.USER && !message.parts.isEmptyUIMessage() && settings.displaySetting.showUserAvatar) {
@@ -40,12 +43,17 @@ fun ChatMessageUserAvatar(
                 text = nickname.ifEmpty { stringResource(R.string.user_default_name) },
                 style = MaterialTheme.typography.labelLargeEmphasized,
                 maxLines = 1,
+                modifier = Modifier.then(
+                    if (onEditNickname != null) Modifier.clickable(onClick = onEditNickname) else Modifier
+                ),
             )
             UIAvatar(
                 name = nickname,
                 modifier = Modifier.size(28.dp),
                 value = avatar,
                 loading = false,
+                onUpdate = onChangeAvatar,
+                showEditBadge = false, // rhUserAvatarEdit
             )
         }
     }

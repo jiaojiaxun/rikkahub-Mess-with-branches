@@ -156,8 +156,10 @@ class SettingsStore(
 
         // 模型选择
         val FAVORITE_MODELS = stringPreferencesKey("favorite_models")
+        val PROVIDER_LAST_USED_AT = stringPreferencesKey("provider_last_used_at") // rhProviderTidy
         val SELECT_MODEL = stringPreferencesKey("chat_model")
         val FAST_MODEL = stringPreferencesKey("fast_model")
+        val SUB_AGENT_MODEL = stringPreferencesKey("sub_agent_model") // rhSubAgentModel
         val TITLE_MODEL = stringPreferencesKey("title_model")
         val TRANSLATE_MODEL = stringPreferencesKey("translate_model")
         val ENABLE_SUGGESTION = booleanPreferencesKey("enable_suggestion")
@@ -265,6 +267,13 @@ class SettingsStore(
                     ?: DEFAULT_AUTO_MODEL_ID,
                 fastModelId = preferences[FAST_MODEL]?.let { runCatching { Uuid.parse(it) }.getOrNull() }
                     ?: DEFAULT_AUTO_MODEL_ID,
+                subAgentModelId = preferences[SUB_AGENT_MODEL]?.let { runCatching { Uuid.parse(it) }.getOrNull() }, // rhSubAgentModel
+                providerLastUsedAt = preferences[PROVIDER_LAST_USED_AT]?.let { raw ->
+                    runCatching { JsonInstant.decodeFromString<Map<String, Long>>(raw) }.getOrElse {
+                        Log.w(TAG, "Failed to decode providerLastUsedAt, using default", it)
+                        emptyMap()
+                    }
+                }?.mapNotNull { (k, v) -> runCatching { Uuid.parse(k) }.getOrNull()?.let { it to v } }?.toMap() ?: emptyMap(), // rhProviderTidy
                 titleModelId = preferences[TITLE_MODEL]?.let { runCatching { Uuid.parse(it) }.getOrNull() },
                 translateModeId = preferences[TRANSLATE_MODEL]?.let { runCatching { Uuid.parse(it) }.getOrNull() }
                     ?: DEFAULT_AUTO_MODEL_ID,
@@ -629,6 +638,12 @@ class SettingsStore(
             preferences[FAVORITE_MODELS] = JsonInstant.encodeToString(settings.favoriteModels)
             preferences[SELECT_MODEL] = settings.chatModelId.toString()
             preferences[FAST_MODEL] = settings.fastModelId.toString()
+            settings.subAgentModelId?.let {
+                preferences[SUB_AGENT_MODEL] = it.toString()
+            } ?: preferences.remove(SUB_AGENT_MODEL) // rhSubAgentModel
+            preferences[PROVIDER_LAST_USED_AT] = JsonInstant.encodeToString(
+                settings.providerLastUsedAt.mapKeys { it.key.toString() }
+            ) // rhProviderTidy
             settings.titleModelId?.let {
                 preferences[TITLE_MODEL] = it.toString()
             } ?: preferences.remove(TITLE_MODEL)
@@ -833,6 +848,9 @@ data class Settings(
     val favoriteModels: List<Uuid> = emptyList(),
     val chatModelId: Uuid = Uuid.random(),
     val fastModelId: Uuid = Uuid.random(),
+    val subAgentModelId: Uuid? = null, // rhSubAgentModel
+    /** rhProviderTidy: providerId -> 最后一次被调用的 epoch millis。用于供应商一键整理。 */
+    val providerLastUsedAt: Map<Uuid, Long> = emptyMap(),
     val titleModelId: Uuid? = null,
     val imageGenerationModelId: Uuid = Uuid.random(),
     val titlePrompt: String = DEFAULT_TITLE_PROMPT,
@@ -947,8 +965,20 @@ enum class ChatFontFamily {
     CUSTOM,
 }
 
+
+@Serializable
+data class RpStyleRule( // rhRpStyleRules
+    val id: String = kotlin.uuid.Uuid.random().toString(),
+    val pattern: String = "*",
+    val colorHex: String = "#808080",
+    val enabled: Boolean = true,
+)
+
 @Serializable
 data class DisplaySetting(
+    // rh-batch3: collapse long messages the user sent.
+    val collapseLongUserMessage: Boolean = true,
+    val collapseUserMessageLines: Int = 8,
     val userAvatar: Avatar = Avatar.Dummy,
     val userNickname: String = "",
     val useAppIconStyleLoadingIndicator: Boolean = true,
@@ -972,6 +1002,8 @@ data class DisplaySetting(
     val codeBlockAutoWrap: Boolean = false,
     val codeBlockAutoCollapse: Boolean = false,
     val showLineNumbers: Boolean = false,
+    val mascotEnabled: Boolean = false, // rhWhalePreset
+
     val ttsOnlyReadQuoted: Boolean = false,
     val ttsOnlyReadOutsideBrackets: Boolean = false,
     val autoPlayTTSAfterGeneration: Boolean = false,
@@ -986,6 +1018,11 @@ data class DisplaySetting(
     val chatCustomFontName: String = "",
     val enableVolumeKeyScroll: Boolean = false,
     val volumeKeyScrollRatio: Float = 1.0f,
+    val rpStyleRules: List<RpStyleRule> = emptyList(), // rhRpStyleRules
+    val showPlanBar: Boolean = true, // rhPlanBar228
+    // rhLiteStream (batch53): 精简版流式渲染——流式中的末条消息纯文本直出,
+    // 生成完成自动切回完整渲染。长会话防卡顿。默认 false = 原版行为。
+    val liteStreamRender: Boolean = false,
 )
 
 @Serializable
@@ -998,11 +1035,17 @@ data class WebDavConfig(
         BackupItem.DATABASE,
         BackupItem.FILES
     ),
+    val liteAttachmentTypes: List<LiteAttachmentType> = listOf(LiteAttachmentType.TEXT, LiteAttachmentType.IMAGE), // rhLiteTypesPS
 ) {
     @Serializable
     enum class BackupItem {
         DATABASE,
         FILES,
+    }
+    
+    enum class LiteAttachmentType { // rhLiteTypesPS
+        TEXT,
+        IMAGE,
     }
 }
 

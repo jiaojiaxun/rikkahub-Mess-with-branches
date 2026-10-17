@@ -6,9 +6,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
@@ -43,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -54,7 +60,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.dokar.sonner.ToastType
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.rememberHazeState
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -63,6 +73,7 @@ import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.ai.ui.UIMessage
 import me.rerere.common.android.appTempFolder
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
@@ -89,6 +100,9 @@ import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvide
 import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.useCropLauncher
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionCamera
+import me.rerere.rikkahub.ui.components.ui.MiffanPresentation
+import me.rerere.rikkahub.ui.components.ui.MiffanMascotState
+import me.rerere.rikkahub.ui.components.ui.WhaleGirlMascot
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionManager
 import me.rerere.rikkahub.ui.components.ui.permission.rememberPermissionState
 import me.rerere.rikkahub.ui.context.LocalNavController
@@ -319,6 +333,15 @@ private fun ChatPageContent(
             }
         }
     }
+    // rhUserInfoEdit: 用户昵称编辑状态(对话页为唯一编辑入口)
+    val nicknameEditState = useEditState<String> { newNickname ->
+        vm.updateSettings(
+            setting.copy(
+                displaySetting = setting.displaySetting.copy(userNickname = newNickname)
+            )
+        )
+    }
+    
     var previewMode by rememberSaveable { mutableStateOf(false) }
     val assistant = setting.getCurrentAssistant()
     var showFilesSheet by remember { mutableStateOf(false) }
@@ -330,6 +353,15 @@ private fun ChatPageContent(
     val allowAudioVideoAttachments =
         setting.getCurrentChatModel()?.findProvider(setting.providers) is ProviderSetting.Google
     val hazeState = rememberHazeState()
+    // rhPlanBar228: 计划细条数据,取最新一次已执行的 todo_write,开关关闭时置空隐藏
+    val rhPlanTodos = if (setting.displaySetting.showPlanBar) {
+        remember(conversation.currentMessages) {
+            me.rerere.rikkahub.ui.components.message.findActivePlan(conversation.currentMessages)
+        }
+    } else {
+        emptyList()
+    }
+    var quotingMessage by remember { mutableStateOf<UIMessage?>(null) } // rhQuoteSend
 
     val completionProviders = remember(assistant.workspaceId, conversation.workspaceCwd, workspaceRepository) {
         assistant.workspaceId?.let { workspaceId ->
@@ -350,9 +382,36 @@ private fun ChatPageContent(
         modifier = Modifier.fillMaxSize()
     ) {
         AssistantBackground(setting = setting, modifier = Modifier)
+        // Dual-mode chat: AI-authored html skin layer. Sits above the native background
+        // and below the Scaffold, so the native message list and input bar keep working.
+        // No-op unless html mode is enabled. Fully-qualified refs only: no new imports.
+        if (me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.isReady) {
+            me.rerere.rikkahub.ui.pages.chat.ChatHtmlLayer(
+                skinStore = me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store,
+                onBridgeEvent = { type, payload ->
+                    when (type) {
+                        "send_message" -> {
+                            val el = payload["text"]
+                            val text = if (el is kotlinx.serialization.json.JsonPrimitive &&
+                                el !is kotlinx.serialization.json.JsonNull
+                            ) el.content else null
+                            if (!text.isNullOrBlank()) {
+                                vm.handleMessageSend(content = listOf(UIMessagePart.Text(text)))
+                            }
+                        }
+                        "request_exit" -> {
+                            me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store.setMode(false)
+                        }
+                        else -> android.util.Log.d("ChatHtmlLayer", "skin event: " + type)
+                    }
+                },
+            )
+        }
+
         Scaffold(
             topBar = {
                 TopBar(
+                    hazeState = hazeState,
                     settings = setting,
                     conversation = conversation,
                     bigScreen = bigScreen,
@@ -373,10 +432,36 @@ private fun ChatPageContent(
                 )
             },
             bottomBar = {
+                Column {
+                    // rhPlanBar228: 计划细条,常驻输入框正上方,收起一行,点击展开完整清单
+                    me.rerere.rikkahub.ui.components.message.PlanBar(todos = rhPlanTodos)
+                    val quotePreview = quotingMessage
+                    if (quotePreview != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text(
+                                    text = "引用: " + quotePreview.toText().take(80),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                TextButton(onClick = { quotingMessage = null }) {
+                                    Text("取消", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
                 ChatInput(
                     state = inputState,
                     loading = loadingJob != null,
                     settings = setting,
+                    hazeState = hazeState,
                     completionProviders = completionProviders,
                     onCancelClick = {
                         vm.stopGeneration()
@@ -426,8 +511,9 @@ private fun ChatPageContent(
                                 messageId = inputState.editingMessage!!,
                             )
                         } else {
-                            vm.handleMessageSend(inputState.getContents())
+                            vm.handleMessageSend(inputState.getContents(), quotedMessageId = quotingMessage?.id)
                         }
+                        quotingMessage = null
                         inputState.clearInput()
                     },
                     onLongSendClick = {
@@ -437,8 +523,9 @@ private fun ChatPageContent(
                                 messageId = inputState.editingMessage!!,
                             )
                         } else {
-                            vm.handleMessageSend(content = inputState.getContents(), answer = false)
+                            vm.handleMessageSend(content = inputState.getContents(), answer = false, quotedMessageId = quotingMessage?.id)
                         }
+                        quotingMessage = null
                         inputState.clearInput()
                     },
                     onUpdateChatModel = {
@@ -474,11 +561,14 @@ private fun ChatPageContent(
                     onPickAudio = attachmentPickerActions.onPickAudio,
                     onPickFile = attachmentPickerActions.onPickFile,
                 )
+                }
             },
             containerColor = Color.Transparent,
         ) { innerPadding ->
+            Box(modifier = Modifier.fillMaxSize()) {
             ChatList(
                 innerPadding = innerPadding,
+                onQuote = { quotingMessage = it },
                 conversation = conversation,
                 state = chatListState,
                 loading = loadingJob != null,
@@ -565,7 +655,66 @@ private fun ChatPageContent(
                     vm.updateConversation(conversation.copy(customSystemPrompt = newPrompt))
                     vm.saveConversationAsync()
                 },
+            // rhUserInfoEdit
+            onChangeUserAvatar = { newAvatar ->
+                vm.updateSettings(
+                    setting.copy(
+                        displaySetting = setting.displaySetting.copy(userAvatar = newAvatar)
+                    )
+                )
+            },
+            onEditUserNickname = {
+                nicknameEditState.open(setting.displaySetting.userNickname)
+            },
             )
+    
+    // rhUserInfoEdit: 昵称编辑对话框(从抽屉搬到对话页)
+    nicknameEditState.EditStateContent { nickname, onUpdate ->
+        AlertDialog(
+            onDismissRequest = { nicknameEditState.dismiss() },
+            title = { Text(stringResource(R.string.chat_page_edit_nickname)) },
+            text = {
+                OutlinedTextField(
+                    value = nickname,
+                    onValueChange = onUpdate,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.chat_page_nickname_placeholder)) },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        nicknameEditState.confirm()
+                    },
+                    enabled = nickname.isNotBlank(),
+                ) { Text(stringResource(R.string.chat_page_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { nicknameEditState.dismiss() }) {
+                    Text(stringResource(R.string.chat_page_cancel))
+                }
+            },
+        )
+    }
+            if (setting.displaySetting.mascotEnabled) {
+                WhaleGirlMascot(
+                    state = if (errors.isNotEmpty()) {
+                        MiffanMascotState.Error
+                    } else if (loadingJob != null) {
+                        MiffanMascotState.Thinking
+                    } else {
+                        MiffanMascotState.Idle
+                    },
+                    interactive = true,
+                    presentation = MiffanPresentation.Avatar,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 12.dp)
+                        .size(96.dp),
+                )
+            }
+            }
         }
 
         if (showFilesSheet) {
@@ -790,6 +939,7 @@ private fun ChatFilesPickerSheet(
 
 @Composable
 private fun TopBar(
+    hazeState: HazeState,
     settings: Settings,
     conversation: Conversation,
     drawerState: DrawerState,
@@ -806,6 +956,13 @@ private fun TopBar(
         onUpdateTitle(it)
     }
 
+    Surface( // rhTopBarAlignInput
+        modifier = Modifier.hazeBlur(input = HazeInput.Sources(hazeState)), // rhTopBarGlassFix
+        shape = MaterialTheme.shapes.largeIncreased.copy(topStart = CornerSize(0.dp), topEnd = CornerSize(0.dp)), // rhTopBarShape
+        color = Color.Transparent, // rhTopBarGlassFix
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        tonalElevation = 0.dp,
+    ) {
     TopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         navigationIcon = {
@@ -856,7 +1013,32 @@ private fun TopBar(
             }
         },
         actions = {
+            // rh-batch1:native-exit - one tap back to the native chat UI while an HTML skin
+            // is on (the skin file stays; the AI can switch it back with chat_ui_set_mode).
+            if (me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.isReady) {
+                val rhSkinState by me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store
+                    .stateFlow.collectAsStateWithLifecycle()
+                if (rhSkinState.htmlModeEnabled) {
+                    androidx.compose.material3.FilledTonalButton(
+                        onClick = {
+                            me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store.setMode(false)
+                        },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 12.dp,
+                            vertical = 4.dp,
+                        ),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.chat_html_exit_native),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
+            }
             var showShareMenu by remember { mutableStateOf(false) }
+            // rhHideImport: hide import button when conversation already has user messages
+            val rhHasUserMsg = conversation.messageNodes.any { n -> n.messages.any { it.role == me.rerere.ai.core.MessageRole.USER } }
+            if (!rhHasUserMsg) {
             Box {
                 IconButton(
                     onClick = { showShareMenu = true }
@@ -877,6 +1059,7 @@ private fun TopBar(
                     )
                 }
             }
+            }
             IconButton(
                 onClick = {
                     onClickMenu()
@@ -894,6 +1077,7 @@ private fun TopBar(
             }
         },
     )
+    }
     titleState.EditStateContent { title, onUpdate ->
         AlertDialog(
             onDismissRequest = {
@@ -931,3 +1115,4 @@ private fun TopBar(
         )
     }
 }
+

@@ -84,7 +84,10 @@ fun WebDavTab(
     val progress by vm.progress.collectAsStateWithLifecycle()
     val toaster = LocalToaster.current
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+        val scope = rememberCoroutineScope()
+    // rh-batch9: the download progress card sits at the top of this scrollable column, so the
+    // restore flow needs a handle on the scroll position to bring it back on screen.
+    val scrollState = rememberScrollState()
     var showBackupFiles by remember { mutableStateOf(false) }
     var restoringItemId by remember { mutableStateOf<String?>(null) }
     var isBackingUp by remember { mutableStateOf(false) }
@@ -116,9 +119,9 @@ fun WebDavTab(
             .imePadding()
     ) {
         Column(
-            modifier = Modifier
+                        modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -412,25 +415,23 @@ fun WebDavTab(
                         val item = pendingRestoreItem
                         pendingRestoreItem = null
                         showRestoreMode = false
-                        if (item != null) scope.launch {
-                            restoringItemId = item.displayName
-                            runCatching {
-                                vm.restore(item, BackupRestoreMode.MERGE)
-                                toaster.show(context.getString(R.string.backup_page_restore_success), type = ToastType.Success)
-                                showBackupFiles = false
-                                onShowRestartDialog()
-                            }.onFailure { err ->
-                                toaster.show(context.getString(R.string.backup_page_restore_failed, err.message ?: ""), type = ToastType.Error)
-                            }
-                            restoringItemId = null
+                                                // [batch159] 合并走两阶段状态机：下载 → 扫描 → 差异确认 → 应用
+                        // rh-batch9: 先收起文件列表露出下载进度卡片（保留 batch9 行为）
+                        showBackupFiles = false
+                        if (item != null) {
+                            scope.launch { scrollState.scrollTo(0) }
+                            vm.beginWebDavMerge(item)
                         }
                     }) { Text(BackupRestoreMode.MERGE.displayName()) }
                     Button(onClick = {
                         val item = pendingRestoreItem
                         pendingRestoreItem = null
                         showRestoreMode = false
-                        if (item != null) scope.launch {
+                                                if (item != null) scope.launch {
                             restoringItemId = item.displayName
+                            // rh-batch9: see the MERGE branch - reveal the progress card.
+                            showBackupFiles = false
+                            scrollState.scrollTo(0)
                             runCatching {
                                 vm.restore(item, BackupRestoreMode.OVERWRITE)
                                 toaster.show(context.getString(R.string.backup_page_restore_success), type = ToastType.Success)
@@ -461,7 +462,12 @@ private fun WebDavProgressCard(progress: BackupProgress) {
                     val fraction = progress.fraction
                     if (fraction == null) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     else LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), progress = { fraction })
-                    Text("${progress.percent ?: 0}% · ${progress.detail}")
+                    Text(
+                        // rh-batch9: a server that omits the size (no getcontentlength on
+                        // PROPFIND and a chunked GET) has nothing to be a percentage of, so
+                        // show the byte detail on its own instead of a misleading "0%".
+                        progress.percent?.let { "$it% · ${progress.detail}" } ?: progress.detail
+                    )
                     if (progress.total > 0L) Text("${progress.completed} / ${progress.total} bytes")
                 }
             },

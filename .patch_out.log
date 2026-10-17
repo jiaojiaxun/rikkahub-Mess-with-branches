@@ -1,0 +1,3 @@
+batch237: TodoTools OK
+batch237: TodoPlanCard OK
+::notice::batch237 OK - PlanBar mandatory-first (tool description) + show-on-parse (UI gate removed)

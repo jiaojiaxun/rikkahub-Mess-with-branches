@@ -109,7 +109,8 @@ fun AssistantPicker(
 }
 
 @Composable
-private fun AssistantPickerSheet(
+// rhUserAvatarEdit: 公开化(抽屉助手卡片要直接复用)
+fun AssistantPickerSheet(
     settings: Settings,
     currentAssistant: Assistant,
     onAssistantSelected: (Assistant) -> Unit,

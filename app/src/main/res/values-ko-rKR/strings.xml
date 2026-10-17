@@ -1613,5 +1613,10 @@ mDNS 주소: .local 호스트네임을 사용하며, IP를 몰라도 같은 네�
   <string name="setting_update_reminder_pause_days">%1$d일</string>
   <string name="setting_update_reminder_resume_now">지금 재개</string>
   <string name="reasoning_max">최대</string>
+    <!-- rh-batch1 -->
+    <string name="chat_tool_approval_allow_chat">Allow for this chat</string>
+    <string name="chat_tool_approval_allow_always">Always allow</string>
+    <string name="chat_tool_approval_hint">Long-press Allow for more options. Long-press Deny to give a reason.</string>
+    <string name="chat_html_exit_native">Native UI</string>
 </resources>
 

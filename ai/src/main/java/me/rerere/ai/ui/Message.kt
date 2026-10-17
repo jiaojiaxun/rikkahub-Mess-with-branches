@@ -23,7 +23,13 @@ data class UIMessage(
     val finishedAt: LocalDateTime? = null,
     val modelId: Uuid? = null,
     val usage: TokenUsage? = null,
-    val translation: String? = null
+    val translation: String? = null,
+    val finishReason: String? = null, // rhAutoResume
+    // rhQuoteData (UI-1/65): 引用回复目标 id；null=普通消息，旧 JSON 兼容
+    val quotedMessageId: Uuid? = null,
+    // rh-batch2:tps - time the final request spent streaming output (first -> last
+    // chunk), excluding time-to-first-token and tool waits. Null when not measured.
+    val generationMillis: Long? = null
 ) {
     fun summaryAsText(maxLength: Int = Int.MAX_VALUE): String {
         val text = "[${role.name}]: " + parts.joinToString(separator = "\n") { part ->

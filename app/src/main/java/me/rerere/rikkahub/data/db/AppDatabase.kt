@@ -47,7 +47,7 @@ import me.rerere.rikkahub.utils.JsonInstant
         WorkspaceEntity::class,
         FolderEntity::class,
     ],
-    version = 34,
+    version = 37,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -165,6 +165,37 @@ class Migration_33_34 : Migration(33, 34) {
         db.execSQL("ALTER TABLE workspaces_new RENAME TO workspaces")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_workspaces_root ON workspaces(root)")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_workspaces_updated_at ON workspaces(updated_at)")
+    }
+}
+
+// rhParentChat (batch55): v35 adds parent_chat_id to ConversationEntity for the
+// sub-agent folding tree. Pure column addition with a default, mirroring the
+// folder_id column added in v27.
+class Migration_34_35 : Migration(34, 35) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE conversationentity ADD COLUMN parent_chat_id TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+
+// rhWsShell133 (batch133 v6): v36 adds shell_status / shell_compatibility_mode to workspaces.
+// Hand-written migration (not AutoMigration) because 35.json was never committed
+// (batch55_1 bumped version on CI without committing the schema export).
+class Migration_35_36 : Migration(35, 36) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE workspaces ADD COLUMN shell_status TEXT NOT NULL DEFAULT 'DISABLED'")
+        db.execSQL("ALTER TABLE workspaces ADD COLUMN shell_compatibility_mode INTEGER NOT NULL DEFAULT 0")
+    }
+}
+// rhShortMem: v37 adds conversation_id to MemoryEntity for per-conversation short-term memory.
+// Hand-written like 35->36: the 36.json schema export was never committed either.
+class Migration_36_37 : Migration(36, 37) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE memoryentity ADD COLUMN conversation_id TEXT NOT NULL DEFAULT ''")
+        // rhConfigMig234: A2(batch230_conversation_config_db) 的 config 列迁移(AutoMigration 34->35)
+        // 因 version 锚点(仓库态34 vs CI态36)失配被静默 skip, 实体有 config 列而迁移链没有,
+        // v36 设备升级 v37 时 Room 校验崩溃。所有设备均无 config(AutoMigration 从未生效), 直接加列。
+        db.execSQL("ALTER TABLE conversationentity ADD COLUMN config TEXT NOT NULL DEFAULT ''")
     }
 }
 

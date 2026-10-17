@@ -9,6 +9,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -78,12 +79,24 @@ fun ChatMessageNerdLine(
                     val used = contextUsed.coerceAtLeast(0)
                     StatsItem(
                         icon = {
-                            Icon(
-                                imageVector = HugeIcons.Upload02,
-                                contentDescription = "上下文",
-                                tint = textColor,
-                                modifier = Modifier.size(12.dp),
-                            )
+                            if (contextLimit != null && contextLimit > 0) {
+                                val contextRatio = (used.toDouble() / contextLimit.toDouble())
+                                    .coerceIn(0.0, 1.0).toFloat()
+                                CircularProgressIndicator(
+                                    progress = { contextRatio },
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = if (contextRatio >= 0.9f) MaterialTheme.colorScheme.error else textColor,
+                                    trackColor = textColor.copy(alpha = 0.2f),
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = HugeIcons.Upload02,
+                                    contentDescription = "上下文",
+                                    tint = textColor,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
                         },
                         content = {
                             if (contextLimit != null) {

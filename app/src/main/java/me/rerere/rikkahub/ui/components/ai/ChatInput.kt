@@ -83,6 +83,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.PopupProperties
 import com.dokar.sonner.ToastType
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.material3.Material3
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 import me.rerere.ai.provider.Model
@@ -130,6 +135,7 @@ fun ChatInput(
     state: ChatInputState,
     loading: Boolean,
     settings: Settings,
+    hazeState: HazeState,
     enableSearch: Boolean,
     onUpdateSearchMode: (SearchMode) -> Unit,
     modifier: Modifier = Modifier,
@@ -150,6 +156,8 @@ fun ChatInput(
 ) {
     val toaster = LocalToaster.current
     val assistant = settings.getCurrentAssistant()
+    val hazeTintColor = MaterialTheme.colorScheme.surfaceContainerLow
+    val inputHazeStyle = HazeBlurStyle.Material3(containerColor = hazeTintColor)
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
@@ -225,11 +233,18 @@ fun ChatInput(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(containerShape),
+                    .clip(containerShape)
+                    .then(
+                        if (settings.displaySetting.enableBlurEffect) Modifier.hazeBlur(
+                            input = HazeInput.Sources(hazeState),
+                            style = inputHazeStyle,
+                        )
+                        else Modifier
+                    ),
                 shape = containerShape,
                 tonalElevation = 0.dp,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                color = if (settings.displaySetting.enableBlurEffect) Color.Transparent else hazeTintColor,
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -315,9 +330,17 @@ fun ChatInput(
                             val model = settings.getCurrentChatModel()
                             if (model?.abilities?.contains(ModelAbility.REASONING) == true) {
                                 ReasoningButton(
+                                    tavernMode = state.tavernMode, // rhTavernMode
+                                    onUpdateTavernMode = state.onToggleTavernMode,
+                                    squeezeTokenEnabled = state.squeezeTokenEnabled, // rhSqueezeWire
+                                    onUpdateSqueezeToken = state.onToggleSqueezeToken, // rhSqueezeWire
                                     reasoningLevel = assistant.reasoningLevel,
                                     onUpdateReasoningLevel = {
                                         onUpdateAssistant(assistant.copy(reasoningLevel = it))
+                                    },
+                                    streamOutput = assistant.streamOutput, // rhStreamToggle
+                                    onUpdateStreamOutput = { enabled ->
+                                        onUpdateAssistant(assistant.copy(streamOutput = enabled))
                                     },
                                     onlyIcon = true,
                                 )

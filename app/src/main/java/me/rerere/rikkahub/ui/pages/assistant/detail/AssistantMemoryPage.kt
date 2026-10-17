@@ -63,6 +63,7 @@ fun AssistantMemoryPage(id: String) {
     )
     val assistant by vm.assistant.collectAsStateWithLifecycle()
     val memories by vm.memories.collectAsStateWithLifecycle()
+    val conversationTitles by vm.conversationTitles.collectAsStateWithLifecycle() // rhShortMemUI
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
@@ -85,6 +86,7 @@ fun AssistantMemoryPage(id: String) {
             innerPadding = innerPadding,
             assistant = assistant,
             memories = memories,
+            conversationTitles = conversationTitles, // rhShortMemUI
             onUpdateAssistant = { vm.update(it) },
             onDeleteMemory = { vm.deleteMemory(it) },
             onAddMemory = { vm.addMemory(it) },
@@ -98,6 +100,7 @@ private fun AssistantMemoryContent(
     innerPadding: PaddingValues,
     assistant: Assistant,
     memories: List<AssistantMemory>,
+    conversationTitles: Map<String, String>, // rhShortMemUI
     onUpdateAssistant: (Assistant) -> Unit,
     onAddMemory: (AssistantMemory) -> Unit,
     onUpdateMemory: (AssistantMemory) -> Unit,
@@ -178,7 +181,32 @@ private fun AssistantMemoryContent(
                         onCheckedChange = {
                             onUpdateAssistant(
                                 assistant.copy(
-                                    enableMemory = it
+                                    // rhShortMemUI: 长期/短期互斥
+                                    enableMemory = it,
+                                    enableShortMemory = if (it) false else assistant.enableShortMemory
+                                )
+                            )
+                        }
+                    )
+                }
+            )
+            // rhShortMemUI: 短期记忆(会话私有), 与长期记忆互斥
+            item(
+                headlineContent = { Text(stringResource(R.string.assistant_page_short_memory)) },
+                supportingContent = {
+                    Text(
+                        text = stringResource(R.string.assistant_page_short_memory_desc),
+                    )
+                },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.enableShortMemory,
+                        onCheckedChange = {
+                            onUpdateAssistant(
+                                assistant.copy(
+                                    enableShortMemory = it,
+                                    enableMemory = if (it) false else assistant.enableMemory,
+                                    useGlobalMemory = if (it) false else assistant.useGlobalMemory
                                 )
                             )
                         }
@@ -261,30 +289,82 @@ private fun AssistantMemoryContent(
                     .align(Alignment.CenterStart)
             )
 
-            IconButton(
-                onClick = {
-                    memoryDialogState.open(AssistantMemory(0, ""))
-                },
-                modifier = Modifier.align(Alignment.CenterEnd)
-            ) {
-                Icon(
-                    imageVector = HugeIcons.Add01,
-                    contentDescription = null
-                )
+            // rhShortMemUI: 短期记忆必须归属具体会话, 顶部全局添加按钮隐藏(各组有自己的添加按钮)
+            if (!assistant.enableShortMemory) {
+                IconButton(
+                    onClick = {
+                        memoryDialogState.open(AssistantMemory(0, ""))
+                    },
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.Add01,
+                        contentDescription = null
+                    )
+                }
             }
         }
 
-        memories.fastForEach { memory ->
-            key(memory.id) {
-                MemoryItem(
-                    memory = memory,
-                    onEditMemory = {
-                        memoryDialogState.open(it)
-                    },
-                    onDeleteMemory = {
-                        pendingDeleteMemory = it
-                    }
+        if (assistant.enableShortMemory) {
+            // rhShortMemUI: 短期记忆按会话分组
+            val groupedShortMemories = memories.groupBy { it.conversationId }
+            if (groupedShortMemories.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.assistant_page_short_memory_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(8.dp)
                 )
+            }
+            groupedShortMemories.forEach { (convId, convMemories) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = conversationTitles[convId] ?: stringResource(R.string.assistant_page_memory_unknown_conversation),
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = {
+                            memoryDialogState.open(AssistantMemory(0, "", convId))
+                        }
+                    ) {
+                        Icon(HugeIcons.Add01, null)
+                    }
+                }
+                convMemories.fastForEach { memory ->
+                    key(memory.id) {
+                        MemoryItem(
+                            memory = memory,
+                            onEditMemory = {
+                                memoryDialogState.open(it)
+                            },
+                            onDeleteMemory = {
+                                pendingDeleteMemory = it
+                            }
+                        )
+                    }
+                }
+            }
+        } else {
+            memories.fastForEach { memory ->
+                key(memory.id) {
+                    MemoryItem(
+                        memory = memory,
+                        onEditMemory = {
+                            memoryDialogState.open(it)
+                        },
+                        onDeleteMemory = {
+                            pendingDeleteMemory = it
+                        }
+                    )
+                }
             }
         }
     }

@@ -13,6 +13,12 @@ class ChatInputState {
     val textContent = TextFieldState()
     var messageContent by mutableStateOf(listOf<UIMessagePart>())
     var editingMessage by mutableStateOf<Uuid?>(null)
+    // rhTavernMode (会话级酒馆模式):由 ChatVM 注入,页面无需改动
+    var tavernMode by mutableStateOf(false)
+    // rhSqueezeWire: 榨干 token 状态(会话级,由 ChatVM 注入)
+    var squeezeTokenEnabled by mutableStateOf(false)
+    var onToggleSqueezeToken: ((Boolean) -> Unit)? = null
+    var onToggleTavernMode: ((Boolean) -> Unit)? = null
     private var editingParts: List<UIMessagePart>? = null
     private var editingAttachmentUrls: Set<String> = emptySet()
 

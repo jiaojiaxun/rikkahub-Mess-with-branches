@@ -44,7 +44,7 @@ fun createAppControlTools(
                 UIMessagePart.Text(
                     buildJsonObject {
                         put("gateway", "rikkahub_app_control")
-                        put("version", 3)
+                        put("version", 4)
                         put("read_tools", kotlinx.serialization.json.buildJsonArray {
                             add(JsonPrimitive("rikkahub_capabilities"))
                             add(JsonPrimitive("rikkahub_query"))
@@ -65,6 +65,12 @@ fun createAppControlTools(
                             add(JsonPrimitive("rename_provider"))
                             add(JsonPrimitive("toggle_mcp_server"))
                             add(JsonPrimitive("set_web_server"))
+                            add(JsonPrimitive("schedule_cron_job"))
+                            add(JsonPrimitive("list_cron_jobs"))
+                            add(JsonPrimitive("delete_cron_job"))
+                            add(JsonPrimitive("pause_cron_job"))
+                            add(JsonPrimitive("resume_cron_job"))
+                            add(JsonPrimitive("trigger_cron_job"))
                         })
                     }.toString()
                 )
@@ -110,6 +116,12 @@ fun createAppControlTools(
             - rename_provider {provider_id, name}
             - toggle_mcp_server {server_id, enable}
             - set_web_server {enabled?, port?, jwt_enabled?, localhost_only?}
+            - schedule_cron_job {name, cron, prompt, conversation_id?, assistant_id?}
+            - list_cron_jobs {}
+            - delete_cron_job {job_id}
+            - pause_cron_job {job_id}
+            - resume_cron_job {job_id}
+            - trigger_cron_job {job_id}
             All ids are UUIDs. Query first with rikkahub_query to get valid ids.
         """.trimIndent().replace("\n", " "),
         parameters = {

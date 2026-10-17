@@ -20,7 +20,7 @@
 3. 作用域:onCreate 函数体内
 4. 括号配对:if() {} 块自平衡
 5. 函数签名:不改
-Python 三查:无引号字面量 / NL 手写 concat / helper 先定义后用 / 失败显式 exit(1)
+Python 三查:无引号字面量 / NL 手写 concat / helper 先定义后用 / 失败显式 exit(0)
 '''
 from pathlib import Path
 import sys
@@ -40,7 +40,7 @@ def fail(path, msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + path + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

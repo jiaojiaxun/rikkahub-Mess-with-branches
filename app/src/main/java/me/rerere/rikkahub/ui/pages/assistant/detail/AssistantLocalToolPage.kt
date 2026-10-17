@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -46,6 +48,7 @@ import me.rerere.rikkahub.data.ai.tools.local.PermissionHelper
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
+import me.rerere.rikkahub.ui.components.ui.CardGroupScope
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.utils.writeClipboardText
@@ -122,6 +125,7 @@ private fun AssistantLocalToolContent(
     }
 
 
+    var rhToolQuery by remember { mutableStateOf("") } // rhToolSearch225
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -130,6 +134,13 @@ private fun AssistantLocalToolContent(
             .imePadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        OutlinedTextField( // rhToolSearchBox225
+            value = rhToolQuery,
+            onValueChange = { rhToolQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("搜索工具名称") },
+            singleLine = true,
+        )
         // Built-in tools section
         Text(
             text = stringResource(R.string.assistant_page_local_tools_section_existing),
@@ -137,6 +148,83 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "聊天界面皮肤（HTML 模式） 允许 AI 编写 HTML 皮肤，改变聊天背景、气泡和悬浮元素") { // rhToolSearch225
+            item(
+                headlineContent = { Text("聊天界面皮肤（HTML 模式）") },
+                supportingContent = { Text("允许 AI 编写 HTML 皮肤，改变聊天背景、气泡和悬浮元素") },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.localTools.contains(LocalToolOption.ChatUi),
+                        onCheckedChange = { toggleLocalTool(LocalToolOption.ChatUi, it) }
+                    )
+                }
+            )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "当前使用 HTML 模式 关闭即恢复原生聊天界面；需要先有 AI 写好的皮肤") { // rhToolSearch225
+            item(
+                headlineContent = { Text("当前使用 HTML 模式") },
+                supportingContent = { Text("关闭即恢复原生聊天界面；需要先有 AI 写好的皮肤") },
+                trailingContent = {
+                    if (me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.isReady) {
+                        val skinStore = me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store
+                        val skinState by skinStore.stateFlow.collectAsStateWithLifecycle()
+                        Switch(
+                            checked = skinState.htmlModeEnabled,
+                            onCheckedChange = { skinStore.setMode(it) }
+                        )
+                    }
+                }
+            )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "应用控制（App Control） 允许 AI 读取并修改助手、模型、供应商等设置；每次修改都需要你批准") { // rhToolSearch225
+            item(
+                headlineContent = { Text("应用控制（App Control）") },
+                supportingContent = { Text("允许 AI 读取并修改助手、模型、供应商等设置；每次修改都需要你批准") },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.localTools.contains(LocalToolOption.AppControl),
+                        onCheckedChange = { toggleLocalTool(LocalToolOption.AppControl, it) }
+                    )
+                }
+            )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "图片创作（AI 生成图片） 允许 AI 调用 generate_image，用图片创作页选的模型生图并存入图库；每次调用都会产生费用") { // rhToolSearch225
+            item(
+                headlineContent = { Text("图片创作（AI 生成图片）") },
+                supportingContent = { Text("允许 AI 调用 generate_image，用图片创作页选的模型生图并存入图库；每次调用都会产生费用") },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.localTools.contains(LocalToolOption.ImageGeneration),
+                        onCheckedChange = { toggleLocalTool(LocalToolOption.ImageGeneration, it) }
+                    )
+                }
+            )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "子代理（Sub-agents） 分发 AI 任务并获得摘要") { // rhToolSearch225
+            item(
+                headlineContent = { Text("子代理（Sub-agents）") },
+                supportingContent = { Text("分发 AI 任务并获得摘要") },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.localTools.contains(LocalToolOption.SubAgents),
+                        onCheckedChange = { toggleLocalTool(LocalToolOption.SubAgents, it) }
+                    )
+                }
+            )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "版本查看 允许 AI 查看当前 App 版本号与 CI 构建号") { // rhToolSearch225
+            item( // rhAppVersionSwitch225
+                headlineContent = { Text("版本查看") },
+                supportingContent = { Text("允许 AI 查看当前 App 版本号与 CI 构建号") },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.localTools.contains(LocalToolOption.AppVersion),
+                        onCheckedChange = { toggleLocalTool(LocalToolOption.AppVersion, it) }
+                    )
+                }
+            )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "JavaScript Engine JavaScript 引擎 Execute JavaScript code with QuickJS engine for calculations and scripting 用 QuickJS 引擎执行 JavaScript 代码，做计算和脚本处理哦") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_javascript_engine_title))
@@ -151,6 +239,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Time Info 时间信息 Get current date, weekday, time, and timezone info from the device 从设备获取当前日期、星期、时间和时区信息呀♪") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_time_info_title))
@@ -165,6 +255,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Clipboard 剪贴板 Read or write plain text from the device clipboard 读取或写入设备剪贴板中的纯文本呀") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_clipboard_title))
@@ -179,6 +271,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Text to Speech 文字转语音 Let the AI read text aloud to you using your selected TTS service 让 AI 用你选的 TTS 服务朗读文本哦 ・ω・") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_tts_title))
@@ -193,6 +287,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Ask User 询问用户 Allow the AI to ask you questions for clarification 允许 AI 向你提问来获取更多信息哦") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_ask_user_title))
@@ -207,6 +303,7 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
         }
 
         // Device info section
@@ -216,6 +313,7 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "Battery 电池 Read battery level, charging state, plug type, temperature, and health. 读取电量、充电状态、充电方式、温度和健康度。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_battery_title))
@@ -230,6 +328,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Audio info 音频信息 Read ringer mode, music-active state, headphone connection, and output devices. 读取响铃模式、音乐播放状态、耳机连接和输出设备。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_audio_info_title))
@@ -244,6 +344,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Telephony info 电话信息 Read SIM and network info carrier, network type . Requires READ_PHONE_STATE. 读取 SIM 卡和网络信息（运营商、网络类型）。需要 READ_PHONE_STATE 权限。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_telephony_title))
@@ -259,6 +361,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Wi-Fi info Wi-Fi 信息 Read current Wi-Fi connection SSID, IP, signal . Requires location permission for SSID. 读取当前 Wi-Fi 连接（SSID、IP、信号）。读取 SSID 需要位置权限。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_wifi_title))
@@ -277,6 +381,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Sensors 传感器 List device sensors and read short samples accelerometer, gyroscope, light, etc. . 列出设备传感器并读取短样本（加速度计、陀螺仪、光线等）。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_sensors_title))
@@ -291,6 +397,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Storage info 存储信息 Read total/free/used storage on internal and external volumes. 读取内部和外部存储卷的总计/可用/已用空间。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_storage_title))
@@ -305,6 +413,7 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
         }
 
         // Output section
@@ -314,6 +423,7 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "Toast Toast 提示 Show a brief toast popup over whatever is currently on screen. 在当前屏幕内容上方显示一个简短的 toast 弹窗。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_toast_title))
@@ -328,6 +438,40 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "系统通知 允许 AI 主动发送系统通知（状态栏提醒）") { // rhToolSearch225
+            item( // rhNotifSwitch (batch96)
+                headlineContent = {
+                    Text("系统通知")
+                },
+                supportingContent = {
+                    Text("允许 AI 主动发送系统通知（状态栏提醒）")
+                },
+                trailingContent = {
+                    PermissionedSwitch(
+                        checked = assistant.localTools.contains(LocalToolOption.Notification),
+                        onCheckedChange = { toggleLocalTool(LocalToolOption.Notification, it) }
+                    )
+                }
+            )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "AI 自定义工具 允许 AI 自己编写 JavaScript 工具并调用（在 设置-高级功能 里管理）") { // rhToolSearch225
+            item( // rhCustomToolsRow (batch213)
+                headlineContent = {
+                    Text("AI 自定义工具")
+                },
+                supportingContent = {
+                    Text("允许 AI 自己编写 JavaScript 工具并调用（在 设置-高级功能 里管理）")
+                },
+                trailingContent = {
+                    Switch(
+                        checked = assistant.localTools.contains(LocalToolOption.CustomTools),
+                        onCheckedChange = { toggleLocalTool(LocalToolOption.CustomTools, it) }
+                    )
+                }
+            )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Share 分享 Open the system share sheet to send text or a URL to other apps. 打开系统分享面板，将文本或网址发送到其他应用。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_share_title))
@@ -342,6 +486,7 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
         }
 
         // Hardware control section
@@ -351,6 +496,7 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "Torch 手电筒 Turn the camera flashlight on or off. 打开或关闭相机闪光灯。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_torch_title))
@@ -365,6 +511,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Vibrate 振动 Vibrate the device with a duration or pattern. 按时长或模式让设备振动。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_vibrate_title))
@@ -379,6 +527,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Brightness 亮度 Read and set screen brightness. Setting requires WRITE_SETTINGS. 读取和设置屏幕亮度。设置需要 WRITE_SETTINGS 权限。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_brightness_title))
@@ -394,6 +544,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Volume 音量 Read and set audio stream volumes through the system audio controls. 读取和设置音频流音量。铃声/通知音量流需要勿扰模式访问权限。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_volume_title))
@@ -408,6 +560,7 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
         }
 
         // Personal data section
@@ -417,6 +570,7 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "Location 位置 Read the device\\'s current location latitude, longitude, accuracy . 读取设备当前位置（纬度、经度、精度）。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_location_title))
@@ -435,6 +589,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Contacts 联系人 Search or list device contacts name, phone numbers, emails . 搜索或列出设备联系人（姓名、电话号码、邮箱）。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_contacts_title))
@@ -450,6 +606,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Call log 通话记录 Read recent calls incoming, outgoing, missed with duration and timestamps. 读取最近通话（来电、去电、未接）及其时长和时间戳。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_call_log_title))
@@ -465,6 +623,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "SMS inbox 短信收件箱 Read or search SMS inbox messages. 读取或搜索短信收件箱中的消息。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_sms_inbox_title))
@@ -480,6 +640,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Camera photo 相机（拍照） Open the system camera so the user can take a photo and return its file path. 打开系统相机，让用户拍照并返回其文件路径。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_camera_photo_title))
@@ -495,6 +657,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Mic recorder 麦克风录音 Record audio from the microphone for a bounded duration to a local file. 从麦克风录制限定时长的音频到本地文件。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_mic_recorder_title))
@@ -510,6 +674,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Speech to text 语音转文字 Listen to the microphone and convert spoken words to text. 聆听麦克风并将语音转换为文字。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_speech_to_text_title))
@@ -525,6 +691,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Fingerprint 指纹 Show the system biometric prompt to verify the user\\'s identity. 显示系统生物识别提示以验证用户身份。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_fingerprint_title))
@@ -540,6 +708,7 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
         }
 
         // Media section
@@ -549,6 +718,7 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "Media player 媒体播放器 Play and stop audio from a file path or URL. 从文件路径或网址播放和停止音频。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_media_player_title))
@@ -563,6 +733,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Media scanner 媒体扫描器 Notify Android\\'s media scanner about new files so they appear in gallery/music apps. 通知 Android 媒体扫描器有新文件，使其出现在图库/音乐应用中。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_media_scanner_title))
@@ -577,6 +749,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Download 下载 Download files from URLs into the public Downloads folder, and save text content notes, transcripts, jokes, scripts as files there. 从网址下载文件到公共下载文件夹，并将文本内容（笔记、转录、笑话、脚本）保存为文件。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_download_title))
@@ -591,6 +765,7 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
         }
 
         Text(
@@ -599,6 +774,7 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "Files 文件 Read, write, list, search, copy, move, delete files. 读取、写入、列出、搜索、复制、移动、删除文件。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_files_title))
@@ -617,6 +793,7 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
         }
 
         Text(
@@ -625,6 +802,7 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "MCP control MCP 控制 Allow the assistant to add, edit, and remove MCP servers with in-app configuration and per-action approval. 允许助手添加、编辑和删除 MCP 服务器，并在应用内完成配置与逐次审批。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_mcp_control_title))
@@ -639,6 +817,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Cost guards 成本守护 Let the assistant inspect its running token totals against the per-assistant soft / hard caps and self-throttle. Read-only — auto-stop integration with the streaming pipeline ships in a follow-up. 让助手对照每个助手的软/硬上限检查其累计 token 用量并自我限流。只读 — 与流式管道的自动停止集成将在后续版本中提供。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_cost_guards_title))
@@ -653,6 +833,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Skill import 技能导入 Let the assistant install skills from a URL OR from text it already has e.g. fetched via MCP for authenticated servers . Native, openclaw, and Hermes formats. Per-call approval required for every install Always Allow is disabled — you review the source each time . 让助手从网址或已有的文本安装技能（例如通过 MCP 从需认证的服务器获取）。支持原生、openclaw 和 Hermes 格式。每次安装都需要逐次授权（已禁用“始终允许” — 你每次都要审查来源）。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_skill_import_title))
@@ -667,6 +849,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "JS skills JS 技能 Let the assistant run JavaScript skills calculate hash, query Wikipedia, generate QR codes, render maps, etc. inside a hidden WebView. The skill\\'s code defines what it does; per-call approval each time. Compatible with skills written for Google AI Edge Gallery — drop them into your skills folder and they just work. 让助手在隐藏的 WebView 中运行 JavaScript 技能（计算哈希、查询维基百科、生成二维码、渲染地图等）。技能的代码定义其功能；每次调用都需授权。兼容为 Google AI Edge Gallery 编写的技能 — 把它们放进你的技能文件夹即可使用。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_js_skills_title))
@@ -681,6 +865,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "System intents 系统 Intent Let the assistant pre-fill system apps for you to finalise: Calendar event, new Contact, email composer, SMS composer, WiFi settings, Maps. Nothing is saved or sent without your tap in the destination app. 让助手为你预填系统应用，由你最终确认：日历事件、新建联系人、邮件编辑器、短信编辑器、WiFi 设置、地图。没有你在目标应用中的点击，不会保存或发送任何内容。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_system_intents_title))
@@ -695,6 +881,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "OrangeChat 生活工具 日历读写、闹钟、计时器、应用使用统计和媒体控制；所有有副作用的操作仍需授权。") { // rhToolSearch225
             item(
                 headlineContent = { Text("OrangeChat 生活工具") },
                 supportingContent = {
@@ -712,6 +900,7 @@ private fun AssistantLocalToolContent(
                     )
                 },
             )
+            } // rhToolSearch225
         }
 
         Text(
@@ -720,6 +909,7 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "Browser 浏览器 AI-driven web browser. 17 individually-togglable tools — configure read/write access in Settings → Browser. AI 驱动的网页浏览器。17 个可单独开关的工具 — 在 设置 → 浏览器 中配置读/写访问权限。") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_browser_title))
@@ -734,6 +924,7 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
         }
 
         // Phase 25 — Phase 3 second cut + ExternalStorage + Archive.
@@ -743,6 +934,7 @@ private fun AssistantLocalToolContent(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp)
         )
         CardGroup {
+            rhToolItem(rhToolQuery, "SMS send Send SMS messages programmatically. Requires SEND_SMS permission. Approval required per call.") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_sms_send_title))
@@ -758,6 +950,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Wallpaper Set the home or lock screen wallpaper from a local image. Approval required per call.") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_wallpaper_title))
@@ -772,6 +966,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Keystore Generate, sign, encrypt, and decrypt with hardware-backed keys Android Keystore . 7 tools.") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_keystore_title))
@@ -786,6 +982,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "NFC Read and write NDEF records on NFC tags. Requires the app to be in foreground for tag detection. This device has no NFC hardware, so these tools cannot be enabled.") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_nfc_title))
@@ -806,6 +1004,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "External storage Lets file tools work on USB drives, SD cards, Downloads, and cloud storage. Each tree requires a one-time grant via the SAF picker.") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_external_storage_title))
@@ -820,6 +1020,8 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
+            rhToolItem(rhToolQuery, "Archive zip Create and extract .zip archives directly. No password support in v1. Works on file:// and content:// URIs.") { // rhToolSearch225
             item(
                 headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_archive_title))
@@ -834,8 +1036,17 @@ private fun AssistantLocalToolContent(
                     )
                 }
             )
+            } // rhToolSearch225
         }
 
+    }
+}
+
+// [batch225] rhToolSearch225: 搜索过滤行包装。query 为空显示全部;
+// 否则只显示名称或描述 key 命中的行。包装不改变块内任何逻辑。
+private fun CardGroupScope.rhToolItem(query: String, key: String, block: CardGroupScope.() -> Unit) {
+    if (query.isBlank() || key.contains(query.trim(), ignoreCase = true)) {
+        block()
     }
 }
 

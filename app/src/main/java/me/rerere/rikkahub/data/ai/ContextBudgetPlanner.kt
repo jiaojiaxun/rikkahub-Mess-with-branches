@@ -1,5 +1,12 @@
 package me.rerere.rikkahub.data.ai
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import me.rerere.ai.core.InputSchema
+import me.rerere.ai.core.Tool
+import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 
@@ -17,16 +24,19 @@ data class ContextBudgetPlan(
  * that do not report usage fall back to estimating the complete message list.
  */
 object ContextBudgetPlanner {
-    private const val CHARS_PER_TOKEN = 3
+        private const val CHARS_PER_TOKEN = 3
     private const val MESSAGE_OVERHEAD_TOKENS = 8
     private const val MEDIA_PART_TOKENS = 1_024
+    /** Per-tool JSON envelope around the function declaration. */
+    private const val TOOL_SCHEMA_ENVELOPE_TOKENS = 16L
 
     fun plan(
         messages: List<UIMessage>,
         contextLength: Int,
         thresholdPercent: Int,
-        thresholdTokensK: Int? = null,
+                thresholdTokensK: Int? = null,
         reservedTokens: Int = 0,
+        requestOverheadTokens: Long = 0,
     ): ContextBudgetPlan {
         require(contextLength > 0) { "contextLength must be positive" }
         val normalizedThreshold = thresholdPercent.coerceIn(5, 95)
@@ -43,7 +53,7 @@ object ContextBudgetPlanner {
         val triggerTokens = minOf(configuredTriggerTokens.toLong(), safeInputBudget)
             .coerceAtMost(Int.MAX_VALUE.toLong())
             .toInt()
-        val estimatedInputTokens = estimateInputTokens(messages)
+                val estimatedInputTokens = estimateInputTokens(messages, requestOverheadTokens)
         return ContextBudgetPlan(
             estimatedInputTokens = estimatedInputTokens,
             triggerTokens = triggerTokens,
@@ -51,7 +61,10 @@ object ContextBudgetPlanner {
         )
     }
 
-    fun estimateInputTokens(messages: List<UIMessage>): Int {
+        fun estimateInputTokens(
+        messages: List<UIMessage>,
+        requestOverheadTokens: Long = 0,
+    ): Int {
         val usageIndex = messages.indexOfLast { message ->
             val usage = message.usage
             usage != null && (usage.totalTokens > 0 || usage.promptTokens + usage.completionTokens > 0)
@@ -63,8 +76,10 @@ object ContextBudgetPlanner {
             reportedTotal.toLong() +
                 estimatePostUsageToolOutputTokens(messages[usageIndex]) +
                 messages.drop(usageIndex + 1).sumOf(::estimateMessageTokens)
-        } else {
-            messages.sumOf(::estimateMessageTokens)
+                } else {
+            // No provider usage exists to anchor the estimate. Include the request material
+            // that lives outside the message list, or compaction will trigger too late.
+            messages.sumOf(::estimateMessageTokens) + requestOverheadTokens.coerceAtLeast(0)
         }
         return estimate.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
@@ -74,10 +89,57 @@ object ContextBudgetPlanner {
      * This is required after compaction because reported usage belongs to the pre-compaction
      * request and cannot describe the synthetic summary that replaced it.
      */
-    fun estimateContextTokens(messages: List<UIMessage>): Int = messages
-        .sumOf(::estimateMessageTokens)
+        fun estimateContextTokens(
+        messages: List<UIMessage>,
+        requestOverheadTokens: Long = 0,
+    ): Int = (messages.sumOf(::estimateMessageTokens) + requestOverheadTokens.coerceAtLeast(0))
         .coerceAtMost(Int.MAX_VALUE.toLong())
         .toInt()
+
+        /**
+     * Estimates tokens sent outside the message list: system prompt, memory, tool prompts,
+     * and each tool's JSON declaration. Provider usage already includes this for the request
+     * it describes; callers must pass it for local fallback and post-compaction estimates.
+     */
+    fun estimateRequestOverheadTokens(
+        systemPromptText: String,
+        tools: List<Tool>,
+        memoryText: String = "",
+        modelForToolPrompts: Model? = null,
+    ): Long {
+        val promptTokens = estimateTextTokens(systemPromptText) + estimateTextTokens(memoryText)
+        val toolTokens = tools.sumOf { tool ->
+            val toolPromptTokens = modelForToolPrompts?.let { model ->
+                runCatching { tool.systemPrompt(model, emptyList()) }
+                    .getOrDefault("")
+                    .let(::estimateTextTokens)
+            } ?: 0L
+            estimateTextTokens(tool.name) +
+                estimateTextTokens(tool.description) +
+                estimateToolSchemaTokens(tool) +
+                toolPromptTokens +
+                TOOL_SCHEMA_ENVELOPE_TOKENS
+        }
+        return promptTokens + toolTokens
+    }
+
+    private fun estimateToolSchemaTokens(tool: Tool): Long {
+        val schema = runCatching { tool.parameters() }.getOrNull() as? InputSchema.Obj
+            ?: return 0L
+        var tokens = 0L
+        schema.properties.forEach { (name, element) ->
+            tokens += estimateTextTokens(name) + estimateJsonElementTokens(element)
+        }
+        schema.required?.let { tokens += estimateTextTokens(it.joinToString(",")) }
+        return tokens
+    }
+
+    private fun estimateJsonElementTokens(element: JsonElement): Long = when (element) {
+        is JsonObject -> element.keys.sumOf { estimateTextTokens(it) } +
+            element.values.sumOf { estimateJsonElementTokens(it) }
+        is JsonArray -> element.sumOf { estimateJsonElementTokens(it) }
+        is JsonPrimitive -> estimateTextTokens(element.content)
+    }
 
     fun estimateMessageTokens(message: UIMessage): Long {
         val contentTokens = message.parts.sumOf(::estimatePartTokens)

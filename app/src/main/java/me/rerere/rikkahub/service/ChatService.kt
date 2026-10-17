@@ -100,6 +100,9 @@ import me.rerere.rikkahub.data.datastore.getCurrentChatModel
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.getAssistantOf // rhA3Wiring
+import me.rerere.rikkahub.data.model.getChatModelOf // rhA3Wiring
+import me.rerere.rikkahub.data.model.bindConfig
 import me.rerere.rikkahub.data.model.ConversationCompaction
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.AssistantAffectScope
@@ -124,7 +127,23 @@ private const val COMPACTION_REQUEST_TIMEOUT_MS = 3 * 60_000L
 private const val COMPACTION_TOTAL_TIMEOUT_MS = 8 * 60_000L
 private const val COMPACTION_MAX_REQUEST_OUTPUT_TOKENS = 16_384
 private const val MAX_PARALLEL_COMPACTION_REQUESTS = 4
+/**
+ * rh-batch10:title-model-hint - at most one "no title model" hint per hour. A blank title is
+ * retried on every message, so an uncooled hint would pop up per message (the exact spam the
+ * surrounding code avoids for 429s).
+ */
+private const val TITLE_MODEL_HINT_COOLDOWN_MS = 60 * 60 * 1000L
+
 private const val MAX_FULL_CONTEXT_MAP_GROUPS = 8
+
+/**
+ * rh-batch8:auto-compaction-cooldown - minimum gap between two automatic compaction passes of
+ * the same conversation. Automatic compaction is forced after every tool round whose next
+ * request still exceeds the threshold, so without a floor a single long agentic turn becomes
+ * an unbounded series of summarisation requests (what the user sees as "重复请求很多次").
+ * Manual compression and the context-limit recovery pass ignore this cooldown.
+ */
+private const val AUTO_COMPACTION_COOLDOWN_MS = 120_000L
 /**
  * Streaming chunks can arrive once per token. Persisting every chunk rewrites all message nodes
  * and can throttle the provider, while persisting only at the end loses the visible response when
@@ -321,7 +340,16 @@ class ChatService(
      * while the Room transaction was in progress. Removing only the marker we observed avoids
      * dropping that newer dirty state.
      */
-    private val streamingPersistenceSequence = AtomicLong(0L)
+    /**
+ * rh-batch8:auto-compaction-cooldown - elapsed-realtime of the last automatic compaction pass
+ * per conversation (see AUTO_COMPACTION_COOLDOWN_MS).
+ */
+private val lastAutoCompactionAt = ConcurrentHashMap<Uuid, Long>()
+
+/** rh-batch10:title-model-hint - elapsed-realtime of the last hint shown. */
+private val titleModelMissingNotifiedAt = AtomicLong(0L)
+
+private val streamingPersistenceSequence = AtomicLong(0L)
     private val pendingStreamingPersistence = ConcurrentHashMap<Uuid, Long>()
     private val lastStreamingPersistAt = ConcurrentHashMap<Uuid, Long>()
 
@@ -406,6 +434,7 @@ class ChatService(
         ProcessLifecycleOwner.get().lifecycle.removeObserver(lifecycleObserver)
         sessions.values.forEach { it.cleanup() }
         sessions.clear()
+        lastAutoCompactionAt.clear()
         sessionMutexes.clear()
         compactionMutexes.clear()
         persistenceMutexes.clear()
@@ -445,11 +474,13 @@ class ChatService(
         }
         if (sessions.remove(conversationId, session)) {
             session.cleanup()
-            // Evict the per-conversation mutex so it doesn't accumulate forever.
+                        // Evict the per-conversation mutex so it doesn't accumulate forever.
             // dropSession() already removes it; removeSession() (idle eviction path)
             // was previously missing this cleanup, causing a slow leak on heavy-use
             // sessions where many conversations cycle in and out of memory.
             sessionMutexes.remove(conversationId)
+            // rh-batch8:auto-compaction-cooldown - same leak guard for the cooldown map.
+            lastAutoCompactionAt.remove(conversationId)
             compactionMutexes.remove(conversationId)
             if (!pendingStreamingPersistence.containsKey(conversationId)) {
                 persistenceMutexes.remove(conversationId)
@@ -467,9 +498,10 @@ class ChatService(
      * user reset it. Safe to call when no session exists — no-op.
      */
     fun dropSession(conversationId: Uuid) {
-        val session = sessions.remove(conversationId) ?: return
+        val session =         sessions.remove(conversationId) ?: return
         session.cleanup()
         sessionMutexes.remove(conversationId)
+        lastAutoCompactionAt.remove(conversationId)
         compactionMutexes.remove(conversationId)
         pendingStreamingPersistence.remove(conversationId)
         lastStreamingPersistAt.remove(conversationId)
@@ -558,7 +590,7 @@ class ChatService(
 
     // ---- 发送消息 ----
 
-    fun sendMessage(conversationId: Uuid, content: List<UIMessagePart>, answer: Boolean = true) {
+    fun sendMessage(conversationId: Uuid, content: List<UIMessagePart>, answer: Boolean = true, quotedMessageId: Uuid? = null) {
         if (content.isEmptyInputMessage()) return
 
         val session = getOrCreateSession(conversationId)
@@ -592,13 +624,29 @@ class ChatService(
                 val settings = settingsStore.settingsFlow.first()
                 val assistant = settings.getAssistantById(currentConversation.assistantId)
                     ?: settings.getCurrentAssistant()
-                val processedContent = preprocessUserInputParts(content, assistant)
+                // rhQuoteFix (batch95): 把被引消息文本注入,让模型能看到引用内容
+                val quotedContext = quotedMessageId?.let { qid ->
+                    currentConversation.messageNodes
+                        .flatMap { node -> node.messages }
+                        .firstOrNull { msg -> msg.id == qid }
+                        ?.parts
+                        ?.filterIsInstance<UIMessagePart.Text>()
+                        ?.joinToString("\n") { it.text }
+                        ?.takeIf { it.isNotBlank() }
+                }
+                val processedContent = buildList {
+                    if (quotedContext != null) {
+                        add(UIMessagePart.Text("以下是被引用的消息内容:" + "\n" + quotedContext + "\n"))
+                    }
+                    addAll(preprocessUserInputParts(content, assistant))
+                }
 
                 // 添加消息到列表
                 val withUser = currentConversation.copy(
                     messageNodes = currentConversation.messageNodes + UIMessage(
                         role = MessageRole.USER,
                         parts = processedContent,
+                        quotedMessageId = quotedMessageId, // rhQuoteSend
                     ).toMessageNode(),
                 )
                 saveConversation(conversationId, withUser)
@@ -618,6 +666,33 @@ class ChatService(
                 }
 
                 _generationDoneFlow.emit(conversationId)
+
+                // [batch226] rhSqueezeWire: 榨干 token 自动续跑（会话级，与酒馆同一 Store）
+                // 正常完成后每轮存一条「继续」用户消息并再跑生成，直到关开关/停止/达上限。
+                // 刻意不调 sendMessage：它会 cancel 当前 job（自己），必须在同一 job 内循环。
+                val rhSqueezeMaxRounds = 100
+                var rhSqueezeRounds = 0
+                while (answer && !routedHandled && rhSqueezeRounds < rhSqueezeMaxRounds &&
+                    me.rerere.rikkahub.data.datastore.TavernModeStore.isSqueezeTokenEnabled(
+                        context, conversationId.toString()
+                    )
+                ) {
+                    rhSqueezeRounds++
+                    val rhSqueezeConv = session.state.value
+                    saveConversation(
+                        conversationId,
+                        rhSqueezeConv.copy(
+                            messageNodes = rhSqueezeConv.messageNodes + UIMessage(
+                                role = MessageRole.USER,
+                                parts = listOf(UIMessagePart.Text("继续")),
+                            ).toMessageNode(),
+                        ),
+                    )
+                    handleMessageComplete(conversationId)
+                }
+                if (rhSqueezeRounds > 0) {
+                    _generationDoneFlow.emit(conversationId)
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 addError(e, conversationId, title = context.getString(R.string.error_title_send_message))
@@ -1007,6 +1082,23 @@ class ChatService(
         } else {
             toolApprovalPreferences.grantAlways(toolName)
         }
+        // rhSubAgentGrant (batch55-3): 主对话 Always 授权同步到全部子代理对话。
+        // 子代理无独立 UI 面向用户，授权语义上等价于主对话的延伸。
+        grantSubAgents(conversationId, toolName)
+    }
+
+    /** rhSubAgentGrant (batch55-3): 把主对话的授权同步给全部子代理对话。
+     * 子代理用 parentChatId 关联主对话；子代理无独立审批 UI，主对话的授权
+     * 语义延伸到子代理。失败容忍：查询/授权失败仅记日志。 */
+    private suspend fun grantSubAgents(parentChatId: Uuid, toolName: String) {
+        runCatching {
+            val children = conversationRepo.getChildrenOf(parentChatId)
+            children.forEach { child ->
+                me.rerere.rikkahub.data.ai.tools
+                    .ToolApprovalAllowList.grantForChat(child.id, toolName)
+                Log.i(TAG, "Sub-agent grant: " + child.id + " <- " + parentChatId + " for " + toolName)
+            }
+        }.onFailure { Log.w(TAG, "grantSubAgents failed for " + parentChatId, it) }
     }
 
     /** Outcome of [rerunTool]. [Failure.message] is a short, non-localized diagnostic
@@ -1086,10 +1178,8 @@ class ChatService(
                 }
 
                 val settings = settingsStore.settingsFlow.first()
-                val assistant = settings.getAssistantById(conversation.assistantId) ?: settings.getCurrentAssistant()
-                val model = settings.findModelById(
-                    conversation.chatModelId ?: assistant.chatModelId ?: settings.chatModelId
-                ) ?: return RerunToolResult.Failure("no chat model selected")
+                val assistant = settings.getAssistantOf(conversation) // rhA3Wiring
+                val model = settings.getChatModelOf(conversation) ?: return RerunToolResult.Failure("no chat model selected")
 
                 val tools = buildToolsForRerun(assistant, conversationId, conversation, model, settings)
                 val tool = tools.firstOrNull { it.name == toolPart.toolName }
@@ -1184,6 +1274,10 @@ class ChatService(
             modelCanSeeImages = Modality.IMAGE in model.inputModalities,
         )
         addAll(localTools.getTools(assistant.localTools, invocationCtx))
+        // rhPlanBar228: todo_write 计划工具,无副作用仅校验归一化,UI 从消息历史派生计划栏
+        add(me.rerere.rikkahub.data.ai.tools.createTodoTool())
+        // rhAppVersion: version gate (batch225 AppVersion switch)
+        if (assistant.localTools.contains(me.rerere.rikkahub.data.ai.tools.LocalToolOption.AppVersion)) { add(me.rerere.rikkahub.data.ai.tools.local.appVersionTool(context)) } // rhAppVersionGate225
         addAll(pluginToolProvider.getTools())
         addAll(createWorkspaceToolsIfReady(assistant.workspaceId?.toString(), conversation.workspaceCwd))
         if (assistant.enabledSkills.isNotEmpty()) {
@@ -1228,9 +1322,7 @@ class ChatService(
         val initialConversation = getConversationFlow(conversationId).value
         val assistant = settings.getAssistantById(initialConversation.assistantId)
             ?: settings.getCurrentAssistant()
-        val model = settings.findModelById(
-            initialConversation.chatModelId ?: assistant.chatModelId ?: settings.chatModelId
-        )
+        val model = settings.getChatModelOf(initialConversation)
             ?: throw IllegalStateException(
                 "No chat model selected. Pick one in Settings → Default models, or choose a model in Settings."
             )
@@ -1260,6 +1352,12 @@ class ChatService(
         }
         val useExternalWebSearch = shouldUseExternalWebSearch(assistant, model)
 
+                // rh-batch15: system-prompt + tool-schema overhead, measured from the actually
+        // assembled tool list inside the generation call below. Declared at function scope
+        // (before runCatching) so the context-limit recovery path after the block can read
+        // the same figure — that path exists precisely because provider overhead exceeded
+        // the local estimate.
+        val requestOverheadTokens = java.util.concurrent.atomic.AtomicLong(0L)
         val generationResult = runCatching {
             // reset suggestions
             updateConversation(conversationId, initialConversation.copy(chatSuggestions = emptyList()))
@@ -1354,8 +1452,11 @@ class ChatService(
                         // execution result appended afterwards so the threshold reflects the
                         // next request without turning automatic compaction into a preflight
                         // estimate of an otherwise unverified conversation.
-                        val nextRequestTokens = ContextBudgetPlanner
-                            .estimateInputTokens(generatedMessages)
+                                                val nextRequestTokens = ContextBudgetPlanner
+                            .estimateInputTokens(
+                                generatedMessages,
+                                requestOverheadTokens = requestOverheadTokens.get(),
+                            )
                         val triggerTokens = automaticCompactionTriggerTokens(settings, model)
                         if (actualPromptTokens == null ||
                             triggerTokens == null ||
@@ -1374,8 +1475,9 @@ class ChatService(
                                 settings = settings,
                                 assistant = assistant,
                                 model = model,
-                                processingStatus = session.processingStatus,
+                                                                processingStatus = session.processingStatus,
                                 force = true,
+                                requestOverheadTokens = requestOverheadTokens.get(),
                             )
                             compacted.newlyCreatedAutoCompaction?.let { compaction ->
                                 generatedMessages.lastOrNull()
@@ -1402,7 +1504,11 @@ class ChatService(
                 conversationModeInjectionIds = conversation.modeInjectionIds,
                 conversationLorebookIds = conversation.lorebookIds,
                 workspaceCwd = conversation.workspaceCwd,
-                memories = if (assistant.useGlobalMemory) {
+                // rhShortMem: 短期记忆绑定当前会话
+                conversationId = conversationId.toString(),
+                memories = if (assistant.enableShortMemory) {
+                    memoryRepository.getMemoriesOfConversation(assistant.id.toString(), conversationId.toString())
+                } else if (assistant.useGlobalMemory) {
                     memoryRepository.getGlobalMemories()
                 } else {
                     memoryRepository.getMemoriesOfAssistant(assistant.id.toString())
@@ -1414,6 +1520,21 @@ class ChatService(
                 },
                 outputTransformers = outputTransformers,
                 tools = buildList {
+                    // rhTavernMode: 会话级酒馆模式 —— 只留 提示词 + 记忆 + 搜索 + 文件
+                    // 记忆工具在 GenerationHandler 的 toolsInternal 里单独加,不在这里;提示词是 system prompt,不走 tools
+                    val rhTavern = me.rerere.rikkahub.data.datastore.TavernModeStore.isEnabled(context, conversationId.toString())
+                    if (rhTavern) {
+                        if (useExternalWebSearch) {
+                            addAll(createSearchTools(settings))
+                        }
+                        val rhCtx = me.rerere.rikkahub.data.ai.tools.ToolInvocationContext(
+                            callerAssistantId = assistant.id.toString(),
+                            callerConversationId = conversationId.toString(),
+                            modelCanSeeImages = me.rerere.ai.provider.Modality.IMAGE in model.inputModalities,
+                        )
+                        addAll(localTools.getTools(listOf(me.rerere.rikkahub.data.ai.tools.LocalToolOption.Files), rhCtx))
+                        return@buildList
+                    }
                     if (useExternalWebSearch) {
                         addAll(createSearchTools(settings))
                     }
@@ -1427,6 +1548,10 @@ class ChatService(
                         modelCanSeeImages = Modality.IMAGE in model.inputModalities,
                     )
                     addAll(localTools.getTools(assistant.localTools, invocationCtx))
+                    // rhPlanBar228: todo_write 计划工具,无副作用仅校验归一化,UI 从消息历史派生计划栏
+                    add(me.rerere.rikkahub.data.ai.tools.createTodoTool())
+                    // rhAppVersion: version gate (batch225 AppVersion switch)
+                    if (assistant.localTools.contains(me.rerere.rikkahub.data.ai.tools.LocalToolOption.AppVersion)) { add(me.rerere.rikkahub.data.ai.tools.local.appVersionTool(context)) } // rhAppVersionGate225
                     addAll(pluginToolProvider.getTools())
                     addAll(createWorkspaceToolsIfReady(assistant.workspaceId?.toString(), conversation.workspaceCwd))
                     if (assistant.enabledSkills.isNotEmpty()) {
@@ -1496,6 +1621,31 @@ class ChatService(
                             )
                         )
                     }
+                                }.also { assembledTools ->
+                    // Measure the same tool declarations used by the request. Provider usage
+                    // covers these only when it exists; fallback estimates otherwise missed them.
+                    requestOverheadTokens.set(
+                        ContextBudgetPlanner.estimateRequestOverheadTokens(
+                            systemPromptText = buildString {
+                                append(assistant.systemPrompt)
+                                conversation.customSystemPrompt?.takeIf { it.isNotBlank() }?.let {
+                                    appendLine()
+                                    append(it)
+                                }
+                            },
+                            memoryText = (
+                                if (assistant.enableShortMemory) {
+                                    memoryRepository.getMemoriesOfConversation(assistant.id.toString(), conversationId.toString())
+                                } else if (assistant.useGlobalMemory) {
+                                    memoryRepository.getGlobalMemories()
+                                } else {
+                                    memoryRepository.getMemoriesOfAssistant(assistant.id.toString())
+                                }
+                            ).joinToString("\n") { it.content },
+                            tools = assembledTools,
+                            modelForToolPrompts = model,
+                        )
+                    )
                 },
             ).onCompletion { completionCause ->
                 // 可能被取消了，或者意外结束，兜底更新
@@ -1514,6 +1664,23 @@ class ChatService(
                 // user presses Stop so a cancelled job cannot discard its last partial chunk.
                 withContext(NonCancellable) {
                     persistStreamingStateNow(conversationId, updateSearchIndex = true)
+                    
+                    // rhNotifEmit (batch101): 通知管理器消费生成完成
+                    runCatching {
+                        val lastAssistantMsg = updatedConversation.messageNodes
+                            .lastOrNull()?.messages?.lastOrNull { it.role == MessageRole.ASSISTANT }
+                        val preview = lastAssistantMsg?.parts
+                            ?.filterIsInstance<UIMessagePart.Text>()
+                            ?.joinToString("") { it.text }
+                            ?.takeLast(200)
+                        appEventBus.emit(
+                            AppEvent.ChatGenerationEnded(
+                                conversationId = conversationId,
+                                senderName = senderName,
+                                contentPreview = preview,
+                            )
+                        )
+                    }
                 }
 
             }.collect { chunk ->
@@ -1532,6 +1699,13 @@ class ChatService(
                         updateConversation(conversationId, updatedConversation)
                         markStreamingPersistence(conversationId)
                         persistStreamingStateIfDue(conversationId)
+                        
+                        // rhNotifEmit (batch101): 通知管理器消费流式更新
+                        chunk.messages.lastOrNull()?.let { lastMessage ->
+                            appEventBus.tryEmit(
+                                AppEvent.ChatGenerationUpdate(conversationId, lastMessage, senderName)
+                            )
+                        }
 
                         // Persist immediately when a tool transitions to "execution
                         // started but no output yet" — this writes the executionStartedAt
@@ -1584,9 +1758,10 @@ class ChatService(
                     settings = settings,
                     assistant = assistant,
                     model = model,
-                    processingStatus = session.processingStatus,
+                                        processingStatus = session.processingStatus,
                     force = true,
                     compactEntireContext = true,
+                    requestOverheadTokens = requestOverheadTokens.get(),
                 )
             }.onFailure {
                 Log.w(TAG, "Context-limit retry compaction failed", it)
@@ -1786,8 +1961,13 @@ class ChatService(
 
         runCatching {
             val settings = settingsStore.settingsFlow.first()
-            val model = settings.findModelById(settings.titleModelId, fallback = settings.fastModelId)
-                ?: return@runCatching
+                        val model = settings.findModelById(settings.titleModelId, fallback = settings.fastModelId)
+                ?: run {
+                    // rh-batch10:title-model-hint - previously silent, so the conversation just
+                    // stayed untitled with nothing to explain why.
+                    notifyTitleModelUnavailable(conversationId, settings.titleModelId)
+                    return@runCatching
+                }
             val provider = model.findProvider(settings.providers) ?: return@runCatching
             // Same defence as handleLlmTurn: don't burn tokens on a disabled provider.
             if (!provider.enabled) return@runCatching
@@ -1822,6 +2002,31 @@ class ChatService(
             // the generateSuggestion pattern (log only) to keep the surface quiet.
             Log.w(TAG, "generateTitle failed", it)
         }
+    }
+
+        /**
+     * rh-batch10:title-model-hint - surfaces a configuration problem (no usable title model and
+     * no usable fast model) through the normal error stream, rate-limited so it cannot become a
+     * popup per message. Transient failures (429s, network) stay logged only - see the
+     * onFailure branch below.
+     */
+    private fun notifyTitleModelUnavailable(conversationId: Uuid, titleModelId: Uuid?) {
+        val now = SystemClock.elapsedRealtime()
+        val last = titleModelMissingNotifiedAt.get()
+        if (last != 0L && now - last < TITLE_MODEL_HINT_COOLDOWN_MS) return
+        if (!titleModelMissingNotifiedAt.compareAndSet(last, now)) return
+        Log.w(TAG, "generateTitle: no usable model (titleModelId=$titleModelId)")
+                addError(
+            IllegalStateException(
+                "没有可用的标题生成模型。请在 设置 → 模型 中指定标题模型，或至少启用一个提供商。"
+            ),
+            conversationId = conversationId,
+            title = "无法生成标题",
+            // rh-batch13: attach the remedy the error stream already models
+            // (ChatErrorSolution.CheckTitleModelSettings) so the error card can offer a direct
+            // jump to the title-model setting instead of only describing the problem.
+            solution = ChatErrorSolution.CheckTitleModelSettings,
+        )
     }
 
     // ---- 生成建议 ----
@@ -1889,8 +2094,9 @@ class ChatService(
         assistant: Assistant,
         model: Model,
         processingStatus: MutableStateFlow<String?>,
-        force: Boolean = false,
+                force: Boolean = false,
         compactEntireContext: Boolean = false,
+        requestOverheadTokens: Long = 0,
     ): CompactedMessageView {
         var view = loadCompactedMessageView(conversation)
         if (!settings.enableAutoCompaction) {
@@ -1901,10 +2107,28 @@ class ChatService(
             }
         }
 
-        // Automatic compaction is deliberately driven by provider-reported usage after a
+                // Automatic compaction is deliberately driven by provider-reported usage after a
         // tool result, or by an actual context-limit error. Do not estimate the history here
         // and compact before the model has had a chance to execute its tools.
         if (!force) return view
+
+        // rh-batch8:auto-compaction-cooldown - one agentic turn executes many tool rounds, and
+        // every round that still reports an over-threshold prompt used to start another full
+        // map/reduce pass. The cooldown collapses those into at most one pass per window. A
+        // context-limit recovery pass (compactEntireContext) always runs: it is the escape
+        // hatch for the case where the previous pass genuinely did not shrink enough.
+        if (!compactEntireContext) {
+            val lastAt = lastAutoCompactionAt[conversation.id]
+            val nowElapsed = SystemClock.elapsedRealtime()
+            if (lastAt != null && nowElapsed - lastAt < AUTO_COMPACTION_COOLDOWN_MS) {
+                Log.i(
+                    TAG,
+                    "Auto compaction skipped: last pass ran " +
+                        "${nowElapsed - lastAt}ms ago (< ${AUTO_COMPACTION_COOLDOWN_MS}ms)",
+                )
+                return view
+            }
+        }
 
         Log.i(
             TAG,
@@ -1954,7 +2178,10 @@ class ChatService(
                     if (
                         triggerTokens != null &&
                         firstView.rawTailStartIndex < latestConversation.messageNodes.size &&
-                        ContextBudgetPlanner.estimateContextTokens(firstView.messages) >= triggerTokens
+                                                ContextBudgetPlanner.estimateContextTokens(
+                            firstView.messages,
+                            requestOverheadTokens,
+                        ) >= triggerTokens
                     ) {
                         Log.i(
                             TAG,
@@ -1972,6 +2199,9 @@ class ChatService(
                     }.also { newlyCreatedAutoCompaction = it }
                 }
             }
+                        // rh-batch8:auto-compaction-cooldown - stamp the pass even when it was skipped for
+            // lack of new source material, so a long tool loop cannot re-enter immediately.
+            lastAutoCompactionAt[conversation.id] = SystemClock.elapsedRealtime()
             val latestConversation = getConversationFlow(conversation.id).value
             return ContextCompactionView.build(latestConversation, compaction).copy(
                 newlyCreatedAutoCompaction = newlyCreatedAutoCompaction,
@@ -2163,6 +2393,72 @@ class ChatService(
         }
     }
 
+        /**
+     * rh-batch8:truncate-only - drop every message before the retained tail WITHOUT calling a
+     * model. This is the "不总结，只保留最近 N 条" option of the compress dialog: it cannot fail,
+     * cannot time out, and costs no tokens, which is what a user wants when the summarisation
+     * pass keeps re-requesting the same payload or comes back unusable.
+     *
+     * The stored compaction (if any) describes messages that no longer exist, so it is cleared
+     * in the same critical section, before the truncated snapshot is saved.
+     *
+     * Returns the number of dropped message nodes. Throws when there is nothing to drop, so the
+     * caller never silently "succeeds" without doing anything.
+     */
+    suspend fun truncateConversationToRecent(
+        conversationId: Uuid,
+        keepRecentMessages: Int,
+    ): Result<Int> {
+        val releaseForegroundWork = foregroundWorkTracker.acquire()
+        return runCatching {
+            awaitForegroundWorkReady()
+            ensureHydrated(conversationId)
+            compactionMutexFor(conversationId).withLock {
+                val conversation = getConversationFlow(conversationId).value
+                val keep = keepRecentMessages.coerceAtLeast(1)
+                val total = conversation.messageNodes.size
+                if (total <= keep) {
+                    throw IllegalStateException(
+                        context.getString(R.string.chat_page_compress_not_enough_messages)
+                    )
+                }
+                val boundary = total - keep
+                val truncated = conversation.copy(
+                    messageNodes = conversation.messageNodes.subList(boundary, total).toList()
+                )
+                conversationRepo.clearCompaction(conversationId)
+                saveConversation(conversationId, truncated)
+                Log.i(
+                    TAG,
+                    "rh-batch8:truncate-only dropped $boundary node(s) from $conversationId, " +
+                        "kept the last $keep"
+                )
+                boundary
+            }
+        }.also {
+            releaseForegroundWork()
+        }
+    }
+
+    /**
+     * Keeps the manual truncation off the chat screen's coroutine, mirroring
+     * [compressConversationAsync]: deleting a long history rewrites every surviving message node
+     * and must not be cancelled by the user navigating away.
+     */
+    fun truncateConversationToRecentAsync(
+        conversationId: Uuid,
+        keepRecentMessages: Int,
+    ): Job = appScope.launch {
+        truncateConversationToRecent(conversationId, keepRecentMessages)
+            .onFailure { error ->
+                addError(
+                    error,
+                    conversationId = conversationId,
+                    title = "精简对话失败",
+                )
+            }
+    }
+
     private suspend fun awaitForegroundWorkReady() {
         // Reassert the service for every model round. This is cheap when it is already running,
         // and recovers when an OEM reclaimed it between a tool result and the next request.
@@ -2291,17 +2587,49 @@ class ChatService(
                 )
             }
 
-            val result = withTimeout(COMPACTION_REQUEST_TIMEOUT_MS) {
-                providerHandler.generateText(
-                    providerSetting = provider,
-                    messages = listOf(UIMessage.user(prompt)),
-                    params = backgroundTextGenerationParams(model).copy(
-                        maxTokens = requestedTargetTokens,
-                    ),
-                )
+            // rh-batch3:compaction-stream - stream the reply so the UI can show what the
+            // compression model is writing. Providers whose stream fails before any text
+            // arrives fall back to the plain request.
+            val compactionParams = backgroundTextGenerationParams(model).copy(
+                maxTokens = requestedTargetTokens,
+            )
+            val previewId = kotlin.uuid.Uuid.random().toString()
+            val summaryText = withTimeout(COMPACTION_TOTAL_TIMEOUT_MS) {
+                var streamed = listOf(UIMessage.user(prompt))
+                var streamedText = ""
+                try {
+                    val chunkHandler = me.rerere.ai.ui.StreamChunkHandler(model)
+                    providerHandler.streamText(
+                        providerSetting = provider,
+                        messages = streamed,
+                        params = compactionParams,
+                    ).collect { chunk ->
+                        streamed = chunkHandler.handle(streamed, chunk)
+                        val last = streamed.last()
+                        if (last.role == MessageRole.ASSISTANT) {
+                            streamedText = last.toText()
+                            me.rerere.rikkahub.data.ai.CompactionPreviewStore.update(
+                                conversation.id, previewId, streamedText,
+                            )
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (streamedText.isNotBlank()) throw e
+                    Log.w(TAG, "Compaction stream failed, retrying without streaming", e)
+                } finally {
+                    me.rerere.rikkahub.data.ai.CompactionPreviewStore.clear(conversation.id, previewId)
+                }
+                streamedText.trim().ifBlank {
+                    providerHandler.generateText(
+                        providerSetting = provider,
+                        messages = listOf(UIMessage.user(prompt)),
+                        params = compactionParams,
+                    ).message.toText().trim()
+                }
             }
-
-            return result.message.toText().trim()
+            return summaryText
                 .takeIf { it.isNotBlank() }
                 ?: throw IllegalStateException("Failed to generate compressed summary")
         }
@@ -2311,10 +2639,7 @@ class ChatService(
         // context metadata can otherwise turn one large tool result into dozens of tiny serial
         // requests, so switch to the bounded per-tool preview only for that pathological plan.
         val fullSources = messagesToCompress.map(ContextCompactionPlanner::sourceText)
-        val fullSourceGroups = ContextCompactionPlanner.partitionSources(
-            sources = fullSources,
-            maxInputTokens = mapInputBudgetTokens,
-        )
+        val fullSourceGroups = listOf(fullSources) // rhSingleCompress: 单请求不分块
         var sourceGroups = fullSourceGroups
         var usingMapPreviews = false
         if (fullSourceGroups.size > MAX_FULL_CONTEXT_MAP_GROUPS) {
@@ -2356,7 +2681,7 @@ class ChatService(
         var finalSummary: String? = null
         while (finalSummary == null) {
             val passTargetTokens = if (sourceGroups.size == 1) {
-                modelSummaryTargetTokens.coerceAtMost(COMPACTION_MAX_REQUEST_OUTPUT_TOKENS)
+                modelSummaryTargetTokens // rhSingleCompress: 预算=目标值
             } else {
                 ContextCompactionPlanner.mapOutputTargetTokens(
                     finalTargetTokens = ContextCompactionPlanner.intermediateTargetTokens(
@@ -2431,6 +2756,15 @@ class ChatService(
         checkFilesDelete(conversation, session.state.value)
         session.state.value = conversation
     }
+
+    /** [batch234] A4: 设置当前会话的模型 —— 写会话自己的 config.chatModelId, 不动助手。 */
+    suspend fun setConversationModel(conversationId: Uuid, modelId: Uuid) { // rhA4Suspend235
+        val current = getConversationFlow(conversationId).value
+        val bound = current.bindConfig(settingsStore.settingsFlow.value)
+        val updated = bound.copy(config = bound.config?.copy(chatModelId = modelId))
+        updateConversation(conversationId, updated)
+        conversationRepo.updateConversationConfig(updated)
+    } // rhA4SetModel
 
     fun updateConversationState(conversationId: Uuid, update: (Conversation) -> Conversation) {
         // Atomic compare-and-set via StateFlow.update so two concurrent writers can't
@@ -2747,9 +3081,15 @@ class ChatService(
                 )
             }
 
-        val forkConversation = Conversation(
+                val forkConversation = Conversation(
             id = Uuid.random(),
             assistantId = currentConversation.assistantId,
+            // rh-batch14: carry the parent's title over instead of leaving the fork untitled.
+            // A blank title here made generateTitle treat the branch as a brand-new chat and
+            // name it after its own first messages, erasing the lineage. nextForkTitle()
+            // numbers it and strips any pre-existing suffix, so repeated forking cannot stack.
+            // Fully qualified: adding an import here matched an ambiguous anchor (CI #59).
+            title = me.rerere.rikkahub.data.model.nextForkTitle(currentConversation.title),
             messageNodes = copiedNodes,
             customSystemPrompt = currentConversation.customSystemPrompt,
             modeInjectionIds = currentConversation.modeInjectionIds,

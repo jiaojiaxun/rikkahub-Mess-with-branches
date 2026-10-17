@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -133,6 +134,9 @@ class ChatDrawerVM(
         }
     }
 
+    // rhFoldTree (batch55-4b): 查询某主对话的全部子代理对话（折叠树用）
+    fun getChildrenFlow(parentId: Uuid): Flow<List<me.rerere.rikkahub.data.model.Conversation>> = conversationRepo.getChildrenFlowOf(parentId) // rhSubAgentNest
+    
     fun saveScrollPosition(index: Int, offset: Int) {
         savedStateHandle["scrollIndex"] = index
         savedStateHandle["scrollOffset"] = offset

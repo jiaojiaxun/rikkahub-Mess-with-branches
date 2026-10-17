@@ -1767,4 +1767,9 @@
   <string name="browser_ai_action_done">انتهى: %1$s</string>
   <string name="browser_ai_action_stopped">تم الإيقاف بواسطة المستخدم</string>
   <string name="browser_ai_action_failed">فشل: %1$s</string>
+    <!-- rh-batch1 -->
+    <string name="chat_tool_approval_allow_chat">Allow for this chat</string>
+    <string name="chat_tool_approval_allow_always">Always allow</string>
+    <string name="chat_tool_approval_hint">Long-press Allow for more options. Long-press Deny to give a reason.</string>
+    <string name="chat_html_exit_native">Native UI</string>
 </resources>

@@ -7,7 +7,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +26,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -72,16 +76,19 @@ import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.isEmptyUIMessage
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.File02
+import me.rerere.hugeicons.stroke.Sparkles
 import me.rerere.hugeicons.stroke.MusicNote03
 import me.rerere.hugeicons.stroke.Video01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
+import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.translation.TranslationMode
 import me.rerere.rikkahub.data.model.AssistantAffectScope
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.replaceRegexes
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
+import me.rerere.rikkahub.ui.components.richtext.HighlightCodeBlock
 import me.rerere.rikkahub.ui.components.richtext.ZoomableAsyncImage
 import me.rerere.rikkahub.ui.components.richtext.buildMarkdownPreviewHtml
 import me.rerere.rikkahub.ui.components.webview.WebViewContentCache
@@ -98,6 +105,10 @@ import me.rerere.rikkahub.utils.openUrl
 import me.rerere.rikkahub.utils.urlDecode
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.compose.foundation.layout.fillMaxSize // rhAttachCard
+import androidx.compose.foundation.shape.CircleShape // rhAttachCard
+import me.rerere.hugeicons.stroke.Download01 // rhAttachCard
+import me.rerere.rikkahub.utils.fileSizeToString // rhAttachCard
 
 @Composable
 fun ChatMessage(
@@ -131,6 +142,10 @@ fun ChatMessage(
     onToolApproval: ((toolCallId: String, approved: Boolean, reason: String, scope: me.rerere.rikkahub.service.ChatService.ApprovalScope, toolName: String) -> Unit)? = null,
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)? = null,
     onRerunTool: (suspend (toolCallId: String) -> me.rerere.rikkahub.service.ChatService.RerunToolResult)? = null,
+    onQuote: (() -> Unit)? = null, // rhQuoteMenu
+// rhUserAvatarEdit: 点消息处头像/昵称分别弹改头像/改昵称(对话页为唯一编辑入口)
+onChangeUserAvatar: ((Avatar) -> Unit)? = null,
+onEditUserNickname: (() -> Unit)? = null,
 ) {
     // node.selectIndex can be stale (e.g. after a branch/message was removed) or the
     // node can be empty; degrade to the last message, or render nothing, instead of
@@ -173,10 +188,19 @@ fun ChatMessage(
                     message = message,
                     avatar = settings.userAvatar,
                     nickname = settings.userNickname,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                // rhUserAvatarEdit
+                onChangeAvatar = onChangeUserAvatar,
+                onEditNickname = onEditUserNickname,
                 )
             }
         }
+        // rhLiteStream (batch53): 精简流式——流式末条消息纯文本直出, 生成完成自动切回完整渲染
+        if (settings.liteStreamRender && loading && lastMessage) {
+            ProvideTextStyle(textStyle) {
+                LiteStreamingText(parts = message.parts)
+            }
+        } else
         ProvideTextStyle(textStyle) {
             MessagePartsBlock(
                 assistant = assistant,
@@ -271,6 +295,7 @@ fun ChatMessage(
                     navController.navigate(Screen.WebView(contentId = contentId))
                 }
             },
+            onQuote = onQuote,
             onDismissRequest = {
                 showActionsSheet = false
             }
@@ -288,6 +313,28 @@ fun ChatMessage(
 }
 
 @OptIn(FlowPreview::class)
+@Composable
+private fun LiteStreamingText(
+    parts: List<UIMessagePart>,
+) {
+    // rhLiteStream (batch53): 最轻量流式渲染——纯 Text 直出, 跳过 Markdown
+    // 解析/SelectionContainer/ChainOfThought 动画。chunk 只触发一个 Text 重绘。
+    val nl = System.lineSeparator() + System.lineSeparator()
+    val text = parts.filterIsInstance<UIMessagePart.Text>()
+        .joinToString(nl) { it.text }
+    val reasoning = parts.filterIsInstance<UIMessagePart.Reasoning>()
+        .joinToString(nl) { it.reasoning }
+    val combined = buildString {
+        if (reasoning.isNotBlank()) {
+            append(reasoning)
+            append(nl)
+        }
+        append(text)
+        append(" ...")
+    }
+    Text(text = combined, style = MaterialTheme.typography.bodyMedium)
+}
+
 @Composable
 private fun MessagePartsBlock(
     assistant: Assistant?,
@@ -350,6 +397,48 @@ private fun MessagePartsBlock(
     groupedParts.fastForEach { block ->
         when (block) {
             is MessagePartBlock.ThinkingBlock -> {
+                var showSummaryPanel by remember { mutableStateOf(false) } // rhSummaryPanel
+                if (showSummaryPanel) { // rhSummaryPanel
+                    ModalBottomSheet(
+                        onDismissRequest = { showSummaryPanel = false },
+                    ) {
+                        Column( // rhBatch88
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "工具调用（共 " + block.steps.size + " 步）",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            block.steps.filterIsInstance<ThinkingStep.ToolStep>().forEach { step ->
+                                val tool = step.tool
+                                Text(
+                                    text = tool.toolName,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                )
+                                HighlightCodeBlock(
+                                    tool.input,
+                                    "json",
+                                )
+                                if (tool.isExecuted) {
+                                    val outputText = tool.output
+                                        .filterIsInstance<UIMessagePart.Text>()
+                                        .joinToString("\n") { it.text }
+                                    if (outputText.isNotBlank()) {
+                                        HighlightCodeBlock(
+                                            outputText,
+                                            "json",
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 if (block.steps.isNotEmpty()) {
                     val isReasoningOnlyBlock = block.steps.fastAll { it is ThinkingStep.ReasoningStep }
                     // Force-expand whenever any tool step is awaiting approval. Without
@@ -360,11 +449,48 @@ private fun MessagePartsBlock(
                         it is ThinkingStep.ToolStep &&
                             it.tool.approvalState is ToolApprovalState.Pending
                     }
+                    // rhToolProgressBadge: 步骤完成度（N/M）—— 0/4 这样的进度一眼可见
+                    val finishedSteps = block.steps.count { step ->
+                        when (step) {
+                            is ThinkingStep.ToolStep -> step.tool.isExecuted
+                            is ThinkingStep.ServerToolStep -> step.tool.isFinished
+                            is ThinkingStep.ReasoningStep -> true
+                        }
+                    }
+                    val totalSteps = block.steps.size
+                    var toolStepIndex = 0
+                    // rhToolProgressBadge: 折叠态进度徽标 —— 只有正在生成或步骤>=3 时显示
+                    if (loading || totalSteps >= 3) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                imageVector = HugeIcons.Sparkles,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = "$finishedSteps/$totalSteps",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.shimmer(
+                                    isLoading = loading && finishedSteps < totalSteps
+                                ),
+                            )
+                        }
+                    }
                     ChainOfThought(
                         modifier = Modifier.animateContentSize(),
                         steps = block.steps,
+                        collapsedLabel = ToolSummaryMapper.summarize(block.steps), // rhSemanticSummary
                         collapsedAdaptiveWidth = isReasoningOnlyBlock,
                         forceExpanded = hasPendingApproval,
+                        onShowSummary = { showSummaryPanel = true }, // rhSummaryPanel
                         cardColors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
                         ),
@@ -382,6 +508,7 @@ private fun MessagePartsBlock(
                             }
 
                             is ThinkingStep.ToolStep -> {
+                                toolStepIndex++
                                 key(step.tool.toolCallId.ifBlank { step.hashCode().toString() }) {
                                     ChatMessageToolStep(
                                         tool = step.tool,
@@ -390,6 +517,7 @@ private fun MessagePartsBlock(
                                         onToolApproval = onToolApproval,
                                         onToolAnswer = onToolAnswer,
                                         onRerunTool = onRerunTool,
+                                        stepNumber = toolStepIndex,
                                     )
                                 }
                             }
@@ -424,7 +552,12 @@ private fun MessagePartsBlock(
                                     onClick = { onUserMessageClick?.invoke() },
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp)) {
-                                        MarkdownBlock(
+                                        CollapsibleUserText(
+                                    text = part.text,
+                                    enabled = settings.displaySetting.collapseLongUserMessage,
+                                    maxLines = settings.displaySetting.collapseUserMessageLines,
+                                ) {
+                                    MarkdownBlock(
                                             content = part.text.replaceRegexes(
                                                 assistant = assistant,
                                                 scope = AssistantAffectScope.USER,
@@ -432,6 +565,7 @@ private fun MessagePartsBlock(
                                             ),
                                             onClickCitation = handleClickCitation
                                         )
+                                }
                                     }
                                 }
                             } else {
@@ -483,6 +617,8 @@ private fun MessagePartsBlock(
                     }
 
                     is UIMessagePart.Video -> {
+                        // batch25 marker: Video/Audio/Document 封面提取需额外库（Coil video frame），
+                        // 当前统一用 Icon 占位。Image 的 shimmer 占位已实现（isImageLoading 分支）。
                         Surface(
                             tonalElevation = 2.dp,
                             onClick = {
@@ -519,21 +655,52 @@ private fun MessagePartsBlock(
                                 val chooserIndent = Intent.createChooser(intent, null)
                                 context.startActivity(chooserIndent)
                             },
-                            modifier = Modifier,
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.secondaryContainer
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ) {
-                            ProvideTextStyle(MaterialTheme.typography.labelSmall) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(44.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 ) {
-                                    Icon(
-                                        imageVector = HugeIcons.MusicNote03,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp)
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Icon(imageVector = HugeIcons.MusicNote03, contentDescription = null, modifier = Modifier.size(24.dp))
+                                    }
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = part.url.toUri().toFile().name,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.titleSmall,
                                     )
+                                    Text(
+                                        text = "audio · " + runCatching { part.url.toUri().toFile().length().fileSizeToString() }.getOrDefault("未知大小"),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Surface(
+                                    modifier = Modifier.size(36.dp),
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = HugeIcons.Download01,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -575,48 +742,52 @@ private fun MessagePartsBlock(
                                 val chooserIndent = Intent.createChooser(intent, null)
                                 context.startActivity(chooserIndent)
                             },
-                            modifier = Modifier,
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.tertiaryContainer
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ) {
-                            ProvideTextStyle(MaterialTheme.typography.labelSmall) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(44.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 ) {
-                                    when (part.mime) {
-                                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> {
-                                            Icon(
-                                                painter = painterResource(R.drawable.docx),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-
-                                        "application/pdf" -> {
-                                            Icon(
-                                                painter = painterResource(R.drawable.pdf),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-
-                                        else -> {
-                                            Icon(
-                                                imageVector = HugeIcons.File02,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Icon(imageVector = HugeIcons.File02, contentDescription = null, modifier = Modifier.size(24.dp))
                                     }
-
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = part.fileName,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.widthIn(max = 200.dp)
+                                        style = MaterialTheme.typography.titleSmall,
                                     )
+                                    Text(
+                                        text = part.fileName.substringAfterLast('.', "file").uppercase() + " · " + runCatching { part.url.toUri().toFile().length().fileSizeToString() }.getOrDefault("未知大小"),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Surface(
+                                    modifier = Modifier.size(36.dp),
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = HugeIcons.Download01,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -683,6 +854,49 @@ private fun MessagePartsBlock(
                 }
             ) {
                 Text(stringResource(R.string.citations_count, annotations.size))
+            }
+        }
+    }
+}
+
+/** rhQuoteBlock: 引用块——消息上方的引用预览小卡（UI-1 批 b，纯组件）。
+ * 数据由调用方解析后传入；点击回调由调用方处理（跳转/高亮）。 */
+@Composable
+fun ChatMessageQuoteBlock(
+    senderName: String,
+    previewText: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 3.dp, height = 18.dp)
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+            Column {
+                Text(
+                    text = senderName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = previewText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

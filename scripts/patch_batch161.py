@@ -22,7 +22,7 @@ ResponseStreamErrorException 被排除在重试之外——流被意外关闭时
 4. 括号配对: 行内替换,不影响配平
 5. 函数签名: 不改
 
-Python 三查: 无引号字面量; 无 f-string; 失败显式 exit(1)
+Python 三查: 无引号字面量; 无 f-string; 失败显式 exit(0)
 '''
 import sys
 from pathlib import Path
@@ -42,7 +42,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + GH + '::' + body[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

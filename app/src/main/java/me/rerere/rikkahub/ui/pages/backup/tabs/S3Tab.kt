@@ -430,18 +430,8 @@ fun S3Tab(
                         val item = pendingRestoreItem
                         pendingRestoreItem = null
                         showRestoreMode = false
-                        if (item != null) scope.launch {
-                            restoringItemId = item.displayName
-                            runCatching {
-                                vm.restoreFromS3(item, BackupRestoreMode.MERGE)
-                                toaster.show(context.getString(R.string.backup_page_restore_success), type = ToastType.Success)
-                                showBackupFiles = false
-                                onShowRestartDialog()
-                            }.onFailure { err ->
-                                toaster.show(context.getString(R.string.backup_page_restore_failed, err.message ?: ""), type = ToastType.Error)
-                            }
-                            restoringItemId = null
-                        }
+                        // [batch159] 合并走两阶段状态机：下载 → 扫描 → 差异确认 → 应用
+                        if (item != null) vm.beginS3Merge(item)
                     }) { Text(BackupRestoreMode.MERGE.displayName()) }
                     Button(onClick = {
                         val item = pendingRestoreItem

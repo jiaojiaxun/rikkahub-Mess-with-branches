@@ -19,13 +19,15 @@ import java.time.LocalDate
 
 fun buildMemoryTools(
     json: Json,
+    // rhShortMem: true = 短期记忆(会话私有), 描述里向模型申明作用域; 只显示当前模式的介绍
+    sessionScoped: Boolean = false,
     onCreation: suspend (String) -> AssistantMemory,
     onUpdate: suspend (Int, String) -> AssistantMemory,
     onDelete: suspend (Int) -> Unit
 ): List<Tool> = listOf(
     Tool(
         name = "memory_tool",
-        description = """
+        description = (if (sessionScoped) "SCOPE: SHORT-TERM memory, private to THIS conversation only; saved memories will NOT appear in other conversations." + "\n\n" else "") + """
             The memory tool stores long-term information across conversations.
             Use `action` to control the operation: `create` (add), `edit` (update), `delete` (remove).
             - No relevant record: `create` + `content`
