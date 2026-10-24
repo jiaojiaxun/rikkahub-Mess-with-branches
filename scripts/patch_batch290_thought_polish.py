@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch290 v4: thought drawer polish, complete script restored.
+'''batch290 v5: fix unresolved JsonArray reference in favicon helper.
 
-v3 accidentally replaced this file with only a small assertion fragment
-(create_or_update_file is whole-file replacement, not an incremental edit).
-This version restores the complete implementation and fixes the real v2
-self-check bug: JSON accessor checks are scoped to the newly generated
-favicon function, not to the entire pre-existing tools file.
+#519 compile error (read from check-run annotations, not guessed):
+    Unresolved reference 'JsonArray' at ChatMessageTools.kt:124
 
-Six changes remain: expanded chevrons point down; plain reasoning labels
-hide seconds; result blocks open the existing detail sheet; favicon parsing
-uses safe casts; payload previews cap the actual string; tool start times
-feed the elapsed-time header. The file is idempotent via rhDrawer290.
+The helper used `as? JsonArray` but ChatMessageTools.kt only imports
+JsonElement / JsonObject / JsonPrimitive — no JsonArray. Fix: use the
+fully-qualified name `kotlinx.serialization.json.JsonArray` so no new
+import is needed (zero conflict with existing import block).
+
+Everything else identical to v4.
 '''
 import sys
 from pathlib import Path
@@ -601,7 +600,7 @@ private fun rhToolFaviconUrl(tool: UIMessagePart.Tool): String? {
         )
     }.getOrNull()
     val root = content as? JsonObject ?: return null
-    val items = root.get("items") as? JsonArray ?: return null
+    val items = root.get("items") as? kotlinx.serialization.json.JsonArray ?: return null
     val first = items.firstOrNull() as? JsonObject ?: return null
     val url = first.get("url") as? JsonPrimitive ?: return null
     return url.content.takeIf { it.startsWith("http") }
@@ -747,6 +746,9 @@ def part_tools():
         return
     if 'joinToString("\\n")' not in new_favicon:
         add_fail('tools favicon Kotlin newline literal malformed')
+        return
+    if 'kotlinx.serialization.json.JsonArray' not in new_favicon:
+        add_fail('tools favicon missing fully-qualified JsonArray')
         return
     write(TOOLS, new_text)
     note('tools OK: ' + ','.join(applied))
