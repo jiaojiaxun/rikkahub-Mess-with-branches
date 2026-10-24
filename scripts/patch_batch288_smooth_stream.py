@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch288: 流式渲染平滑三件套 —— 打字机匀速 + 块冻结 + 新块淡入
+'''batch288 v3: 流式渲染平滑三件套 —— 打字机匀速 + 块冻结 + 新块淡入
 
 【编号说明】原为 batch285_smooth_stream, 因另一会话的 patch_batch285_per_conversation_model.py
 的 DIAG 也是 ci_diag_batch285.txt(会互相覆盖诊断文件), 改名 batch288 + 独立 diag 名。
 内部 Kotlin 标记保持 rhSmoothStream285(幂等标记, 与 batch242 的 rhSplitStreamingBlocks
-不同名), 内容与 v2 完全一致。
+不同名)。
 
-【v2 修正: 500ms 延迟门曾被 LaunchedEffect 重启杀死】
-v1 把 delay(500) 放在 drive() 里, 而驱动方是 LaunchedEffect(active, len) ——
-每 80ms 一次新 chunk 就取消旧协程, delay 被打断, 而 started 已在 delay 前置位,
-实际延迟只剩 ~80ms。v2 拆成:
-  · awaitStartDelay(active): 独立 LaunchedEffect(active) 内跑, 只受 active 键影响,
-    delay 完再置 started
-  · drive() 里 if (!started) return —— 延迟未结束不推进
-另修: clip(latest, active) 对"从未流式过的历史消息"(started=false, revealed=0)
-直接返回全文, 消除首帧空白, 且不重放动画。
+【v3 修正: 首个大块文本绕过 0.5s 缓冲 + 缓冲后无 chunk 卡空白】
+v2 的 INSTANT_LEN(>=64 snapTo) 分支本意是"滚动重建不重放", 但无法与
+"流式第一帧就是大 chunk"区分 => 首块 >=64 字符直接全量蹦出, 打字机被绕过。
+v3 用 rememberSaveable 的 everDriven 判定重建:
+  · 首次组合(rhIsRebuild=false): 走打字机(含首块大 chunk, 积压平滑追赶)
+  · 滚动重建(everDriven 被 SaveableStateHolder 恢复为 true): snapTo 全量, 不重放
+  · 历史消息(loading=false): clip 直通, 逐字节不变
+另修: v2 的 awaitStartDelay 在独立 LaunchedEffect 跑完后, 若没有新 chunk 到来
+drive 不会重启 => 显示卡空白。v3 改"累计式缓冲门"(startAtMillis 时间戳):
+drive 内部 delay 剩余时间, 被 LaunchedEffect 重启取消后下次只等剩余部分,
+缓冲结束后同一协程立即推进, 不再依赖下一个 chunk。
+  · 删 awaitStartDelay/独立 LaunchedEffect/INSTANT_LEN/driven
+  · drive(targetLen, active, isRebuild) 三参, isRebuild 取代 INSTANT_LEN 判定
 
 【用户诉求】流式"一顿一顿的变速" -> 0.5s 延迟缓冲 + 匀速输出 + 文字淡入。
 【根因】ChatService 80ms sample(batch258) 后每帧增量不可预测(一次蹦 0~N 字符),
@@ -30,24 +34,26 @@ Markdown 全文重组合且无打字整流层。
    +import androidx.compose.runtime.key。
    —— batch242 的冻结在当前链上零落地(snapshot 实读 MarkdownBlock 无 marker,
    其 fail 被 warn-only 吞), 本批换名重实现, 不依赖它。
-3. ChatMessage.kt: ContentBlock Text 分支插打字机状态+两个 LaunchedEffect,
+3. ChatMessage.kt: ContentBlock Text 分支插打字机状态(rhTw+rhEverDriven+rhIsRebuild),
    两处助手 MarkdownBlock content=part.text -> content=rhShownText,
    助手分支包 CompositionLocalProvider(LocalRhStreamFade provides rhStreamActive)。
 
 【行为边界】用户消息/历史消息(loading=false 且从未流式)逐字节不变;
 hasHtml 消息打字机照常但冻结/淡入不覆盖; 表格单元格默认 LocalRhStreamFade=false;
 重生成 clip 的 len>=latest.length 检查保证越界安全。
+已知退化(诚实标注): LazyColumn 的 items 若不带 key, rememberSaveable 在 item
+滚出屏重建后不恢复 => 生成中消息滚出屏再回来会从 0 重放打字(不丢字, 只是动画)。
 
 五查:
- 1. import: Markdown.kt +1 key; ChatMessage.kt +3; SmoothStream.kt 新文件 15 条。
+ 1. import: Markdown.kt +1 key; ChatMessage.kt +4(CompositionLocalProvider/
+    LocalRhStreamFade/RhTypewriterState/rememberSaveable); SmoothStream.kt 新文件 15 条。
  2. 同文件冲突: Markdown.kt 在链 batch24/144(Paragraph rpStyleRules 区域)不重叠,
-    batch242 未落地已核; ChatMessage.kt 在链 53/76/88/249 均不在 textContent 锚点带;
-    batch285_per_conversation_model(PreferencesStore/ConversationConfig/ChatVM/ChatPage/
-    SettingPreferencesUIPage) 与 batch286/287 同族, 与本批零文件重叠。
+    batch242 未落地已核; ChatMessage.kt 在链 53/76/88/249 均不在 textContent 锚点带,
+    286/289 的 ThinkingBlock slice 与本批 ContentBlock 落点不相交。
  3. 作用域: 打字机块在 ContentBlock key(block.index) 内; rhShownText 在 lambda 外定义
     lambda 内捕获; 新符号均 richtext 包文件级。
  4. 括号配对: 三文件 balance 前后一致断言; 新块自身配平已逐块数过。
- 5. 函数签名: 零改动。
+ 5. 函数签名: drive 加 isRebuild 形参(调用点同脚本同步); 其余零改动。
 Python 三查: 引号 Q/SQ 变量构造; Kotlin 多行块用 raw 三引号字面量;
 NL 显式 concat 禁 join/f-string/walrus; helper 先定义后用; 每部分独立 try 捕获继续;
 失败 ::error + ci_diag_batch288_smooth_stream.txt 落盘。
@@ -131,23 +137,21 @@ import kotlinx.coroutines.delay
 internal val LocalRhStreamFade = compositionLocalOf { false }
 
 // 打字机参数:
-// START_DELAY  首批内容到达后先攒 0.5s, 吃到足够 buffer 再开始吐字
+// START_DELAY  首批内容到达后先攒 0.5s, 吃到足够 buffer 再开始吐字。
+//              累计式计时: drive 被重启后只等剩余部分, 缓冲结束立即推进。
 // BASE_RATE    基础吐字速率(字符/秒); 低于多数模型到达率, 平滑层始终工作
 // CATCHUP      积压追赶窗口(秒); 积压大时 rate 提升到 backlog/CATCHUP,
 //              显示最多落后约 1.5s, 速率随积压连续变化(无跳变, 观感匀速)
 // FINISH_MS    生成结束后的冲线时长(剩余字符快速补完)
-// INSTANT_LEN  组合销毁重建(滚动出屏再回来)时, 已有内容超过该长度直接全量,
-//              避免滚动回来重放打字机
 private const val RH_TW_START_DELAY_MS = 500L
 private const val RH_TW_BASE_RATE = 24f
 private const val RH_TW_CATCHUP_WINDOW_S = 1.5f
 private const val RH_TW_FINISH_MS = 220
-private const val RH_TW_INSTANT_LEN = 64
 
 internal class RhTypewriterState {
     private val revealed = Animatable(0f)
     private var started = false
-    private var driven = false
+    private var startAtMillis = 0L
 
     // 读取当前应显示的文本(组合期调用, 无副作用)。
     // 从未流式过的历史消息(started=false, revealed=0)直通全文, 零帧空白。
@@ -157,16 +161,10 @@ internal class RhTypewriterState {
         return if (len >= latest.length) latest else latest.substring(0, len)
     }
 
-    // 初始缓冲门: 必须在只依赖 active 的独立 LaunchedEffect 里调用,
-    // 否则会随每个 chunk 重启而被取消(v1 的 bug, v2 修正)。
-    suspend fun awaitStartDelay(active: Boolean) {
-        if (!active || started) return
-        delay(RH_TW_START_DELAY_MS)
-        started = true
-    }
-
     // 驱动动画: target 变化时由 LaunchedEffect 重启, 从当前 revealed 匀速推进。
-    suspend fun drive(targetLen: Int, active: Boolean) {
+    // isRebuild=true 表示"滚动出屏后重建"(everDriven 由 rememberSaveable 恢复),
+    // 直接 snapTo 全量, 不重放打字机; 首块大 chunk 不属于重建, 照常走打字机。
+    suspend fun drive(targetLen: Int, active: Boolean, isRebuild: Boolean) {
         if (!active) {
             if (revealed.value < targetLen) {
                 if (!started && revealed.value == 0f) {
@@ -179,15 +177,18 @@ internal class RhTypewriterState {
             return
         }
         if (targetLen <= 0) return
-        if (!driven) {
-            driven = true
-            if (targetLen >= RH_TW_INSTANT_LEN) {
-                // 滚动销毁重建: 已有内容直接全量, 不重放
-                revealed.snapTo(targetLen.toFloat())
-                return
-            }
+        if (isRebuild) {
+            revealed.snapTo(targetLen.toFloat())
+            return
         }
-        if (!started) return
+        if (!started) {
+            // 累计式缓冲门: 反复被 LaunchedEffect 重启也不会超过总 500ms,
+            // 缓冲结束后同一协程立即推进(不依赖下一个 chunk 到来)。
+            if (startAtMillis == 0L) startAtMillis = System.currentTimeMillis()
+            val remain = RH_TW_START_DELAY_MS - (System.currentTimeMillis() - startAtMillis)
+            if (remain > 0) delay(remain)
+            started = true
+        }
         val backlog = targetLen - revealed.value
         if (backlog <= 0f) return
         val rate = maxOf(RH_TW_BASE_RATE, backlog / RH_TW_CATCHUP_WINDOW_S)
@@ -286,9 +287,14 @@ def part_smoothstream():
     for need in ['class RhTypewriterState', 'fun RhFadeIn(',
                  'fun rhSplitStreamBlocks285(', 'LocalRhStreamFade',
                  'rememberSaveable', 'RH_TW_START_DELAY_MS = 500L',
-                 'suspend fun awaitStartDelay(active: Boolean)']:
+                 'suspend fun drive(targetLen: Int, active: Boolean, isRebuild: Boolean)',
+                 'startAtMillis']:
         if need not in SMOOTH_STREAM_KT:
             note('ABORT selfcheck missing ' + need)
+            raise SystemExit(1)
+    for bad in ['awaitStartDelay', 'INSTANT_LEN', 'RH_TW_INSTANT_LEN']:
+        if bad in SMOOTH_STREAM_KT:
+            note('ABORT selfcheck stale symbol ' + bad)
             raise SystemExit(1)
     note('smoothstream OK: new file written chars=' + str(len(SMOOTH_STREAM_KT)))
 
@@ -403,16 +409,17 @@ def part_markdown():
     note('markdown OK: freeze loop + chunk children + key import wired')
 
 
-TYPEWRITER_BLOCK = r'''// rhSmoothStream285: 打字机匀速渲染。0.5s 初始缓冲后恒定速率吐字,
-                        // 积压平滑提速(显示最多落后约 1.5s), 生成结束 220ms 冲线;
-                        // 滚动销毁重建(len>=64)直接全量不重放。
+TYPEWRITER_BLOCK = r'''// rhSmoothStream285: 打字机匀速渲染。0.5s 累计缓冲后恒定速率吐字,
+                        // 积压平滑提速(显示最多落后约 1.5s), 生成结束 220ms 冲线。
+                        // everDriven 经 rememberSaveable 跨组合保存: 滚动出屏重建时
+                        // rhIsRebuild=true -> 直接全量, 不重放; 首块大 chunk 照常打字。
                         val rhTw = remember { RhTypewriterState() }
                         val rhStreamActive = role != MessageRole.USER && loading
-                        LaunchedEffect(rhStreamActive) {
-                            rhTw.awaitStartDelay(rhStreamActive)
-                        }
+                        val rhEverDriven = rememberSaveable { mutableStateOf(false) }
+                        val rhIsRebuild = remember { rhEverDriven.value }
                         LaunchedEffect(rhStreamActive, part.text.length) {
-                            rhTw.drive(part.text.length, rhStreamActive)
+                            if (rhStreamActive && !rhIsRebuild) rhEverDriven.value = true
+                            rhTw.drive(part.text.length, rhStreamActive, rhIsRebuild)
                         }
                         val rhShownText = rhTw.clip(part.text, rhStreamActive)
 '''
@@ -479,7 +486,10 @@ def part_chatmessage():
 
     imp1 = find_unique(lines, 'import androidx.compose.runtime.Composable',
                        'chatmessage composable import')
-    lines = lines[:imp1 + 1] + ['import androidx.compose.runtime.CompositionLocalProvider // rhSmoothStream285'] + lines[imp1 + 1:]
+    lines = lines[:imp1 + 1] + [
+        'import androidx.compose.runtime.CompositionLocalProvider // rhSmoothStream285',
+        'import androidx.compose.runtime.saveable.rememberSaveable // rhSmoothStream285',
+    ] + lines[imp1 + 1:]
     imp2 = find_unique(lines, 'import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock',
                        'chatmessage markdownblock import')
     lines = lines[:imp2 + 1] + [
@@ -493,22 +503,28 @@ def part_chatmessage():
         raise SystemExit(1)
     checks = [
         'RhTypewriterState()',
-        'rhTw.awaitStartDelay(rhStreamActive)',
-        'rhTw.drive(part.text.length, rhStreamActive)',
+        'rhTw.drive(part.text.length, rhStreamActive, rhIsRebuild)',
         'rhTw.clip(part.text, rhStreamActive)',
+        'rememberSaveable { mutableStateOf(false) }',
+        'val rhIsRebuild = remember { rhEverDriven.value }',
         'CompositionLocalProvider(LocalRhStreamFade provides rhStreamActive)',
         'content = rhShownText.replaceRegexes(',
         'import me.rerere.rikkahub.ui.components.richtext.RhTypewriterState',
+        'import androidx.compose.runtime.saveable.rememberSaveable',
     ]
     for need in checks:
         if need not in t2:
             note('ABORT chatmessage selfcheck missing ' + need)
             raise SystemExit(1)
+    for bad in ['awaitStartDelay']:
+        if bad in t2:
+            note('ABORT chatmessage stale symbol ' + bad)
+            raise SystemExit(1)
     if t2.count('content = part.text.replaceRegexes(') != 1:
         note('ABORT chatmessage user content left != 1')
         raise SystemExit(1)
     p.write_text(t2, encoding='utf-8')
-    note('chatmessage OK: typewriter + provider + 2 content swaps wired')
+    note('chatmessage OK: typewriter + rebuild flag + provider + 2 content swaps wired')
 
 
 def write_diag():
