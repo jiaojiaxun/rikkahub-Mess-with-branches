@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch290 v6: minimal anchored polish on top of batch289.
+'''batch290 v7: minimal anchored drawer polish.
 
-This deliberately does NOT carry a second full copy of RhThoughtDrawer.kt.
-The CI chain has already applied 286 and 289 before this script; edit only
-the verified anchors in that tree. This avoids whole-file replacement
-mistakes and keeps the patch small and reviewable.
+Runs after batch286/289 in the CI chain. No duplicate full Kotlin file.
+Each source file is checked before a single write; all edits are idempotent.
 
-All edits are idempotent and each file is written once, after its checks.
+UI rules:
+- expanded chevrons point down; opened levels use solid dots;
+- the group drawer controls only tool steps, never hides reasoning steps;
+- reasoning plainLabel hides the seconds in the extra slot;
+- result blocks open the existing detail sheet;
+- favicon parsing is shape-safe and JsonArray is fully qualified;
+- preview strings are capped before Compose layout;
+- Tool.executionStartedAt supplies a start time for tool-only blocks.
 '''
 import sys
 from pathlib import Path
@@ -36,10 +41,6 @@ def read(rel):
     return (ROOT / rel).read_text(encoding='utf-8')
 
 
-def write(rel, text):
-    (ROOT / rel).write_text(text, encoding='utf-8')
-
-
 def replace_once(text, old, new, label):
     count = text.count(old)
     if count != 1:
@@ -48,7 +49,7 @@ def replace_once(text, old, new, label):
     return text.replace(old, new, 1)
 
 
-def insert_after_line(text, anchor, addition, label):
+def insert_after(text, anchor, addition, label):
     if addition.strip() in text:
         return text
     lines = text.split(NL)
@@ -65,7 +66,7 @@ def insert_after_line(text, anchor, addition, label):
 def balanced(text):
     return (text.count('(') == text.count(')') and
             text.count('{') == text.count('}') and
-            text.count('[') == text.count(']'))
+            text.count('[') == text.count(']')
 
 
 def part_drawer():
@@ -73,10 +74,9 @@ def part_drawer():
     if MARK in text:
         note('drawer already at 290')
         return
-    if 'rhDrawer289' not in text:
-        fail('drawer prerequisite rhDrawer289 missing')
+    if 'fun RhThoughtDrawer(' not in text or 'fun RhToolJsonBlock(' not in text:
+        fail('drawer prerequisite missing')
         return
-    original = text
     text = text.replace('import me.rerere.hugeicons.stroke.ArrowUp01',
                         'import me.rerere.hugeicons.stroke.ArrowDown01')
     text = text.replace('HugeIcons.ArrowUp01', 'HugeIcons.ArrowDown01')
@@ -84,14 +84,31 @@ def part_drawer():
                         '.background(MaterialTheme.colorScheme.surfaceContainerHighest)')
     text = replace_once(text, 'modifier = Modifier.weight(1f, fill = false),',
                         'modifier = Modifier.weight(1f),', 'drawer header weight')
+
+    # A group is a drawer for tools, not a second switch for reasoning.
+    old_group = '''                if (groupOpened) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        steps.fastForEach { step ->
+                            scope.content(step)
+                        }
+                    }
+                }'''
+    new_group = '''                Column(modifier = Modifier.fillMaxWidth()) {
+                    steps.fastForEach { step ->
+                        if (step is ThinkingStep.ReasoningStep || groupOpened) {
+                            scope.content(step)
+                        }
+                    }
+                }'''
+    text = replace_once(text, old_group, new_group, 'group/reasoning visibility')
+
     text = replace_once(text, '    label: String = "",\n',
                         '    label: String = "",\n    onExpand: (() -> Unit)? = null,\n    previewLimit: Int = 0,\n',
                         'json block parameters')
-    old_body = '''    val body = text.trim()
+    text = replace_once(text, '''    val body = text.trim()
     if (body.isEmpty()) {
         return
-    }'''
-    new_body = '''    val raw = text.trim()
+    }''', '''    val raw = text.trim()
     if (raw.isEmpty()) {
         return
     }
@@ -99,12 +116,11 @@ def part_drawer():
         raw.take(previewLimit) + " ..."
     } else {
         raw
-    }'''
-    text = replace_once(text, old_body, new_body, 'json preview body')
+    }''', 'json preview body')
     text = replace_once(text, '            text = body,', '            text = shown,', 'json preview text')
-    old_modifier = '''            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .padding(horizontal = 12.dp, vertical = 10.dp),'''
-    new_modifier = '''            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+    text = replace_once(text, '''            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(horizontal = 12.dp, vertical = 10.dp),''',
+                        '''            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .then(
                 if (onExpand != null) {
                     Modifier.clickable { onExpand() }
@@ -112,14 +128,13 @@ def part_drawer():
                     Modifier
                 }
             )
-            .padding(horizontal = 12.dp, vertical = 10.dp),'''
-    text = replace_once(text, old_modifier, new_modifier, 'json expand modifier')
-    old_start = '''private fun rhStepsStartMillis(steps: List<ThinkingStep>): Long? {
+            .padding(horizontal = 12.dp, vertical = 10.dp),''',
+                        'json expand modifier')
+    text = replace_once(text, '''private fun rhStepsStartMillis(steps: List<ThinkingStep>): Long? {
     return steps.filterIsInstance<ThinkingStep.ReasoningStep>()
         .map { it.reasoning.createdAt.toEpochMilliseconds() }
         .minOrNull()
-}'''
-    new_start = '''private fun rhStepsStartMillis(steps: List<ThinkingStep>): Long? {
+}''', '''private fun rhStepsStartMillis(steps: List<ThinkingStep>): Long? {
     val candidates = mutableListOf<Long>()
     steps.filterIsInstance<ThinkingStep.ReasoningStep>().forEach { step ->
         candidates.add(step.reasoning.createdAt.toEpochMilliseconds())
@@ -130,26 +145,23 @@ def part_drawer():
         }
     }
     return candidates.minOrNull()
-}'''
-    text = replace_once(text, old_start, new_start, 'tool start time')
+}''', 'tool start time')
     text = text.replace('package me.rerere.rikkahub.ui.components.message\n',
                         'package me.rerere.rikkahub.ui.components.message\n\n// rhDrawer290\n', 1)
-    if text == original:
-        fail('drawer no changes produced')
-        return
     if not balanced(text):
         fail('drawer unbalanced after edits')
         return
-    for token in ['ArrowDown01', 'onExpand: (() -> Unit)? = null',
-                  'previewLimit: Int = 0', 'executionStartedAt', 'surfaceContainerHighest']:
+    for token in ['ArrowDown01', 'step is ThinkingStep.ReasoningStep || groupOpened',
+                  'onExpand: (() -> Unit)? = null', 'previewLimit: Int = 0',
+                  'executionStartedAt', 'surfaceContainerHighest']:
         if token not in text:
             fail('drawer missing ' + token)
             return
     if 'ArrowUp01' in text:
         fail('drawer still has ArrowUp01')
         return
-    write(DRAWER, text)
-    note('drawer OK: anchored polish')
+    (ROOT / DRAWER).write_text(text, encoding='utf-8')
+    note('drawer OK: anchored polish and independent reasoning rows')
 
 
 def part_reasoning():
@@ -157,12 +169,12 @@ def part_reasoning():
     if MARK in text:
         note('reasoning already at 290')
         return
-    old = 'if (showThinkingTitle && state.duration > 0.seconds) {'
-    new = 'if (!plainLabel && showThinkingTitle && state.duration > 0.seconds) { // ' + MARK
-    text = replace_once(text, old, new, 'reasoning extra guard')
+    text = replace_once(text, 'if (showThinkingTitle && state.duration > 0.seconds) {',
+                        'if (!plainLabel && showThinkingTitle && state.duration > 0.seconds) { // ' + MARK,
+                        'reasoning extra guard')
     if MARK not in text:
         return
-    write(REASON, text)
+    (ROOT / REASON).write_text(text, encoding='utf-8')
     note('reasoning OK: plain label hides seconds')
 
 
@@ -171,7 +183,6 @@ def part_tools():
     if MARK in text:
         note('tools already at 290')
         return
-    original = text
     start_marker = 'private fun rhToolFaviconUrl(tool: UIMessagePart.Tool): String? {'
     start = text.find(start_marker)
     if start < 0:
@@ -188,11 +199,9 @@ def part_tools():
     if (direct != null && direct.startsWith("http")) {
         return direct
     }
-    val content = runCatching {
-        JsonInstant.parseToJsonElement(
-            tool.output.filterIsInstance<UIMessagePart.Text>().joinToString(" ") { it.text }
-        )
-    }.getOrNull()
+    val outputText = tool.output.filterIsInstance<UIMessagePart.Text>()
+        .joinToString("\\n") { it.text }
+    val content = runCatching { JsonInstant.parseToJsonElement(outputText) }.getOrNull()
     val root = content as? JsonObject ?: return null
     val items = root.get("items") as? kotlinx.serialization.json.JsonArray ?: return null
     val first = items.firstOrNull() as? JsonObject ?: return null
@@ -200,21 +209,12 @@ def part_tools():
     return url.content.takeIf { it.startsWith("http") }
 }'''
     text = text[:start] + new_function + text[end:]
-    text = insert_after_line(text, 'text = tool.input,', 'previewLimit = 1200, // ' + MARK, 'args preview')
-    result_anchor = 'text = tool.output.filterIsInstance<UIMessagePart.Text>().joinToString("\\n") { it.text },'
-    if result_anchor not in text:
-        fail('result text anchor missing')
-        return
-    text = text.replace(result_anchor, result_anchor + NL + '        previewLimit = 2400, // ' + MARK, 1)
-    expand_anchor = 'showExpandIcon = true, // rhDrawer289'
-    if expand_anchor not in text:
-        fail('expand icon anchor missing')
-        return
-    text = text.replace(expand_anchor, expand_anchor + NL +
-                        '        onExpand = if (hasResultDetail) ({ showResult = true }) else null, // ' + MARK, 1)
-    if text == original:
-        fail('tools no changes produced')
-        return
+    text = insert_after(text, 'text = tool.input,', 'previewLimit = 1200, // ' + MARK, 'args preview')
+    text = insert_after(text, 'showExpandIcon = true, // rhDrawer289',
+                        'previewLimit = 2400, // ' + MARK, 'result preview')
+    text = insert_after(text, 'showExpandIcon = true, // rhDrawer289',
+                        'onExpand = if (hasResultDetail) ({ showResult = true }) else null, // ' + MARK,
+                        'result expand callback')
     if not balanced(text):
         fail('tools unbalanced after edits')
         return
@@ -223,7 +223,7 @@ def part_tools():
         if token not in text:
             fail('tools missing ' + token)
             return
-    write(TOOLS, text)
+    (ROOT / TOOLS).write_text(text, encoding='utf-8')
     note('tools OK: safe favicon, preview caps, detail callback')
 
 
