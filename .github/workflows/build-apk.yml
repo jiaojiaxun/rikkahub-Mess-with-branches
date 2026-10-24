@@ -192,6 +192,22 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
+      # rhLocaleAudit301: print the locale configs actually packaged in the APK.
+      # aapt2 comes from the runner's build-tools; failures stay non-blocking.
+      - name: Audit packaged locales (zh + en)
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1)
+          APK=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -n 1)
+          if [ -z "$AAPT2" ] || [ -z "$APK" ]; then
+            echo "::warning title=LocaleAudit::aapt2 or apk not found"
+          else
+            "$AAPT2" dump configurations "$APK" > locales.txt 2>&1 || true
+            SUMMARY=$(tr '\n' '|' < locales.txt | head -c 900)
+            echo "::warning title=LocaleAudit::$SUMMARY"
+          fi
+
       # Release asset: anonymous download URL, usable by download_file on the phone.
       # Workflow artifacts require a GitHub login to fetch.
       - name: Upload APK to Release
