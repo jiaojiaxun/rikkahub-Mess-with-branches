@@ -1,0 +1,23 @@
+proot OK: shell picked by rootfs content (bash -> fallback sh)
+1 rootfs shell fallback DONE
+reconciler lines=367
+reconciler hits=18
+rec L9:* Reconciles a database file restored from an upstream or older fork backup so Room can open it.
+rec L38:object ImportedDatabaseReconciler {
+rec L40:private const val TAG = "DbReconciler"
+rec L67:"id", "assistant_id", "title", "nodes", "create_at", "update_at",
+rec L88:// rhReconcilerShellCols: shell 列(v36+)允许存在; 判定只看 7 个基础列是否齐全
+rec L101:"CREATE TABLE IF NOT EXISTS `conversation_compaction` (`conversation_id` TEXT NOT NULL, `summary` TEXT NOT NULL, `tail_start_node_id` TEXT, `source_end_node_id` TEXT NOT NULL, `summary_model
+rec L116:* step (`ConversationEntity`, `MemoryEntity`). That migration is a pure schema diff compiled
+rec L124:"CREATE INDEX IF NOT EXISTS `index_ConversationEntity_assistant_id_is_pinned_update_at` ON `ConversationEntity` (`assistant_id`, `is_pinned`, `update_at`)",
+rec L126:"CREATE INDEX IF NOT EXISTS `index_MemoryEntity_assistant_id` ON `MemoryEntity` (`assistant_id`)",
+rec L134:fun reconcile(context: Context) {
+rec L135:reconcileDatabaseFile(context.getDatabasePath(DB_NAME))
+rec L139:* Testable core of [reconcile]: operate on the raw db file at [dbFile] directly, so a test
+rec L142:internal fun reconcileDatabaseFile(dbFile: File) {
+rec L144:Log.i(TAG, "reconcile: no database file at ${dbFile.absolutePath}, skipping")
+rec L155:Log.w(TAG, "reconcile: backup db version $version is newer than $EXPECTED_VERSION; leaving untouched")
+rec L242:Log.i(TAG, "reconcile: reconciled imported db (version=$version, alreadyCurrent=$alreadyCurrent)")
+rec L247:Log.w(TAG, "reconcile: failed to reconcile imported db", t)
+rec L334:"INSERT INTO `workspaces_new` (${targetColumns.joinToString(",") { "`$it`" }}) " +
+2 imported-db reconciler probe DONE

@@ -65,6 +65,7 @@ import me.rerere.rikkahub.data.ai.tools.local.stopMediaTool
 import me.rerere.rikkahub.data.ai.tools.local.storageTool
 import me.rerere.rikkahub.data.ai.tools.local.telephonyInfoTool
 import me.rerere.rikkahub.data.ai.tools.local.toastTool
+import me.rerere.rikkahub.data.ai.tools.local.notificationTool // rhSendNotification
 import me.rerere.rikkahub.data.ai.tools.local.torchTool
 import me.rerere.rikkahub.data.ai.tools.local.vibrateTool
 import me.rerere.rikkahub.data.ai.tools.local.wifiInfoTool
@@ -122,6 +123,8 @@ sealed class LocalToolOption {
     @Serializable @SerialName("sensors")        data object Sensors        : LocalToolOption()
     @Serializable @SerialName("storage_info")   data object StorageInfo    : LocalToolOption()
     @Serializable @SerialName("toast")          data object Toast          : LocalToolOption()
+@Serializable @SerialName("notification") data object Notification : LocalToolOption() // rhSendNotification
+@Serializable @SerialName("custom_tools") data object CustomTools : LocalToolOption() // rhCustomToolsEnum
     @Serializable @SerialName("share")          data object Share          : LocalToolOption()
     @Serializable @SerialName("torch")          data object Torch          : LocalToolOption()
     @Serializable @SerialName("vibrate")        data object Vibrate        : LocalToolOption()
@@ -155,6 +158,11 @@ sealed class LocalToolOption {
     @Serializable @SerialName("nfc")                  data object Nfc                 : LocalToolOption()
     @Serializable @SerialName("external_storage")     data object ExternalStorage     : LocalToolOption()
     @Serializable @SerialName("archive")              data object Archive             : LocalToolOption()
+    @Serializable @SerialName("sub_agents") data object SubAgents : LocalToolOption()
+    @Serializable @SerialName("image_generation") data object ImageGeneration : LocalToolOption()
+    @Serializable @SerialName("chat_ui")            data object ChatUi               : LocalToolOption()
+    @Serializable @SerialName("app_control")        data object AppControl            : LocalToolOption()
+    @Serializable @SerialName("app_version")        data object AppVersion            : LocalToolOption() // rhAppVersionGate225
 }
 
 /**
@@ -300,6 +308,8 @@ class LocalTools(
     private val storageVolumeGrantStore: me.rerere.rikkahub.data.storage.StorageVolumeGrantStore,
     // Shared OkHttp singleton (NetworkChangeMonitor-registered) — backs the web_fetch tool.
     private val okHttpClient: okhttp3.OkHttpClient,
+    private val subAgentEngine: me.rerere.rikkahub.subagent.SubAgentEngine,
+    private val subAgentRegistry: me.rerere.rikkahub.subagent.SubAgentRegistry,
 ) {
     val javascriptTool by lazy {
         Tool(
@@ -682,6 +692,12 @@ class LocalTools(
         if (options.contains(LocalToolOption.Toast)) {
             tools.add(toastTool(context))
         }
+        if (options.contains(LocalToolOption.Notification)) { // rhNotifScope (batch96)
+            tools.add(notificationTool(context))
+        }
+        if (options.contains(LocalToolOption.CustomTools)) { // rhCustomToolsGate (batch213)
+            tools.addAll(me.rerere.rikkahub.data.ai.tools.custom.customTools(context, jsSkillRunner))
+        }
         if (options.contains(LocalToolOption.Share)) {
             tools.add(shareTool(context))
         }
@@ -779,6 +795,15 @@ class LocalTools(
         if (options.contains(LocalToolOption.CostGuards)) {
             tools.add(me.rerere.rikkahub.costguards.checkTokenUsageTool(settingsStore, conversationRepo))
         }
+        if (options.contains(LocalToolOption.SubAgents)) {
+            val subAgentCallerId = invocationContext.callerAssistantId
+            if (subAgentCallerId != null) {
+                tools.add(me.rerere.rikkahub.subagent.subagentDispatchTool(subAgentEngine, invocationContext))
+                tools.add(me.rerere.rikkahub.subagent.subagentGetTool(subAgentRegistry, subAgentCallerId))
+                tools.add(me.rerere.rikkahub.subagent.subagentListTool(subAgentRegistry, subAgentCallerId))
+                tools.add(me.rerere.rikkahub.subagent.subagentCancelTool(subAgentRegistry, subAgentCallerId))
+            }
+        }
         if (options.contains(LocalToolOption.SkillImport)) {
             tools.add(me.rerere.rikkahub.skills.skillInstallFromUrlTool(skillUrlImporter, settingsStore, skillManager))
             tools.add(me.rerere.rikkahub.skills.skillInstallFromTextTool(skillUrlImporter, settingsStore, skillManager))
@@ -851,6 +876,19 @@ class LocalTools(
             tools.add(me.rerere.rikkahub.data.ai.tools.local.zipFilesTool(context))
             tools.add(me.rerere.rikkahub.data.ai.tools.local.unzipFileTool(context))
             tools.add(me.rerere.rikkahub.data.ai.tools.local.listZipContentsTool(context))
+        }
+        if (options.contains(LocalToolOption.ChatUi)) {
+            tools.addAll(me.rerere.rikkahub.data.ai.tools.local.createChatUiTools())
+        }
+        if (options.contains(LocalToolOption.AppControl)) {
+            tools.addAll(
+                me.rerere.rikkahub.data.ai.tools.appcontrol.createAppControlTools(
+                    settingsStore = settingsStore,
+                )
+            )
+        }
+        if (options.contains(LocalToolOption.ImageGeneration)) {
+            tools.add(me.rerere.rikkahub.data.ai.tools.local.createImageGenerationTool())
         }
         // Centralised opt-in to needsApproval. Tool factories themselves don't have to know
         // whether their op is destructive — ToolApprovalDefaults is the single source of

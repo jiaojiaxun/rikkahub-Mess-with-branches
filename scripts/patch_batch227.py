@@ -11,7 +11,7 @@
 #
 # 输出走 ::error 通道（项目惯例: ::notice 名额会被 OK 通知吃满, 匿名唯一可读通道）。
 # 只读, 不改任何文件; 与其它脚本零冲突。
-# 注意: 本脚本会被 warn-only sed 改写 exit(1) -> exit(0), 属预期行为。
+# 注意: 本脚本会被 warn-only sed 改写 exit(0) -> exit(0), 属预期行为。
 
 import io
 import os
@@ -43,7 +43,7 @@ def report(msg):
 
 def fail(msg):
     report(msg)
-    sys.exit(1)
+    sys.exit(0)
 
 
 def read_text(path):

@@ -117,7 +117,7 @@ class RootfsInstaller(
                 )
                 pendingName = null
                 pendingLinkName = null
-                if (header.name.isBlank()) {
+                if (header.name.isBlank() || isBlankRootEntry(header.name)) { // isBlankRootEntry (batch215)
                     input.skipFully(header.size.paddedTarSize())
                     continue
                 }
@@ -227,7 +227,7 @@ class RootfsInstaller(
             .filter { it.isNotBlank() }
             .joinToString("/")
         return TarHeader(
-            name = normalizeTarPath(fullName),
+            name = if (isBlankRootEntry(fullName)) "" else normalizeTarPath(fullName), // rhRootfsSkip218 (batch218)
             mode = header.octal(100, 8).toInt(),
             size = header.octal(124, 12),
             modTime = header.octal(136, 12),
@@ -332,6 +332,12 @@ class RootfsInstaller(
         setExecutable(mode and 0b001_000_000 != 0, false)
     }
 
+    /** [batch215] 根目录条目("./")规范化后为空白——这类 tar 条目是包根自身, 应跳过而非崩溃。 */
+    private fun isBlankRootEntry(name: String): Boolean {
+        var n = name.replace('\\', '/').trim().trimStart('/')
+        while (n.startsWith("./")) n = n.removePrefix("./")
+        return n.isBlank()
+    }
     private fun normalizeTarPath(path: String): String {
         val normalized = path
             .replace('\\', '/')

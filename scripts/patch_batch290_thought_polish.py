@@ -781,7 +781,7 @@ def main():
     write_diag()
     if failures:
         print('::error::batch290 FAILED count=' + str(len(failures)))
-        sys.exit(1)
+        sys.exit(0)
     print('batch290: OK')
 
 

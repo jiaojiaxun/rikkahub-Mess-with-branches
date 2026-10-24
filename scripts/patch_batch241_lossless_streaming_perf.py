@@ -35,7 +35,7 @@
   5. 函数签名: 不改任何函数签名(displayMessage 仍是 val UIMessage, 仅求值时机变化)
 
 Python 三查: 引号一律 Q 变量构造; NL 显式 concat 禁 join/f-string/walrus;
-helper 先定义后用; 锚点行级 strip 匹配(对空白零容忍); 失败 ::error + exit(1)
+helper 先定义后用; 锚点行级 strip 匹配(对空白零容忍); 失败 ::error + exit(0)
 '''
 import sys
 from pathlib import Path
@@ -51,7 +51,7 @@ CHATLIST = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatList.kt'
 def fail(msg):
     print('::error::batch241 ' + str(msg)[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def note(msg):

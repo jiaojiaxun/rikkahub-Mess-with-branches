@@ -95,11 +95,14 @@ class SubAgentEngine(
             .map { it.id }
             .toSet()
 
+        // rhSubAgentModel: 用户为子代理指定的专用模型;缺失或已不可用时回落父助手模型。
+        val effectiveSubAgentModelId = settings.subAgentModelId?.takeIf { it in availableModelIds }
+
         val profile = when (val resolution = resolveSubAgentExecutionProfile(
             runId = runId,
             request = cleaned,
             parentEffectiveModelId = parentEffectiveModelId,
-            assistantDefaultModelId = null,
+            assistantDefaultModelId = effectiveSubAgentModelId, // rhSubAgentModel
             assistantSystemPrompt = parentAssistant.systemPrompt,
             availableModelIds = availableModelIds,
             callerToolNames = emptySet(),
@@ -132,7 +135,7 @@ class SubAgentEngine(
 
         val executionJob = appScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
             try {
-                executeRun(runId, parentAssistantId, cleaned, profile)
+                executeRun(runId, parentAssistantId, parentConversationId, cleaned, profile)
             } finally {
                 withContext(NonCancellable) {
                     val status = registry.get(runId)?.status
@@ -158,6 +161,8 @@ class SubAgentEngine(
     private suspend fun executeRun(
         runId: String,
         parentAssistantId: Uuid,
+        // rhEngineParent (batch55-2): 父对话 id，写进子对话的 parentChatId
+        parentConversationId: Uuid?,
         request: SubAgentRequest,
         profile: SubAgentExecutionProfile,
     ) {
@@ -173,6 +178,8 @@ class SubAgentEngine(
             // chatModelId 承载有效模型；子对话复用父助手 → 工具开关自然继承。
             customSystemPrompt = profile.effectiveSystemPrompt,
             chatModelId = profile.effectiveModelId,
+            // rhEngineParent (batch55-2): 父子关系落库——折叠树/审批继承的数据基础
+            parentChatId = parentConversationId,
         )
 
         // 先订阅后发送：generationDoneFlow 是无重放的 SharedFlow，

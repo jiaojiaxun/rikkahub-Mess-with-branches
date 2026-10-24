@@ -36,6 +36,7 @@ val WorkspaceToolDefaultApprovals: Map<String, Boolean> = mapOf(
     "workspace_run_background" to true,
     "workspace_background_status" to false,
     "workspace_background_kill" to false,
+    "workspace_install_rootfs" to true,
 )
 
 fun resolveWorkspaceToolApproval(name: String, overrides: Map<String, Boolean>): Boolean =
@@ -62,6 +63,7 @@ suspend fun createWorkspaceTools(
         createRunBackgroundTool(workspaceId, ::needsApproval, workspaceRepository, shellCwd),
         createBackgroundStatusTool(workspaceId, ::needsApproval, workspaceRepository),
         createBackgroundKillTool(workspaceId, ::needsApproval, workspaceRepository),
+        createInstallRootfsTool(workspaceId, ::needsApproval, workspaceRepository),
     )
 }
 

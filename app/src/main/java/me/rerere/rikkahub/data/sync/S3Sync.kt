@@ -123,6 +123,32 @@ class S3Sync(
         Log.i(TAG, "deleteS3BackupFile: Deleted ${item.key}")
     }
 
+
+    // [batch156] 两阶段合并：仅下载到缓存（调用方负责删除返回的文件）
+    suspend fun downloadBackupForMerge(
+        config: S3Config,
+        item: S3BackupItem,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): File = withContext(Dispatchers.IO) {
+        val displayName = item.displayName
+        require(displayName.isNotBlank() && File(displayName).name == displayName) { "不安全的 S3 备份文件名" }
+        val backupFile = File(context.cacheDir, displayName)
+        val client = getS3Client(config)
+        onProgress(BackupProgress("下载备份", 0L, item.size, displayName))
+        client.downloadObjectToFile(item.key, backupFile) { completed, total ->
+            onProgress(
+                BackupProgress(
+                    phase = "下载备份",
+                    completed = completed,
+                    total = total.takeIf { it > 0L } ?: item.size,
+                    detail = "已下载 ${completed.fileSizeToString()}",
+                    totalLabel = "实际 ZIP 文件",
+                )
+            )
+        }.getOrThrow()
+        backupFile
+    }
+
     private fun S3Config.toWebDavConfig(): WebDavConfig = WebDavConfig(
         items = items.map {
             when (it) {

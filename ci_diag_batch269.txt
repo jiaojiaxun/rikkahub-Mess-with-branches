@@ -1,0 +1,2 @@
+SettingMcpPage OK: status dot distinguishes Idle / Connecting / Authorizing / Error
+1 mcp status dot DONE

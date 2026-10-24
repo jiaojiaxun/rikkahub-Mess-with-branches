@@ -44,17 +44,18 @@ data class TodoEntry(val content: String, val status: String)
 internal val TodoPlanGreen = Color(0xFF43A047)
 
 /**
- * rhPlanBar228: 从消息列表里取「当前计划」——最后一条已执行的 todo_write 调用(文档5.5)。
- * 双向倒序取时间上最后一次调用;isExecuted 门控保证流式半截调用不算数;
- * 从未调用过或不合法时返回空列表(入口据此隐藏)。
+ * rhPlanBar237: 从消息列表里取「当前计划」——倒序取最新的可解析 todo_write 调用(文档5.5)。
+ * 不再要求 isExecuted: 模型一发出完整参数即显示(不必等整批工具执行完, 显示时机提前);
+ * 流式半截 JSON 解析失败自动跳过并回落更早一次调用; 从未调用或不合法返回空(入口隐藏)。
  */
 fun findActivePlan(messages: List<UIMessage>): List<TodoEntry> =
     messages.asReversed()
         .asSequence()
         .flatMap { message -> message.parts.asReversed().asSequence() }
         .filterIsInstance<UIMessagePart.Tool>()
-        .firstOrNull { it.toolName == TODO_TOOL_NAME && it.isExecuted }
-        ?.let { parseTodos(it.input) }
+        .filter { it.toolName == TODO_TOOL_NAME }
+        .mapNotNull { part -> parseTodos(part.input).takeIf { it.isNotEmpty() } }
+        .firstOrNull()
         .orEmpty()
 
 /**

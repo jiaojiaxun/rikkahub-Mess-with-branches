@@ -14,8 +14,8 @@
     val reasoningContent = @Composable {                       <- holder_idx
         MarkdownBlock(
             content = reasoning.reasoning.replaceRegexes(...)  <- content_idx
-  于是 holder_idx < content_idx 恒成立 => content_idx >= holder_idx 恒为真 => 无条件 fail() => exit(1)。
-  CI 第 7 步把 exit(1) sed 成 exit(0), 脚本静默停在第一部分, A2/B1/B2 全部未执行。
+  于是 holder_idx < content_idx 恒成立 => content_idx >= holder_idx 恒为真 => 无条件 fail() => exit(0)。
+  CI 第 7 步把 exit(0) sed 成 exit(0), 脚本静默停在第一部分, A2/B1/B2 全部未执行。
 教训: "加了防御性断言"不等于"断言方向正确"; 断言本身也要被验证。
       而假绿只能靠读 snapshot(CI 推送的 patch 后源码树)抓出来, job conclusion 抓不出来。
 

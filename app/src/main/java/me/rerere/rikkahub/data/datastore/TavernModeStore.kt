@@ -25,4 +25,12 @@ object TavernModeStore {
     fun setEnabled(context: Context, conversationId: String, enabled: Boolean) {
         prefs(context).edit().putBoolean(conversationId, enabled).apply()
     }
+
+    // rhSqueezeToken: 榨干 token 开关(会话级,自动续跑)
+    fun isSqueezeTokenEnabled(context: Context, conversationId: String): Boolean =
+        prefs(context).getBoolean(conversationId + "_squeeze", false)
+
+    fun setSqueezeTokenEnabled(context: Context, conversationId: String, enabled: Boolean) {
+        prefs(context).edit().putBoolean(conversationId + "_squeeze", enabled).apply()
+    }
 }

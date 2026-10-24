@@ -1,0 +1,6 @@
+drawer rewritten chars=16790
+1 drawer rewrite DONE
+reasoning OK: extra guarded by !plainLabel
+2 reasoning guard DONE
+FAIL tools selfcheck missing as? JsonArray
+3 tools fixes DONE

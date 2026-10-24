@@ -47,7 +47,11 @@ class ModelContextLengthResolverTest {
         assertEquals(1_048_576, resolver.knownContextLengthForTesting("gpt-4.1"))
         assertEquals(1_048_576, resolver.knownContextLengthForTesting("gpt-4.1-mini"))
         assertEquals(128_000, resolver.knownContextLengthForTesting("gpt-4o-2024-11-20"))
-        assertEquals(200_000, resolver.knownContextLengthForTesting("claude-3.7-sonnet"))
+                assertEquals(200_000, resolver.knownContextLengthForTesting("claude-3.7-sonnet"))
+        // rh-batch10: newly supported families.
+        assertEquals(200_000, resolver.knownContextLengthForTesting("claude-opus-5.5"))
+        assertEquals(200_000, resolver.knownContextLengthForTesting("claude-sonnet-5-5"))
+        assertEquals(1_048_576, resolver.knownContextLengthForTesting("gemini-4-pro"))
         assertEquals(1_048_576, resolver.knownContextLengthForTesting("gemini-2.5-pro"))
         assertEquals(262_144, resolver.knownContextLengthForTesting("qwen3-235b"))
         assertEquals(10_000_000, resolver.knownContextLengthForTesting("qwen-long"))

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,6 +30,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -76,12 +78,25 @@ fun SettingSearchDetailPage(
     val service = settings.searchServices.find { it.id == serviceId } ?: return
     val serviceIndex = settings.searchServices.indexOf(service)
     var options by remember(service) { mutableStateOf(service) }
+    var duplicateProviderName by remember { mutableStateOf<String?>(null) }
+    var pendingDuplicateOptions by remember { mutableStateOf<SearchServiceOptions?>(null) }
 
-    fun save(updated: SearchServiceOptions) {
+    fun persist(updated: SearchServiceOptions) {
         options = updated
         val newServices = settings.searchServices.toMutableList()
         newServices[serviceIndex] = updated
         vm.updateSettings(settings.copy(searchServices = newServices))
+    }
+
+    fun save(updated: SearchServiceOptions) {
+        val duplicate = findDuplicateSearchApiKey(updated, settings.searchServices)
+        if (duplicate != null) {
+            pendingDuplicateOptions = updated
+            duplicateProviderName = settings.searchServices
+                .firstOrNull { it.id == duplicate }?.displayName
+        } else {
+            persist(updated)
+        }
     }
 
     Scaffold(
@@ -161,6 +176,32 @@ fun SettingSearchDetailPage(
                 )
             }
         }
+    }
+
+    duplicateProviderName?.let { providerName ->
+        AlertDialog(
+            onDismissRequest = {
+                duplicateProviderName = null
+                pendingDuplicateOptions = null
+            },
+            title = { Text(stringResource(R.string.search_duplicate_key_title)) },
+            text = { Text(stringResource(R.string.search_duplicate_key_message, providerName)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDuplicateOptions?.let(::persist)
+                    duplicateProviderName = null
+                    pendingDuplicateOptions = null
+                }) { Text(stringResource(R.string.search_duplicate_key_continue)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    duplicateProviderName = null
+                    pendingDuplicateOptions = null
+                }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 }
 

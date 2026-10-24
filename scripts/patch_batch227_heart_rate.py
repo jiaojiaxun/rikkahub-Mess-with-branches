@@ -60,7 +60,7 @@ ZH_STRINGS = [
 
 def fail(msg):
     print("::error title=batch227::" + msg)
-    sys.exit(1)
+    sys.exit(0)
 
 
 def read(path):

@@ -1,0 +1,1 @@
+applied=whitelist,error-detail,snapshot,impls verify=ok

@@ -437,6 +437,8 @@ class ConversationRepository(
             workspaceCwd = conversation.workspaceCwd ?: "",
             folderId = conversation.folderId?.toString() ?: "",
             chatModelId = encodeChatModelId(conversation.chatModelId),
+            // rhRepoParent (batch55-2): 子代理对话的父对话 id 落库
+            parentChatId = conversation.parentChatId?.toString() ?: "",
         )
     }
 
@@ -459,6 +461,8 @@ class ConversationRepository(
             workspaceCwd = conversationEntity.workspaceCwd.ifEmpty { null },
             folderId = conversationEntity.folderId.ifEmpty { null }?.let { Uuid.parse(it) },
             chatModelId = decodeChatModelId(conversationEntity.chatModelId),
+            // rhRepoParent (batch55-2): 反向映射读出父子关系
+            parentChatId = conversationEntity.parentChatId.ifEmpty { null }?.let { Uuid.parse(it) },
         )
     }
 
@@ -472,10 +476,33 @@ class ConversationRepository(
             }
     }
 
+    /** [batch234] A4: 只更新会话持有的配置列, 不重写消息节点(防丢)。 */
+    suspend fun updateConversationConfig(conversation: Conversation) {
+        conversationDAO.updateConfig(
+            id = conversation.id.toString(),
+            config = conversation.config?.let { JsonInstant.encodeToString(it) } ?: "",
+        )
+    } // rhA4SetModel
+
     suspend fun togglePinStatus(conversationId: Uuid) {
         // Single atomic UPDATE: avoids the read->write TOCTOU that existed when
         // we read isPinned with getConversationById() and then flipped it.
         conversationDAO.togglePinStatus(conversationId.toString())
+    }
+
+    /** rhRepoChildren (batch55-3): 查询某主对话的全部子代理对话。
+     * 列表视图不需要完整 nodes，与 getConversationsOfAssistant 同模式。 */
+    /** rhSubAgentNest (batch83): 响应式查询某主对话的全部子代理对话。 */
+    fun getChildrenFlowOf(parentId: Uuid): Flow<List<Conversation>> {
+        return conversationDAO.getChildrenOfFlow(parentId.toString()).map { list ->
+            list.map { entity -> conversationEntityToConversation(entity, emptyList()) }
+        }
+    }
+
+    suspend fun getChildrenOf(parentId: Uuid): List<Conversation> {
+        return conversationDAO.getChildrenOf(parentId.toString()).map { entity ->
+            conversationEntityToConversation(entity, emptyList())
+        }
     }
 
     /**

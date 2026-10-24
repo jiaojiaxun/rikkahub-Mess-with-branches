@@ -42,9 +42,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Delete02
+import me.rerere.hugeicons.stroke.ArrowRight01 // rhRpOpt139
 import me.rerere.hugeicons.stroke.FileImport
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.ChatFontFamily
+import me.rerere.rikkahub.Screen // rhRpOpt139
 import me.rerere.rikkahub.data.datastore.DisplaySetting
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.FileUtils
@@ -52,6 +54,7 @@ import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.Select
+import me.rerere.rikkahub.ui.context.LocalNavController // rhRpOpt139
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.ui.theme.rememberChatFontFamily
@@ -66,6 +69,7 @@ fun SettingPreferencesUIPage(vm: SettingVM = koinViewModel()) {
     var displaySetting by remember(settings) { mutableStateOf(settings.displaySetting) }
     val context = LocalContext.current
     val toaster = LocalToaster.current
+    val navController = LocalNavController.current // rhRpOpt139
     val scope = rememberCoroutineScope()
     val chatFontFamily = rememberChatFontFamily(displaySetting)
 
@@ -140,6 +144,63 @@ fun SettingPreferencesUIPage(vm: SettingVM = koinViewModel()) {
                             )
                         },
                     )
+                    // rh-batch3: collapse long user messages
+                    item(
+                        headlineContent = { Text(stringResource(R.string.setting_display_page_collapse_user_message_title)) },
+                        supportingContent = { Text(stringResource(R.string.setting_display_page_collapse_user_message_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = displaySetting.collapseLongUserMessage,
+                                onCheckedChange = { updateDisplaySetting(displaySetting.copy(collapseLongUserMessage = it)) }
+                            )
+                        },
+                    )
+                    // rhPerConversationModel299: 唯一开关，统一控制旧版/新版模型切换
+                    item(
+                        headlineContent = { Text("按对话固定模型（新版）") },
+                        supportingContent = { Text("关闭(默认)=旧版：切换模型会同步到该助手的其他对话；开启=新版：只影响当前对话") },
+                        trailingContent = {
+                            Switch(
+                                checked = displaySetting.perConversationModel,
+                                onCheckedChange = {
+                                    updateDisplaySetting(displaySetting.copy(perConversationModel = it))
+                                }
+                            )
+                        },
+                    )
+                    // rhPlanBar228: 计划细条显示开关
+                    item(
+                        headlineContent = { Text(stringResource(R.string.setting_display_page_plan_bar_title)) },
+                        supportingContent = { Text(stringResource(R.string.setting_display_page_plan_bar_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = displaySetting.showPlanBar,
+                                onCheckedChange = { updateDisplaySetting(displaySetting.copy(showPlanBar = it)) }
+                            )
+                        }
+                    )
+                    if (displaySetting.collapseLongUserMessage) {
+                        item(
+                            headlineContent = {
+                                Text(
+                                    stringResource(
+                                        R.string.setting_display_page_collapse_user_message_lines,
+                                        displaySetting.collapseUserMessageLines,
+                                    )
+                                )
+                            },
+                            supportingContent = {
+                                Slider(
+                                    value = displaySetting.collapseUserMessageLines.toFloat(),
+                                    onValueChange = {
+                                        updateDisplaySetting(displaySetting.copy(collapseUserMessageLines = it.roundToInt()))
+                                    },
+                                    valueRange = 3f..30f,
+                                    steps = 26,
+                                )
+                            },
+                        )
+                    }
                     item(
                         headlineContent = { Text(stringResource(R.string.setting_display_page_show_assistant_bubble_title)) },
                         supportingContent = { Text(stringResource(R.string.setting_display_page_show_assistant_bubble_desc)) },
@@ -257,6 +318,19 @@ fun SettingPreferencesUIPage(vm: SettingVM = koinViewModel()) {
                             )
                         },
                     )
+                    // rhLiteStreamSwitch (batch54a): 精简版流式渲染开关
+                    item(
+                        headlineContent = { Text(stringResource(R.string.rh_lite_stream_render_title)) },
+                        supportingContent = { Text(stringResource(R.string.rh_lite_stream_render_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = displaySetting.liteStreamRender,
+                                onCheckedChange = {
+                                    updateDisplaySetting(displaySetting.copy(liteStreamRender = it))
+                                }
+                            )
+                        },
+                    )
                     item(
                         headlineContent = { Text(stringResource(R.string.setting_display_page_chat_font_family_title)) },
                         supportingContent = {
@@ -364,6 +438,21 @@ fun SettingPreferencesUIPage(vm: SettingVM = koinViewModel()) {
                 }
             }
 
+            item { // rhRpOpt139
+                CardGroup(
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    title = { Text("文本样式") },
+                ) {
+                    item(
+                        onClick = { navController.navigate(Screen.SettingRpOptimizations) },
+                        headlineContent = { Text("RP 优化") },
+                        supportingContent = { Text("自定义 Markdown 文本颜色") },
+                        trailingContent = {
+                            Icon(HugeIcons.ArrowRight01, contentDescription = null)
+                        },
+                    )
+                }
+            }
             item {
                 CardGroup(
                     modifier = Modifier.padding(horizontal = 8.dp),

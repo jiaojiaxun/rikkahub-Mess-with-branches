@@ -1,0 +1,27 @@
+::error::batch299 part: pref
+::error::batch299 part: conf
+::error::batch299 part: vm
+::error::batch299 part: page
+::error::batch299 part: ui
+::error::batch299 diag written chars=612
+::error::batch299 pref-field OK
+::error::batch299 pref READY
+::error::batch299 conf-model OK
+::error::batch299 conf-assistant OK
+::error::batch299 conf-bind OK
+::error::batch299 conf READY
+::error::batch299 vm-setChatModel OK
+::error::batch299 vm READY
+::error::batch299 page-chat-input-model-id OK
+::error::batch299 page READY
+::error::batch299 ui-comment OK
+::error::batch299 ui-headline OK
+::error::batch299 ui-supporting OK
+::error::batch299 ui READY
+::error::batch299 WROTE app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt
+::error::batch299 WROTE app/src/main/java/me/rerere/rikkahub/data/model/ConversationConfig.kt
+::error::batch299 WROTE app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt
+::error::batch299 WROTE app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt
+::error::batch299 WROTE app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingPreferencesUIPage.kt
+::error::batch299 RESULT OK: four files? count=5
+::error::batch299 END lines=20

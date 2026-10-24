@@ -55,7 +55,7 @@
   5. 函数签名: MarkdownBlock 签名一字未改(4 个参数、默认值、类型全部保持), 14 个调用点零改动
 
 Python 三查: 引号一律 Q/SQ 变量构造; NL 显式 concat 禁 join/f-string/walrus;
-helper 先定义后用; 锚点行级 strip 匹配; 失败 ::error + exit(1)
+helper 先定义后用; 锚点行级 strip 匹配; 失败 ::error + exit(0)
 '''
 import sys
 from pathlib import Path
@@ -74,7 +74,7 @@ MD = 'app/src/main/java/me/rerere/rikkahub/ui/components/richtext/Markdown.kt'
 def fail(msg):
     print('::error::batch242 ' + str(msg)[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def note(msg):

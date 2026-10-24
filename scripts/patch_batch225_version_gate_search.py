@@ -10,7 +10,7 @@
 #     CardGroup.item() 只是收集记录(每次重组全量执行), 包装过滤不改变块内逻辑;
 #     通用组件 CardGroup.kt 零改动; 原行内容一字不改(未来在链 patch 的锚点零影响)。
 #
-# warn-only(近期惯例): 任何锚点失败只记录 skipped + 末尾借 ::error 空通道汇总(batch221 先例), 不 exit(1)。
+# warn-only(近期惯例): 任何锚点失败只记录 skipped + 末尾借 ::error 空通道汇总(batch221 先例), 不 exit(0)。
 # 门控链(防编译引用缺失): 枚举失败 → ChatService/Assistant/开关行全跳过;
 #   搜索框需 state+OutlinedTextField/fillMaxWidth import 成功;
 #   包裹需 state + rhToolItem 定义 + CardGroupScope import 成功。

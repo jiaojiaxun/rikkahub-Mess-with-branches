@@ -400,16 +400,35 @@ private fun SettingProviderConfigPage(
     }
 }
 
-@Composable
-private fun SettingProviderModelPage(
-    provider: ProviderSetting,
-    onEdit: (ProviderSetting) -> Unit
-) {
-    ModelList(
-        providerSetting = provider,
-        onUpdateProvider = onEdit
-    )
-}
+    /** Stable identity of the endpoint a model catalog was fetched from. */
+    private fun ProviderSetting.modelCatalogKey(): String = when (this) {
+        is ProviderSetting.OpenAI -> "$id|$baseUrl|$apiKey"
+        is ProviderSetting.Google -> "$id|$baseUrl|$apiKey"
+        is ProviderSetting.Claude -> "$id|$baseUrl|$apiKey"
+        else -> id.toString()
+    }
+
+    @Composable
+    private fun SettingProviderModelPage(
+        provider: ProviderSetting,
+        onEdit: (ProviderSetting) -> Unit,
+        vm: SettingVM = koinViewModel(),
+    ) {
+        val providerManager = koinInject<ProviderManager>()
+        ModelList(
+            providerSetting = provider,
+            onUpdateProvider = onEdit,
+            // rh-batch7:fetch-once - at most one listModels() per (id, baseUrl, apiKey).
+            fetchModels = {
+                val key = provider.modelCatalogKey()
+                vm.cachedModelCatalog(key) ?: providerManager
+                    .getProviderByType(provider)
+                    .listModels(provider)
+                    .also { vm.putModelCatalog(key, it) }
+            },
+            onFetchFailed = { vm.clearModelCatalog(provider.modelCatalogKey()) },
+        )
+    }
 
 private data class ModelListLoadState(
     val models: List<Model> = emptyList(),
@@ -418,18 +437,21 @@ private data class ModelListLoadState(
 )
 
 @Composable
-private fun ModelList(
-    providerSetting: ProviderSetting,
-    onUpdateProvider: (ProviderSetting) -> Unit
-) {
-    val providerManager = koinInject<ProviderManager>()
-    val toaster = LocalToaster.current
-    val modelLoad by produceState(ModelListLoadState(), providerSetting) {
+    private fun ModelList(
+        providerSetting: ProviderSetting,
+        onUpdateProvider: (ProviderSetting) -> Unit,
+        fetchModels: suspend () -> List<Model>,
+        onFetchFailed: () -> Unit = {},
+    ) {
+        val toaster = LocalToaster.current
+        // rh-batch7:fetch-once - re-key on endpoint identity, NOT on the provider object:
+        // add/delete/reorder only changes provider.models, which must not restart the fetch.
+        val fetchKey = remember(providerSetting) { providerSetting.modelCatalogKey() }
+        val modelLoad by produceState(ModelListLoadState(), fetchKey) {
         value = ModelListLoadState(phase = 1)
         runCatching {
             value = ModelListLoadState(phase = 2)
-            val fetched = providerManager.getProviderByType(providerSetting)
-                .listModels(providerSetting)
+                val fetched = fetchModels()
             value = ModelListLoadState(phase = 3)
             val sorted = fetched.sortedBy { it.modelId }.toList()
             value = ModelListLoadState(models = sorted, phase = 4)
@@ -438,6 +460,7 @@ private fun ModelList(
             // when the user navigates away while the request is active.
             if (error is kotlinx.coroutines.CancellationException) throw error
             value = ModelListLoadState(phase = 5, failed = true)
+                onFetchFailed()
             error.printStackTrace()
             toaster.show(
                 error.message ?: "Failed to load models",

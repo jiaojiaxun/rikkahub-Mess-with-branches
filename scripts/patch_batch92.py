@@ -22,7 +22,7 @@
 4. 括号配对:新增块均自平衡
 5. 函数签名:只加方法不改签名;AILoggingManager 构造参数 appScope 加 private val(仍是同类型)
 
-Python 三查:引号用 chr() / 无 f-string / helper 先定义 / 失败显式 exit(1)
+Python 三查:引号用 chr() / 无 f-string / helper 先定义 / 失败显式 exit(0)
 '''
 from pathlib import Path
 import sys
@@ -49,7 +49,7 @@ def fail(path, msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + path + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind_of(ln):

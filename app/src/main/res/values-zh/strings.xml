@@ -1,5 +1,23 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <resources>
+    <!-- rhKeyMerge -->
+    <string name="setting_provider_merge_title">发现重复供应商</string>
+    <string name="setting_provider_merge_message">「%1$s」已使用相同的 URL 或 API Key。是否将新的密钥合并到该供应商？</string>
+    <string name="setting_provider_merge_confirm">合并</string>
+    <string name="setting_provider_merge_keep">仍然新建</string>
+    <!-- rhProviderTidy -->
+    <string name="setting_provider_page_tidy">整理</string>
+    <!-- rhSubAgentModel: sub-agent model -->
+    <string name="setting_model_page_sub_agent_model">子代理模型</string>
+    <string name="setting_model_page_sub_agent_model_desc">分派给子代理使用的模型。未设置时复用父助手的模型。</string>
+    <!-- rhLiteStreamSwitch -->
+    <string name="rh_lite_stream_render_title">精简版流式渲染</string>
+    <string name="rh_lite_stream_render_desc">流式中的末条消息按纯文本直出（跳过 Markdown 与思考卡片动画），生成完成自动切回完整渲染。长会话防卡顿。</string>
+    <!-- rhDrawer48: drawer segmented tabs -->
+    <string name="rh_drawer_tab_chats">会话</string>
+    <string name="rh_drawer_tab_files">文件</string>
+  <string name="setting_page_scheduled_jobs">定时任务</string>
+  <string name="setting_page_scheduled_jobs_desc">查看、开关、删除 AI 创建的定时任务</string>
   <string name="about_page_github">Github</string>
   <string name="about_page_license">License</string>
   <string name="about_page_system">系统</string>
@@ -10,17 +28,17 @@
   <string name="app_name">RikkaHub Agent</string>
   <string name="asr_button_content_description">语音识别</string>
   <string name="asr_button_stop">停止</string>
-  <string name="assistant_detail_basic_desc">配置名称、头像、模型和参数</string>
-  <string name="assistant_detail_extensions_desc">管理提示词注入、世界书和技能等扩展</string>
-  <string name="assistant_detail_local_tools_desc">启用本地工具（如 JavaScript 引擎）</string>
-  <string name="assistant_detail_mcp_desc">为助手配置 MCP 服务器工具</string>
-  <string name="assistant_detail_memory_desc">管理助手记忆和最近的聊天引用</string>
-  <string name="assistant_detail_prompt_desc">设置系统提示、消息模板和正则规则</string>
-  <string name="assistant_detail_request_desc">配置自定义请求头和正文参数</string>
-  <string name="assistant_extensions_page_empty_lorebooks">没有世界书，前往提示词管理创建</string>
-  <string name="assistant_extensions_page_empty_mode_injections">没有模式注入，前往提示词管理创建</string>
-  <string name="assistant_extensions_page_empty_quick_messages">暂无快捷消息，请在扩展中创建</string>
-  <string name="assistant_extensions_page_empty_skills">没有可用的 Skill，前往扩展管理安装</string>
+  <string name="assistant_detail_basic_desc">配置名称、头像、模型和参数呀♪</string>
+  <string name="assistant_detail_extensions_desc">管理提示词注入、世界书和技能等扩展~</string>
+  <string name="assistant_detail_local_tools_desc">启用本地工具（如 JavaScript 引擎）哦</string>
+  <string name="assistant_detail_mcp_desc">为助手配置 MCP 服务器工具呀</string>
+  <string name="assistant_detail_memory_desc">管理助手记忆和最近的聊天引用~</string>
+  <string name="assistant_detail_prompt_desc">设置系统提示、消息模板和正则规则哦</string>
+  <string name="assistant_detail_request_desc">配置自定义请求头和正文参数~</string>
+  <string name="assistant_extensions_page_empty_lorebooks">还没有世界书哦，去提示词管理建一个吧 (・ω・)</string>
+  <string name="assistant_extensions_page_empty_mode_injections">还没有模式注入哦，去提示词管理建一个吧~</string>
+  <string name="assistant_extensions_page_empty_quick_messages">还没有快捷消息哦，去扩展里建一个吧♪</string>
+  <string name="assistant_extensions_page_empty_skills">还没有可用的 Skill 哦，去扩展管理装一个吧✧</string>
   <string name="assistant_extensions_page_goto_extensions">前往扩展管理</string>
   <string name="assistant_extensions_page_goto_prompts">前往提示词管理</string>
   <string name="assistant_extensions_page_tab_lorebooks">世界书</string>
@@ -43,12 +61,12 @@
   <string name="assistant_page_add_body">添加 Body</string>
   <string name="assistant_page_add_header">添加 Header</string>
   <string name="assistant_page_allow_conversation_system_prompt">独立对话系统提示</string>
-  <string name="assistant_page_allow_conversation_system_prompt_desc">允许每个对话单独设置系统提示词</string>
+  <string name="assistant_page_allow_conversation_system_prompt_desc">允许每个对话单独设置系统提示词~</string>
   <string name="assistant_page_allow_conversation_prompt_injection">独立对话提示词注入</string>
-  <string name="assistant_page_allow_conversation_prompt_injection_desc">允许每个对话单独绑定提示词注入和世界书</string>
+  <string name="assistant_page_allow_conversation_prompt_injection_desc">允许每个对话单独绑定提示词注入和世界书哦</string>
   <string name="assistant_page_available_variables">"可用变量: "</string>
   <string name="assistant_page_background_opacity">背景透明度</string>
-  <string name="assistant_page_background_opacity_desc">调整聊天背景图显示透明度</string>
+  <string name="assistant_page_background_opacity_desc">调整聊天背景图的显示透明度~</string>
   <string name="assistant_page_background_opacity_value">透明度：%1$d%%</string>
   <string name="assistant_page_background_set">已设置背景图片</string>
   <string name="assistant_page_balanced">平衡</string>
@@ -58,9 +76,9 @@
   <string name="assistant_page_change_background">更换背景图片</string>
   <string name="assistant_page_chaotic">混乱 (危险)</string>
   <string name="assistant_page_chat_background">聊天背景</string>
-  <string name="assistant_page_chat_background_desc">设置助手聊天页面的背景图片</string>
+  <string name="assistant_page_chat_background_desc">设置助手聊天页面的背景图片呀~</string>
   <string name="assistant_page_chat_model">聊天模型</string>
-  <string name="assistant_page_chat_model_desc">设置助手的默认聊天模型，如果不设置，则使用全局默认聊天模型</string>
+  <string name="assistant_page_chat_model_desc">设置助手的默认聊天模型，不设置就用全局默认的哦</string>
   <string name="assistant_page_clone">复制</string>
   <string name="assistant_page_confirm">确定</string>
   <string name="assistant_page_creative">创造</string>
@@ -70,34 +88,34 @@
   <string name="assistant_page_default_assistant">默认助手</string>
   <string name="assistant_page_delete">删除</string>
   <string name="assistant_page_delete_body">删除 Body</string>
-  <string name="assistant_page_delete_dialog_text">确定要删除这个助手吗？此操作无法撤销。</string>
+  <string name="assistant_page_delete_dialog_text">确定要删除这个助手吗？删了就回不来了哦。</string>
   <string name="assistant_page_delete_header">删除 Header</string>
   <string name="assistant_page_enter_image_url">输入图片URL</string>
   <string name="assistant_page_global_memory">全局记忆</string>
-  <string name="assistant_page_global_memory_desc">使用全局共享内存而非助手隔离内存。启用后，所有助手共享同一内存存储</string>
+  <string name="assistant_page_global_memory_desc">使用全局共享记忆代替助手隔离记忆；开启后所有助手共享同一份哦</string>
   <string name="assistant_page_header_name">Header 名称</string>
   <string name="assistant_page_header_value">Header 值</string>
   <string name="assistant_page_image_url">图片URL</string>
   <string name="assistant_page_invalid_json">无效的 JSON: %s</string>
-  <string name="assistant_page_local_tools_ask_user_desc">允许 AI 向你提问以获得更多信息</string>
+  <string name="assistant_page_local_tools_ask_user_desc">允许 AI 向你提问来获取更多信息哦</string>
   <string name="assistant_page_local_tools_ask_user_title">询问用户</string>
-  <string name="assistant_page_local_tools_clipboard_desc">读取或写入设备剪贴板中的纯文本</string>
+  <string name="assistant_page_local_tools_clipboard_desc">读取或写入设备剪贴板中的纯文本呀</string>
   <string name="assistant_page_local_tools_clipboard_title">剪贴板</string>
-  <string name="assistant_page_local_tools_javascript_engine_desc">使用 QuickJS 引擎执行 JavaScript 代码，进行计算和脚本处理</string>
+  <string name="assistant_page_local_tools_javascript_engine_desc">用 QuickJS 引擎执行 JavaScript 代码，做计算和脚本处理哦</string>
   <string name="assistant_page_local_tools_javascript_engine_title">JavaScript 引擎</string>
-  <string name="assistant_page_local_tools_time_info_desc">从设备获取当前日期、星期、时间和时区信息</string>
+  <string name="assistant_page_local_tools_time_info_desc">从设备获取当前日期、星期、时间和时区信息呀♪</string>
   <string name="assistant_page_local_tools_time_info_title">时间信息</string>
-  <string name="assistant_page_local_tools_tts_desc">让AI使用您所选的TTS服务为您朗读文本</string>
+  <string name="assistant_page_local_tools_tts_desc">让 AI 用你选的 TTS 服务朗读文本哦 (・ω・)</string>
   <string name="assistant_page_local_tools_tts_title">文字转语音</string>
   <string name="assistant_page_manage_memory_title">管理记忆</string>
   <string name="assistant_page_max_tokens">最大Token数</string>
-  <string name="assistant_page_max_tokens_desc">最大生成Token数量。留空表示无限制。</string>
+  <string name="assistant_page_max_tokens_desc">最大生成 Token 数量，留空就是不限制哦</string>
   <string name="assistant_page_max_tokens_limit">限制：%d 个Token</string>
   <string name="assistant_page_max_tokens_no_limit">无限制</string>
   <string name="assistant_page_max_tokens_no_token_limit">无Token限制</string>
-  <string name="assistant_page_memory">记忆</string>
+  <string name="assistant_page_memory">长期记忆</string>
   <string name="assistant_page_memory_count">记忆: %d</string>
-  <string name="assistant_page_memory_desc">启用记忆后，模型在与你对话时尝试主动记录你的信息，并在后续其他对话中使用，此功能需要模型支持工具调用才能正常工作</string>
+  <string name="assistant_page_memory_desc">长期记忆在该助手下的所有会话之间共享（公共）。此功能需要模型支持工具调用才能正常工作</string>
   <string name="assistant_page_message_template">聊天内容模板</string>
   <string name="assistant_page_message_template_desc">控制聊天消息在发送给LLM之前的内容格式，通常不需要修改</string>
   <string name="assistant_page_message_template_missing_message">模板不包含 {{ message }}，用户消息将不会被发送</string>
@@ -185,8 +203,8 @@
   <string name="backup_page_importing">正在恢复...</string>
   <string name="backup_page_loading_failed">加载备份文件失败: %s</string>
   <string name="backup_page_local_backup_export">导出为文件</string>
-  <string name="backup_page_local_backup_export_official">官方兼容备份</string>
-  <string name="backup_page_local_backup_export_official_desc">导出可由 RikkaHub 2.4.14 恢复的备份</string>
+  <string name="backup_page_local_backup_export_official">兼容导出（寿松）</string>
+  <string name="backup_page_local_backup_export_official_desc">沺用原「官方兼容」逻辑：RikkaHub 2.4.14 可以恢复，二改多出的字段原样带上，由官方版自行忽略</string>
   <string name="backup_page_local_backup_export_full">二改完整备份</string>
   <string name="backup_page_local_backup_export_full_desc">导出当前分支的全部数据和文件</string>
   <string name="backup_page_local_backup_import">备份文件导入</string>
@@ -1673,4 +1691,323 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="setting_page_preferences_network_proxy">代理</string>
   <string name="setting_page_preferences_network_proxy_desc">支持 HTTP 和 SOCKS5 代理 URL。留空以使用系统设置。</string>
   <string name="setting_page_preferences_network_proxy_invalid">请输入包含主机和端口的有效代理 URL。</string>
+    <!-- rh-batch1 -->
+    <string name="chat_tool_approval_allow_chat">本对话内允许</string>
+    <string name="chat_tool_approval_allow_always">始终允许</string>
+    <string name="chat_tool_approval_hint">长按「允许」可选择范围，长按「拒绝」可填写原因</string>
+    <string name="chat_html_exit_native">恢复原生</string>
+    <string name="setting_display_page_collapse_user_message_title" formatted="true">折叠长用户消息</string>
+    <string name="setting_display_page_collapse_user_message_desc" formatted="true">你发送的长消息默认折叠，点“展开全文”查看</string>
+    <string name="setting_display_page_collapse_user_message_lines" formatted="true">超过 %d 行折叠</string>
+    <string name="chat_message_expand" formatted="true">展开全文</string>
+    <string name="chat_message_collapse" formatted="true">收起</string>
+    <string name="compaction_stream_title" formatted="true">压缩模型实时输出</string>
+    <string name="chat_input_file_imported_to_workspace" formatted="true">%1$s 已导入工作区：%2$s</string>
+    <string name="chat_input_file_no_workspace" formatted="true">%s 无法直接发送，给助手绑定工作区后会自动导入</string>
+    <string name="backup_page_local_backup_export_pure">轻量备份（不含附件）</string>
+    <string name="backup_page_local_backup_export_pure_desc">只备份对话数据和设置，不含 uploads/ 附件，体积小</string>
+    <string name="setting_tavern_mode">酒馆模式</string> <!-- rhTavernMode -->
+    <string name="setting_tavern_mode_desc">只保留人设、记忆、搜索和文件,其余工具全部关闭</string>
+    <string name="setting_page_custom_tools">AI 自定义工具</string>
+    <string name="setting_page_custom_tools_desc">让 AI 自己编写并调用 JavaScript 工具</string>
+    <!-- rhHeartRate -->
+    <string name="heart_rate_title">实时心率</string>
+    <string name="heart_rate_bpm_unit">BPM</string>
+    <string name="heart_rate_connected_to">已连接：%1$s</string>
+    <string name="heart_rate_connecting">连接中...</string>
+    <string name="heart_rate_scanning">扫描中...</string>
+    <string name="heart_rate_not_connected">未连接</string>
+    <string name="heart_rate_last_update">最后更新：%1$s</string>
+    <string name="heart_rate_permission_hint">需要蓝牙权限才能接收心率广播</string>
+    <string name="heart_rate_grant_permission">授权</string>
+    <string name="heart_rate_bluetooth_off">蓝牙未开启</string>
+    <string name="heart_rate_no_devices">没有发现设备，请先在手表上开启「心率广播」</string>
+    <string name="heart_rate_last_device">上次设备：%1$s</string>
+    <string name="heart_rate_connect">连接</string>
+    <string name="heart_rate_disconnect">断开连接</string>
+    <string name="heart_rate_scan">扫描</string>
+    <string name="heart_rate_stop_scan">停止扫描</string>
+    <string name="heart_rate_close">关闭</string>
+    <string name="chat_message_todo_title">计划</string> <!-- rhPlanBar228 -->
+    <string name="chat_message_todo_update">更新计划</string>
+    <string name="chat_message_todo_all_done">全部步骤已完成</string>
+    <string name="chat_message_todo_count_hint" formatted="true">已完成 %1$d / %2$d</string>
+    <string name="chat_message_todo_collapse">收起</string>
+    <string name="plan_bar_expand">展开计划</string>
+    <string name="setting_display_page_plan_bar_title">显示计划进度条</string>
+    <string name="setting_display_page_plan_bar_desc">在输入框上方常驻显示 AI 的任务计划清单,由 todo_write 工具驱动</string>
+  <!-- rhShortMemUI -->
+  <string name="assistant_page_short_memory">短期记忆</string>
+  <string name="assistant_page_short_memory_desc">短期记忆是每个会话私有的：记忆仅在创建它的会话中可见，会话之间互不可见。不能与长期记忆同时开启。</string>
+  <string name="assistant_page_short_memory_empty">暂无短期记忆。AI 在各会话中保存的记忆会按会话分组显示在这里。</string>
+  <string name="assistant_page_memory_unknown_conversation">未知会话</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_archive_title">压缩包（zip）</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_archive_desc">直接创建和打开 .zip 压缩包。v1 不支持密码。支持 file:// 与 content:// 路径。</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_external_storage_title">外部存储</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_external_storage_desc">让文件工具可以读写 U 盘、SD 卡、下载目录与云存储。每个目录需要先用 SAF 选择器授权一次。</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_keyboard_title">键盘控制</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_keyboard_desc">通过配套的 agent-keyboard 输入法操作当前输入框：输入、读取、按键、删除、移动光标、选中文本。共 8 个工具。</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_keyboard_setup_title">设置 agent-keyboard</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_keyboard_status_installed">agent-keyboard 已安装 — 设为当前输入法即可使用这些工具</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_keyboard_status_not_installed">未安装 agent-keyboard 应用</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_keystore_title">密钥库</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_keystore_desc">使用硬件级密钥（Android Keystore）生成、签名、加密与解密。共 7 个工具。</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_nfc_title">NFC</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_nfc_desc">读写 NFC 标签上的 NDEF 记录。需要在应用处于前台时才能检测到标签。</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_nfc_unavailable">此设备没有 NFC 硬件，因此无法启用这些工具。</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_sms_send_title">发送短信</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_sms_send_desc">以编程方式发送短信。需要 SEND_SMS 权限。每次调用都需要确认。</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_wallpaper_title">壁纸</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_wallpaper_desc">用本地图片设置桌面或锁屏壁纸。每次调用都需要确认。</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_section_keyboard">键盘控制</string>
+    <!-- rhZhLocalTools246 -->
+    <string name="assistant_page_local_tools_section_privileged">特权工具</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_accounts_count">账号（%1$d）</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_ban_warning_title">这可能会让你的 Google 账号被封禁</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_check_status">检查状态</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_daily_limit">每日额度</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_enable">启用 Gemini OAuth</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_no_accounts">尚未登录任何 Google 账号。</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_oauth_ports_unavailable">本地回调端口被占用，无法开始 Google 登录。请关闭占用该端口的应用后重试。</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_oauth_success">Google 登录完成</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_percent_remaining">剩余 %1$d%%</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_project_id">云项目：%1$s</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_provider_description">使用 Google 账号登录，经由 Google Cloud Code Assist 生成内容（与 Antigravity 相同的后端）。无需 API Key。</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_provider_short_description">Google 账号登录 — 请先阅读封号警告</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_reauthenticate">重新授权</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_refresh">刷新</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_refresh_failed">刷新账号失败</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_remove">移除</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_remove_account_message">移除后需要重新登录才能使用该账号。</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_remove_account_title">移除 Google 账号？</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_resets_at">重置时间 %1$s</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_round_robin_description">按轮询顺序使用已启用的账号。</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_sign_in">使用 Google 登录</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_sign_in_required">请先登录至少一个 Google 账号。</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_token_available">令牌有效</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_token_expired">令牌已过期</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_token_not_checked">尚未检查令牌状态</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_token_unavailable">令牌不可用</string>
+    <!-- rhZhOAuth247 -->
+    <string name="gemini_weekly_limit">每周额度</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_accounts_count">账号（%1$d）</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_check_status">检查状态</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_enable">启用 Grok</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_enter_code_prompt">请在浏览器中批准登录。若验证码未自动填入，请输入：</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_no_accounts">尚未登录任何 Grok 账号。</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_oauth_success">xAI 登录完成</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_on_demand_cap">按量付费：上限 %1$s</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_on_demand_disabled">按量付费：已禁用</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_percent_remaining">剩余 %1$d%%</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_plan">套餐：%1$s</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_reauthenticate">重新授权</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_refresh">刷新</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_refresh_failed">刷新账号失败</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_remove">移除</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_remove_account_message">移除后需要重新登录才能使用该账号。</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_remove_account_title">移除 Grok 账号？</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_resets_at">重置时间 %1$s</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_round_robin_description">按轮询顺序使用已启用的账号。</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_sign_in">使用 xAI 登录</string>
+    <!-- rhZhOAuth247 -->
+    <string name="grok_sign_in_required">请先登录至少一个可用账号。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="grok_token_available">令牌有效</string>
+    <!-- rhZhRemaining248 -->
+    <string name="grok_token_expired">令牌已过期</string>
+    <!-- rhZhRemaining248 -->
+    <string name="grok_token_not_checked">尚未检查令牌状态</string>
+    <!-- rhZhRemaining248 -->
+    <string name="grok_token_unavailable">令牌不可用</string>
+    <!-- rhZhRemaining248 -->
+    <string name="grok_weekly_limit">每周额度</string>
+    <!-- rhZhRemaining248 -->
+    <string name="assistant_page_local_tools_keyboard_setup_message">键盘控制需要先安装配套的 agent-keyboard 应用，并将其设为当前输入法。安装后到「系统设置 &gt; 系统 &gt; 语言和输入法 &gt; 屏幕键盘」切换到 agent-keyboard。两者缺一不可，否则所有键盘工具都会返回错误。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="imggen_page_image_missing">图片文件缺失，可能未从备份中恢复</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_catalog_tag_tools">工具</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_back_to_results">返回搜索结果</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_downloads_format">%1$d 次下载</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_file_size_gb_format">%1$.2f GB</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_files_error_format">无法列出文件：%1$s</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_loading_files">正在加载文件…</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_no_gguf_files">此仓库中没有 .gguf 文件</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_requires_access">此仓库为受限或私有仓库，需要访问令牌（本应用不支持）。请改选公开仓库。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_search_action">搜索</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_search_failed_format">搜索失败：%1$s</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_search_no_results">未找到 GGUF 仓库</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_search_placeholder">模型名，例如 Qwen3</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_hf_search_title">搜索 HuggingFace</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_llamacpp_catalog_subtitle">精选支持工具调用模板的 GGUF 模型，点一下即可安装。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_llamacpp_catalog_title">可用模型</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_llamacpp_import_action">安装已有的 GGUF 文件</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_perf_telemetry_format">预填充 %1$.1f tok/s · 解码 %2$.1f tok/s</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_spec_decoding_engaged_short">MTP 已开启</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_vision_retry">重试视觉识别</string>
+    <!-- rhZhRemaining248 -->
+    <string name="local_llm_vision_unavailable_caption">此设备不支持视觉识别，将仅运行文本</string>
+    <!-- rhZhRemaining248 -->
+    <string name="safe_mode_enter_app">进入应用</string>
+    <!-- rhZhRemaining248 -->
+    <string name="search_duplicate_key_continue">仍然保存</string>
+    <!-- rhZhRemaining248 -->
+    <string name="search_duplicate_key_message">此 API 密钥已配置给 %s。密钥本身已隐藏。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="search_duplicate_key_title">重复的 API 密钥</string>
+    <!-- rhZhRemaining248 -->
+    <string name="setting_browser_per_tool_timeout_desc">每次浏览器工具调用的硬时限。范围 10 秒至 10 分钟。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="setting_browser_per_tool_timeout_unit">秒</string>
+    <!-- rhZhRemaining248 -->
+    <string name="setting_browser_single_task_timeout_desc">单次 AI 驱动的浏览器任务的硬上限，防止失控循环。范围 1 分钟至 60 分钟。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="setting_browser_single_task_timeout_unit">分钟</string>
+    <!-- rhZhRemaining248 -->
+    <string name="setting_page_search_web_fetch_tools_desc">允许助手直接抓取并读取网页内容。默认开启；关闭则只使用你配置的搜索服务。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="setting_page_search_web_fetch_tools_title">网页抓取与提取</string>
+    <!-- rhZhRemaining248 -->
+    <string name="setting_tts_page_default_playback_speed">默认播放速度</string>
+    <!-- rhZhRemaining248 -->
+    <string name="setting_tts_page_default_playback_speed_description">本地作用于所有 TTS 服务商，不改变其合成设置。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="stats_page_cache_hit_rate">缓存命中率</string>
+    <!-- rhZhRemaining248 -->
+    <string name="plugin_import_security_warning_action">导入前请检查插件名称、作者、版本和权限声明。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="plugin_import_security_warning_message">插件将在受限 QuickJS 沙箱中运行；网络请求仅允许清单中的域名，工具调用需要授权。请只导入可信来源的 ZIP 文件。</string>
+    <!-- rhZhRemaining248 -->
+    <string name="plugin_import_security_warning_title">插件安全提示</string>
+    <!-- rhZhRemaining248 -->
+    <string name="workspace_detail_deselect_all">取消全选</string>
+    <!-- rhZhRemaining248 -->
+    <string name="workspace_detail_exit_selection">退出多选</string>
+    <!-- rhZhRemaining248 -->
+    <string name="workspace_detail_export_selected">导出选中</string>
+    <!-- rhZhRemaining248 -->
+    <string name="workspace_detail_select_all">全选</string>
+    <!-- rhZhRemaining248 -->
+    <string name="workspace_detail_selected_count">已选 %1$d/%2$d 项</string>
+    <!-- rhToolExpand249 -->
+    <string name="chat_message_tool_view_detail">查看完整结果</string>
+    <!-- rhApprovalIdentity -->
+    <string name="tool_approval_mcp_server_group_hint">按整台 MCP 服务器授权（而不是单个工具）</string>
+    <string name="tool_approval_mcp_server_allow_chat">服务器：本会话</string>
+    <string name="tool_approval_mcp_server_allow_always">服务器：始终</string>
+    <!-- rhApprovalIdentityMcpUi -->
+    <string name="setting_page_tool_approvals_mcp_header">MCP 服务器授权</string>
+    <string name="setting_page_tool_approvals_mcp_on">整台服务器已放行</string>
+    <string name="setting_page_tool_approvals_mcp_off">逐个工具询问</string>
+    <!-- rhHeartRateShare -->
+    <string name="heart_rate_connected_badge">已连接：%1$d/min</string>
+    <string name="heart_rate_disconnected_badge">未连接</string>
+    <string name="heart_rate_share_with_ai">发送消息时附带心率</string>
+    <!-- rhApprovalIdentityCovered -->
+    <string name="setting_page_tool_approvals_mcp_covered">已由服务器级授权覆盖</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_thought_worked">已工作 %1$d秒</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_thought_process">思考过程</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_thought_used_tools">使用了 %1$d 个%2$s工具</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_thought_used_tools_generic">使用了 %1$d 个工具</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_cat_web">网页</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_cat_file">文件</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_cat_mcp">MCP</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_cat_tool">工具</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_tool_args">参数</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_tool_result">结果</string>
+    <string name="rh_verb_search">搜索</string>
+    <string name="rh_verb_fetch">获取</string>
+    <string name="rh_verb_browse">浏览</string>
 </resources>

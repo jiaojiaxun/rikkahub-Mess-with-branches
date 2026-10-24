@@ -21,11 +21,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.common.http.jsonObjectOrNull
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Tools
+import me.rerere.rikkahub.data.ai.tools.RH_DISPLAY_PARAM
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.richtext.HighlightCodeBlock
 import me.rerere.rikkahub.ui.components.richtext.ZoomableAsyncImage
@@ -63,7 +65,8 @@ interface ToolUIRenderer {
     /** 折叠步骤的标题 */
     @Composable
     fun title(context: ToolUIContext): String =
-        stringResource(R.string.chat_message_tool_call_generic, context.tool.toolName)
+        context.arguments.getStringContent(RH_DISPLAY_PARAM)?.takeIf { it.isNotBlank() }
+            ?: stringResource(R.string.chat_message_tool_call_generic, rhPrettifyToolName(context.tool.toolName))
 
     /** 步骤展开时是否显示内联摘要 */
     fun hasSummary(context: ToolUIContext): Boolean = false
@@ -91,6 +94,7 @@ private object DefaultToolUIRenderer : ToolUIRenderer {
 object ToolUIRegistry {
     private val renderers: Map<String, ToolUIRenderer> = listOf(
         ContextCompactionToolUI,
+        TodoToolUI, // rhPlanBar228
         MemoryToolUI,
         SearchWebToolUI,
         ScrapeWebToolUI,
@@ -118,6 +122,22 @@ object ToolUIRegistry {
     /** 查找工具对应的渲染器, 未注册时返回默认渲染器 */
     fun resolve(toolName: String): ToolUIRenderer = renderers[toolName] ?: DefaultToolUIRenderer
 }
+
+// rhToolDisplay (batch229): MCP 工具名美化 mcp__<id>_<server>__<tool> -> Server · tool
+private fun rhPrettifyToolName(name: String): String {
+    if (!name.startsWith("mcp__")) return name
+    val parts = name.split("__")
+    if (parts.size < 3) return name
+    val server = parts[1].substringAfter('_')
+    val tool = parts.drop(2).joinToString("__")
+    return server.replaceFirstChar { it.uppercase() } + " · " + tool
+}
+
+// rhToolDisplay (batch229): 详情 JSON 展示前剔除内部展示参数
+private fun JsonElement.rhStrippedDisplay(): JsonElement =
+    (this as? JsonObject)?.let { obj ->
+        if (obj.containsKey(RH_DISPLAY_PARAM)) JsonObject(obj - RH_DISPLAY_PARAM) else obj
+    } ?: this
 
 internal fun JsonElement?.getStringContent(key: String): String? =
     this?.jsonObjectOrNull?.get(key)?.jsonPrimitiveOrNull?.contentOrNull
@@ -157,7 +177,7 @@ fun DefaultToolPreview(
             }
         ) {
             HighlightCodeBlock(
-                code = JsonInstantPretty.encodeToString(context.arguments),
+                code = JsonInstantPretty.encodeToString(context.arguments.rhStrippedDisplay()),
                 language = "json",
                 style = TextStyle(fontSize = 10.sp, lineHeight = 12.sp)
             )

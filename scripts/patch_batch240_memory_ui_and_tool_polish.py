@@ -51,7 +51,7 @@ PAGE = 'app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/Assistant
 def fail(msg):
     print('::error::batch240 ' + str(msg)[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def balance(text):

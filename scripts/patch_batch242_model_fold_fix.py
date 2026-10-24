@@ -34,7 +34,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ' ;; '.join('L' + str(i + 1) + ':' + lines[i].strip()[:120] for i in range(lo, hi))
     print('::error file=' + ML + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def main():

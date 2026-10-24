@@ -44,7 +44,7 @@ fun createAppControlTools(
                 UIMessagePart.Text(
                     buildJsonObject {
                         put("gateway", "rikkahub_app_control")
-                        put("version", 3)
+                        put("version", 5)
                         put("read_tools", kotlinx.serialization.json.buildJsonArray {
                             add(JsonPrimitive("rikkahub_capabilities"))
                             add(JsonPrimitive("rikkahub_query"))
@@ -65,6 +65,15 @@ fun createAppControlTools(
                             add(JsonPrimitive("rename_provider"))
                             add(JsonPrimitive("toggle_mcp_server"))
                             add(JsonPrimitive("set_web_server"))
+                            add(JsonPrimitive("schedule_cron_job"))
+                            add(JsonPrimitive("list_cron_jobs"))
+                            add(JsonPrimitive("delete_cron_job"))
+                            add(JsonPrimitive("pause_cron_job"))
+                            add(JsonPrimitive("resume_cron_job"))
+                            add(JsonPrimitive("trigger_cron_job"))
+                            add(JsonPrimitive("set_theme"))
+                            add(JsonPrimitive("set_dynamic_color"))
+                            add(JsonPrimitive("set_display_setting"))
                         })
                     }.toString()
                 )
@@ -110,6 +119,18 @@ fun createAppControlTools(
             - rename_provider {provider_id, name}
             - toggle_mcp_server {server_id, enable}
             - set_web_server {enabled?, port?, jwt_enabled?, localhost_only?}
+            - schedule_cron_job {name, cron, prompt, conversation_id?, assistant_id?}
+            - list_cron_jobs {}
+            - delete_cron_job {job_id}
+            - pause_cron_job {job_id}
+            - resume_cron_job {job_id}
+            - trigger_cron_job {job_id}
+            - set_theme {theme_id} (theme_id must already exist; optional mode=light|dark is
+              echoed back as a note, dark/light follows the app color mode)
+            - set_dynamic_color {enabled}
+            - set_display_setting {key, value}: bubble_opacity (0.1-1.0) or boolean keys
+              show_user_avatar / show_assistant_bubble / show_model_icon / show_model_name /
+              show_token_usage / show_thinking_content / show_date_time_in_message
             All ids are UUIDs. Query first with rikkahub_query to get valid ids.
         """.trimIndent().replace("\n", " "),
         parameters = {
@@ -128,6 +149,11 @@ fun createAppControlTools(
             )
         },
         needsApproval = { true },
+        // rhAppControlTheme: 动作级审批键 —— 批一次 set_theme 不会放行 toggle_provider_enabled
+        approvalKey = { args ->
+            me.rerere.rikkahub.data.ai.tools.ToolApprovalIdentity
+                .actionScopedKey("rikkahub_apply_change", args)
+        },
         execute = { input ->
             val args = input as? JsonObject
                 ?: return@Tool listOf(

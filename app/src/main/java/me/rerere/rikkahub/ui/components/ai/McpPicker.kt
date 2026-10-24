@@ -52,6 +52,7 @@ import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.McpStatus
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.ui.components.ui.Tag
+import me.rerere.rikkahub.ui.components.ui.UIAvatar // rhMcpAvatar253
 import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.components.ui.ToggleSurface
 import org.koin.compose.koinInject
@@ -296,6 +297,15 @@ fun McpPicker(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // rhMcpAvatar264: 配了头像才显示（顶替默认图标）；没配则走原状态图标
+                    if (server.commonOptions.avatar != me.rerere.rikkahub.data.model.Avatar.Dummy) {
+                    // rhMcpAvatar253: 只读展示服务器头像（编辑入口在设置页）
+                    UIAvatar(
+                        name = server.commonOptions.name.ifBlank { "MCP" },
+                        value = server.commonOptions.avatar,
+                        showEditBadge = false,
+                    )
+                    } else {
                     when (status) {
                         McpStatus.Idle -> Icon(HugeIcons.Icon1stBracket, null)
                         McpStatus.Connecting -> CircularProgressIndicator(
@@ -313,6 +323,7 @@ fun McpPicker(
                         McpStatus.Authorizing -> CircularProgressIndicator(
                             modifier = Modifier.size(24.dp)
                         )
+                    }
                     }
                     Column(
                         modifier = Modifier.weight(1f),

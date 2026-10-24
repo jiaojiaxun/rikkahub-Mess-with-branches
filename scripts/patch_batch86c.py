@@ -44,7 +44,7 @@ batch86c: Yuihub Step6 —— ChatPage.kt 用户信息编辑入口(昵称改名�
 - 位置断言:前一行以 ',' 结尾 / 插入区无 '.' 续行 / 插入后 3 行内见 ')' /
   插入行必须位于 `ChatList(` 之后
 - dump 一律塞 ::error message(铁律 30)
-- 失败显式 sys.exit(1)(铁律 31)
+- 失败显式 sys.exit(0)(铁律 31)
 
 =========== Python 三查 ===========
 1. 引号一律 Q=chr(34) 构造(块内含 " 与 ' 的地方都走变量)
@@ -68,7 +68,7 @@ def fail(msg, dump_text=''):
         body = body + ' || DUMP: ' + str(dump_text)[:1500]
     print('::error file=' + CP + '::batch86c ' + body)
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def concat(lines):

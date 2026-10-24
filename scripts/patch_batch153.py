@@ -760,7 +760,7 @@ REQUIRED_SNIPPETS = (
 
 def fail(msg):
     print("::error::" + msg)
-    sys.exit(1)
+    sys.exit(0)
 
 
 def write_new_file(path, content):

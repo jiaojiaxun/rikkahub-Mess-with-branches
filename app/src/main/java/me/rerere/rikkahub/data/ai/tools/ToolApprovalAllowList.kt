@@ -19,6 +19,23 @@ object ToolApprovalAllowList {
 
     private fun key(conversationId: Uuid, toolName: String) = "${conversationId}::${toolName}"
 
+    // rhApprovalIdentity: 会话级 MCP 服务器授权（「本会话允许整个 <服务器>」）。
+    // rhApprovalDeadCodeCleanup: 只保留有调用方的 grant/isAllowed；撤销与列表无 UI 入口，已删除。
+    // clearChat 按 "${conversationId}::" 前缀清理，服务器键天然被一并清掉。
+    private val perChatMcpServer: MutableSet<String> =
+        java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    private fun serverGrantKey(conversationId: Uuid, serverKey: String) =
+        "${conversationId}::srv::${serverKey}"
+
+    /** True iff 整台 MCP 服务器已在本会话内被放行。 */
+    fun isMcpServerAllowedForChat(conversationId: Uuid, serverKey: String): Boolean =
+        perChatMcpServer.contains(serverGrantKey(conversationId, serverKey))
+
+    fun grantForChatMcpServer(conversationId: Uuid, serverKey: String) {
+        perChatMcpServer.add(serverGrantKey(conversationId, serverKey))
+    }
+
     /** True iff "Allow for this chat" has been granted for [toolName] in [conversationId]. */
     fun isAllowedForChat(conversationId: Uuid, toolName: String): Boolean =
         perChat.contains(key(conversationId, toolName))

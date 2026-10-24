@@ -12,6 +12,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,10 +39,15 @@ fun CompressContextDialog(
     onConfirm: (additionalPrompt: String, targetTokens: Int, keepRecentMessages: Int) -> Job,
     // Conversation being compressed; used to show the compression model's live reply.
     conversationId: Uuid? = null,
+    // rh-batch8:truncate-only - optional "delete instead of summarise" action. Left null the
+    // toggle is hidden, so an existing call site keeps compiling unchanged.
+    onTruncate: ((keepRecentMessages: Int) -> Job)? = null,
 ) {
     var additionalPrompt by remember { mutableStateOf("") }
     var targetTokensK by remember(defaultTargetTokens) { mutableStateOf("") }
-    var keepRecentMessages by remember { mutableStateOf(32) }
+        var keepRecentMessages by remember { mutableStateOf(32) }
+    // rh-batch8:truncate-only - when on, the confirm button deletes instead of summarising.
+    var truncateOnly by remember { mutableStateOf(false) }
     var currentJob by remember { mutableStateOf<Job?>(null) }
     val isLoading = currentJob?.isActive == true
 
@@ -84,7 +90,39 @@ fun CompressContextDialog(
                         conversationId = conversationId,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                } else {
+                                } else {
+                    // rh-batch8:truncate-only - choose between the original model-backed summary
+                    // and a purely local "keep only the last N messages" cleanup.
+                    if (onTruncate != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "只保留最近 N 条（不总结，直接删除旧消息）",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Switch(
+                                checked = truncateOnly,
+                                onCheckedChange = { truncateOnly = it }
+                            )
+                        }
+                    }
+
+                    if (truncateOnly) {
+                        OutlinedNumberInput(
+                            value = keepRecentMessages,
+                            onValueChange = { keepRecentMessages = it },
+                            label = "保留最近多少条消息",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            text = "将直接删除更早的消息，不调用任何模型、不产生费用，且无法撤销。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    } else {
                     Text(stringResource(R.string.chat_page_compress_context_desc))
 
                     // Token size selector
@@ -137,12 +175,13 @@ fun CompressContextDialog(
                         maxLines = 4,
                     )
 
-                    // Warning text
+                                        // Warning text
                     Text(
                         text = stringResource(R.string.chat_page_compress_warning),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
+                    }
                 }
             }
         },
@@ -163,7 +202,12 @@ fun CompressContextDialog(
                         ?.coerceAtMost(Int.MAX_VALUE.toLong())
                         ?.toInt()
                         ?: defaultTargetTokens
-                    currentJob = onConfirm(additionalPrompt, targetTokens, keepRecentMessages)
+                    currentJob = if (truncateOnly) {
+                        // rh-batch8:truncate-only - no compression model is contacted here.
+                        onTruncate?.invoke(keepRecentMessages)
+                    } else {
+                        onConfirm(additionalPrompt, targetTokens, keepRecentMessages)
+                    }
                 }) {
                     Text(stringResource(R.string.confirm))
                 }

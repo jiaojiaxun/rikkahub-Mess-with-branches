@@ -129,7 +129,7 @@ class ProotShellRunner(
             "CI=true",
             "NO_COLOR=1",
             "PAGER=cat",
-            "/bin/bash",
+            pickRootfsShell(context.linuxDir), // rhShellFallback252
             "-l",
             "-c",
             // 命令通过位置参数传入, 避免任何转义; eval "$2" 对命令文本只求值一次, 等价于 bash -c "$cmd"
@@ -150,6 +150,16 @@ class ProotShellRunner(
         }
     }
 
+    /**
+     * rhShellFallback252: 默认/推荐的 Alpine minirootfs 只有 busybox，没有 /bin/bash。
+     * 之前这里硬编码 /bin/bash，导致 rootfs 检查（只认 bin/sh）通过、执行却 127 退出，
+     * workspace_shell / write_file / edit_file / create_folder / run_background 全线失效。
+     * busybox ash 支持 -l 与 -c 的位置参数，脚本模板无 bash 语法依赖，回退安全；
+     * 有 bash 的环境（如 Ubuntu rootfs）行为完全不变。
+     */
+    private fun pickRootfsShell(linuxDir: File): String =
+        if (File(linuxDir, "bin/bash").isFile) "/bin/bash" else "/bin/sh"
+    
     private fun File.hasUsableRootfs(): Boolean =
         isDirectory && File(this, "bin/sh").isFile
 
