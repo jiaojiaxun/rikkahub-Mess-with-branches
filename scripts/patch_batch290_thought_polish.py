@@ -2,63 +2,63 @@
 # -*- coding: utf-8 -*-
 '''batch290: polish pass on the thought drawer (post-#513 review)
 
-#513 built and shipped the drawer (batch289). A source-level read of the
-snapshot then found six issues that compile fine but are wrong. All six are
-fixed here; nothing else changes.
+v2 (this version): fixes a wrong assertion shipped in v1. The reasoning edit
+prepends "!plainLabel && " to an existing `if (...)` line - parenthesis counts
+are IDENTICAL, so the whole-file balance delta is 0, but v1 asserted
+`delta == 1` and would therefore always fail -> reasoning part silently
+skipped under warn-only (the batch243 false-green failure mode, caught in
+self-review before trusting the run).
 
-  1. Expanded rows show an UP chevron; the reference screenshots show a DOWN
-     chevron (v) on every opened level. -> ArrowDown01 when expanded, in both
-     RhDrawerRow and RhDrawerStepRow.
-  2. ChatMessageReasoning still renders the seconds in the `extra` slot when
+Everything else is unchanged from v1. Six issues found by reading the
+snapshot source after #513 shipped:
+
+  1. Expanded rows showed an UP chevron; the reference screenshots show a
+     DOWN chevron on every opened level. -> ArrowDown01 when expanded.
+  2. ChatMessageReasoning still rendered seconds in the `extra` slot when
      plainLabel is on and a streaming thinking-title exists. -> guard the
-     extra slot with !plainLabel so the row never shows seconds again.
+     extra slot with !plainLabel.
   3. The expand glyph on the result block was pure decoration. -> new
      RhToolJsonBlock(onExpand = ...) param; the result block now opens the
-     existing full-result sheet (showResult = true) when there is a detail to
-     show (hasResultDetail gate from batch249).
-  4. rhToolFaviconUrl used .jsonArray / .jsonObject which THROW on mismatched
-     JSON shapes - a tool whose output is not {items:[{url:...}]} would crash
-     the row. -> rewritten with safe casts (as? JsonObject / as? JsonArray /
-     as? JsonPrimitive) and an http-prefix check on the final value.
-  5. RhToolJsonBlock laid out the full payload text; a 100 KB tool output is
-     still expensive even with maxLines ellipsis. -> previewLimit param caps
-     the string itself (args 1200 chars, result 2400); the full text stays
-     available through the detail sheet.
-  6. Blocks without any Reasoning part had no start time, so the header fell
-     back to the literal title. -> rhStepsStartMillis now also considers
-     Tool.executionStartedAt (verified field, Long? unix millis). Honest
-     boundary kept: no completion timestamp exists on tools, so a FINISHED
-     tool-only block still shows the plain title rather than a fabricated
-     duration.
+     existing full-result sheet (showResult = true) behind the
+     hasResultDetail gate from batch249.
+  4. rhToolFaviconUrl used .jsonArray / .jsonObject which THROW on
+     mismatched JSON shapes. -> rewritten with safe casts (as? JsonObject /
+     as? JsonArray / as? JsonPrimitive) and an http-prefix check.
+  5. RhToolJsonBlock laid out the full payload text. -> previewLimit param
+     caps the string itself (args 1200 chars, result 2400, ellipsis mark
+     appended); the full text stays available through the detail sheet.
+  6. Blocks without any Reasoning part had no start time. ->
+     rhStepsStartMillis now also considers Tool.executionStartedAt (Long?
+     unix millis, verified field). Honest boundary kept: tools carry no
+     completion timestamp, so a FINISHED tool-only block shows the plain
+     title rather than a fabricated duration.
 
-Also: pill and json-block backgrounds move to surfaceContainerHighest so
-they stay visible inside an assistant bubble (surfaceContainerHigh), and the
-header label takes weight(1f) so the chevron sits on the right edge like the
-reference.
+Also: pill/json-block backgrounds move to surfaceContainerHighest so they
+stay visible inside an assistant bubble, and the header label takes
+weight(1f) so the chevron sits on the right edge like the reference.
+
+Idempotence: marker rhDrawer290. If v1's run already applied drawer+tools,
+this run re-checks the markers, skips those parts, and lands the reasoning
+guard that v1's bad assertion skipped.
 
 Five checks:
  1. imports: RhThoughtDrawer.kt whole-file rewrite is self-contained
-    (ArrowDown01 added; everything else already imported). ChatMessageTools
-    uses only already-imported symbols (JsonPrimitive/JsonArray/contentOrNull
-    all present). ChatMessageReasoning needs no new import.
- 2. same-file conflicts: RhThoughtDrawer.kt is our own file (286/289) -
-    rewritten whole. ChatMessageReasoning anchor is the extra-slot guard line
-    (batch243b's regex cache block is far away). ChatMessageTools anchors are
-    the batch286/289 insert points themselves (text = tool.input, / text =
-    tool.output... / showExpandIcon = true, // rhDrawer289), all verified
-    unique in the snapshot read.
+    (ArrowDown01 added). ChatMessageTools uses only already-imported symbols.
+    ChatMessageReasoning needs no new import.
+ 2. same-file conflicts: anchors are the batch286/289 insert points
+    themselves (verified unique in the snapshot read) plus the reasoning
+    extra-slot guard line.
  3. scope: onExpand lambda runs inside ChatMessageToolStep where showResult
-    and hasResultDetail are in scope; helpers stay top-level private.
- 4. braces: whole-file balance asserted for the drawer rewrite (=0); tools
-    file balance asserted unchanged; the reasoning one-line guard adds exactly
-    one '(' pair - asserted delta == +1.
- 5. signatures: RhToolJsonBlock gains onExpand/previewLimit with defaults;
-    existing call sites (label/maxLines/showExpandIcon named args) unchanged.
+    and hasResultDetail live; helpers stay top-level private.
+ 4. braces: drawer rewrite asserted balance == 0; tools file asserted
+    balance unchanged (delta 0); reasoning edit asserted delta == 0
+    (parenthesis counts identical - the v1 bug).
+ 5. signatures: RhToolJsonBlock gains onExpand/previewLimit with defaults.
 
-Python checks: Kotlin lives in triple-quoted blocks (the one backslash-n
-inside joinToString is written as \\\\n so Kotlin receives \\n); NL is
-concatenated explicitly; helpers defined before use; per-part try/except
-with ci_diag_batch290.txt; exit(1) on any failure.
+Python checks: Kotlin lives in triple-quoted blocks (the backslash-n inside
+joinToString is written as \\\\n so Kotlin receives \\n); NL concatenated
+explicitly; helpers defined before use; per-part try/except with
+ci_diag_batch290.txt; exit(1) on any failure.
 '''
 import sys
 from pathlib import Path
@@ -257,8 +257,8 @@ fun RhThoughtDrawer(
  * Grey rounded payload block. rhDrawer290
  *
  * Plain Text on purpose (no syntax highlighter - outputs can be huge).
- * [previewLimit] caps the rendered string; the full text stays available to
- * the caller's detail sheet via [onExpand].
+ * [previewLimit] caps the rendered string (an ellipsis mark is appended when
+ * truncated); the full text stays available through the detail sheet.
  */
 @Composable
 fun RhToolJsonBlock(
@@ -274,7 +274,7 @@ fun RhToolJsonBlock(
         return
     }
     val shown = if (previewLimit > 0 && raw.length > previewLimit) {
-        raw.take(previewLimit)
+        raw.take(previewLimit) + " ..."
     } else {
         raw
     }
@@ -737,8 +737,10 @@ def part_reasoning():
     lines[idx] = new_guard
     new_text = text_of(lines)
     delta = balance(new_text) - bal0
-    if delta != 1:
-        add_fail('reasoning balance delta=' + str(delta) + ' (expected 1)')
+    # The edit only prepends "!plainLabel && " and appends a comment - the
+    # parenthesis counts of the line are IDENTICAL, so delta must be 0.
+    if delta != 0:
+        add_fail('reasoning balance delta=' + str(delta) + ' (expected 0)')
         return
     if new_text.count(old_guard) != 0:
         add_fail('reasoning old guard still present')
