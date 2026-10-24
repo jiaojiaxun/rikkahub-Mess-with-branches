@@ -1,34 +1,33 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch260 v2: 顶部数据源统一（T-M5e）—— 去掉全局 balance 预判，改逐处括号断言
+'''batch260 v3: 顶部数据源统一（T-M5e）—— 逐处断言「左括号减少数」
 
-【为什么要 v2】
-batch260 与 batch260b 在 CI 上都是 ABORT balance delta unexpected: 0（预期 -1 / -3），
-两批都**没有写盘** => T-M5e 至今零落地（ci_diag_batch260.txt / ci_diag_batch260b.txt 实证）。
-全局 delta 是个猜谜题：五处改动里只有三处动括号（-1 / -1 / -1），但实测整文件 delta 恒为 0，
-说明我对「全局括号净变化」的建模与真实文件不符。
+【v2 的错（推送后静态自查立刻发现，run#489 前修的）】
+v2 用的是 parens(new) - parens(old)，而 parens = 左括号数 - 右括号数。
+对一行配平代码，这个值恒为 0（不管删没删括号）=> 所有 -1 预期必定 ABORT。
+正确的量是「左括号个数减少了几只」：old.count('(') - new.count('(')。
 
-【本批】
-不再断言全局 delta，改成**逐处局部断言**：每替换一行，断言该行圆括号净变化等于预期
-（0 / -1 / -1 / -1）；插入的每一行断言自身括号平衡。局部断言可证伪、可解释，
-不依赖全文其他部分。全局 delta 只记录进 diag 供以后核对。
+【v1/v2 为什么都不行】
+v1 与 v1b 断言全局 balance（v1 预期 -1、v1b 预期 -3），CI 实测都是 0 => 双双 ABORT，
+T-M5e 零落地（ci_diag_batch260.txt / ci_diag_batch260b.txt 实证）。
+本批不再用全局 delta，逐行断言左/右括号各减少 want 只，可证伪、与全文其余部分无关。
 
 【改动（5 处，单文件 ChatPage.kt）】
 1 ChatPageContent: val assistant = setting.getCurrentAssistant()
-                  -> val assistant = setting.getAssistantOf(conversation)
+                  -> val assistant = setting.getAssistantOf(conversation)           减 0 只
 2 ChatPageContent: setting.getCurrentChatModel()?.findProvider(...) is ProviderSetting.Google
-                  -> currentChatModel?.findProvider(...) is ProviderSetting.Google
+                  -> currentChatModel?.findProvider(...) is ProviderSetting.Google   减 1 只
 3 TopBar 签名：settings: Settings, 之后插 assistant: Assistant, 与 currentChatModel: Model?
-4 TopBar 内部：删掉自己算的两行（改为直接用参数；model 行改成 val model = currentChatModel）
+4 TopBar 内部：assistant 那行改注释；model 行改成 val model = currentChatModel             各减 1 只
 5 TopBar 调用点：settings = setting, 之后补 assistant = assistant, 与 currentChatModel = currentChatModel,
 
 五查:
- 1. import 清单: 零新增。ChatPage.kt 已有 me.rerere.ai.provider.Model、
-    me.rerere.rikkahub.data.model.Assistant、getAssistantOf、getChatModelOf（batch259 加）
- 2. 同文件冲突: 锚点 5 处与 batch228/237/238/255/259 落点不重叠（259 只动 TopBar 内那两行）
- 3. 作用域: assistant 与 currentChatModel 都在 ChatPageContent 内；TopBar 新参数与使用点同函数
- 4. 括号配对: 逐处断言 0 / -1 / -1 / -1，插入行各自平衡
- 5. 函数签名: 仅 TopBar 增加两个参数，唯一调用点同步补实参；ChatPageContent 签名不变
+ 1. import 清单: 零新增（snapshot 实读确认 ChatPage.kt 已有 Model / Assistant /
+    getAssistantOf / getChatModelOf）
+ 2. 同文件冲突: 五处锚点与 batch228/237/238/255/259 不重叠
+ 3. 作用域: assistant 与 currentChatModel 均在 ChatPageContent；TopBar 新参数与使用点同函数
+ 4. 括号配对: 逐处断言左右各减 0/1/1/1；插入行断言左右相等
+ 5. 函数签名: 仅 TopBar 加两个参数，唯一调用点同步补实参
 Python 三查: 引号用 Q 构造; NL 显式 concat; helper 先定义后用; 失败即中止不写盘
 '''
 import sys
@@ -36,7 +35,6 @@ from pathlib import Path
 
 ROOT = Path.cwd()
 NL = chr(10)
-Q = chr(34)
 DIAG = 'ci_diag_batch260.txt'
 
 PAGE = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt'
@@ -70,10 +68,6 @@ def balance(text):
             + text.count('[') - text.count(']'))
 
 
-def parens(text):
-    return text.count('(') - text.count(')')
-
-
 def lines_to_text(lines):
     out = ''
     for idx, line in enumerate(lines):
@@ -100,11 +94,13 @@ def unique(lines, needle, label):
     return hits[0]
 
 
-def set_line(lines, idx, new_line, want_diff, label):
-    got = parens(new_line) - parens(lines[idx])
-    if got != want_diff:
-        note('ABORT ' + label + ': paren diff=' + str(got) + ' (want ' + str(want_diff) + ')')
-        note('  old=' + repr(lines[idx].strip()))
+def set_line(lines, idx, new_line, want_removed, label):
+    old = lines[idx]
+    ro = old.count('(') - new_line.count('(')
+    rc = old.count(')') - new_line.count(')')
+    if ro != want_removed or rc != want_removed:
+        note('ABORT ' + label + ': parens removed left=' + str(ro) + ' right=' + str(rc) + ' (want ' + str(want_removed) + ' each)')
+        note('  old=' + repr(old.strip()))
         note('  new=' + repr(new_line.strip()))
         raise Abort(label)
     lines[idx] = new_line
@@ -112,8 +108,8 @@ def set_line(lines, idx, new_line, want_diff, label):
 
 def insert_lines(lines, idx, new_lines, label):
     for ln in new_lines:
-        if parens(ln) != 0:
-            note('ABORT ' + label + ': inserted line not balanced -> ' + repr(ln.strip()))
+        if ln.count('(') != ln.count(')'):
+            note('ABORT ' + label + ': inserted line unbalanced -> ' + repr(ln.strip()))
             raise Abort(label)
     lines[idx:idx] = new_lines
 
@@ -138,7 +134,7 @@ def patch():
     set_line(lines, a, ind_of(lines[a]) + A_NEW, 0, 'content assistant')
 
     b = unique(lines, B_OLD, 'allowAudioVideoAttachments')
-    set_line(lines, b, ind_of(lines[b]) + B_NEW, -1, 'allowAudioVideoAttachments')
+    set_line(lines, b, ind_of(lines[b]) + B_NEW, 1, 'allowAudioVideoAttachments')
 
     c = unique(lines, SIG, 'TopBar signature')
     if c + 2 >= len(lines):
@@ -154,10 +150,10 @@ def patch():
     ], 'signature insert')
 
     d = unique(lines, D_OLD, 'topbar assistant line')
-    set_line(lines, d, ind_of(lines[d]) + D_NEW, -1, 'topbar assistant')
+    set_line(lines, d, ind_of(lines[d]) + D_NEW, 1, 'topbar assistant')
 
     e = unique(lines, E_OLD, 'topbar model line')
-    set_line(lines, e, ind_of(lines[e]) + E_NEW, -1, 'topbar model')
+    set_line(lines, e, ind_of(lines[e]) + E_NEW, 1, 'topbar model')
 
     f = unique(lines, CALL, 'TopBar call')
     if f + 2 >= len(lines):
@@ -201,9 +197,9 @@ def write_diag():
         body += str(line) + NL
     try:
         (ROOT / DIAG).write_text(body, encoding='utf-8')
-        print('::error::batch260 v2 diag written chars=' + str(len(body)))
+        print('::error::batch260 v3 diag written chars=' + str(len(body)))
     except Exception as e:
-        print('::error::batch260 v2 diag write FAILED ' + str(e)[:200])
+        print('::error::batch260 v3 diag write FAILED ' + str(e)[:200])
     sys.stdout.flush()
 
 
@@ -215,12 +211,12 @@ def main():
         note('1 topbar pure presentational ABORTED (no file written): ' + str(e))
     except Exception as e:
         note('1 topbar pure presentational EXCEPTION ' + type(e).__name__ + ' ' + str(e)[:300])
-    print('::error::batch260 v2 part: topbar pure presentational')
+    print('::error::batch260 v3 part: topbar pure presentational')
     sys.stdout.flush()
     write_diag()
     for line in report:
-        print('::error::batch260 v2 ' + str(line)[:800])
-    print('::error::batch260 v2 END lines=' + str(len(report)))
+        print('::error::batch260 v3 ' + str(line)[:800])
+    print('::error::batch260 v3 END lines=' + str(len(report)))
 
 
 main()
