@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch290 v8: anchored drawer polish, with CI-safe Python.
+'''batch290 v9: line-oriented drawer polish.
 
-#522 failed before Kotlin: Python SyntaxError at the final exit line.
-The workflow sed rewrites every literal "exit(1)" to "exit(0)", including
-"sys.exit(1)", producing "sys.exit(0))". Use sys.exit(1 + 0) so the source
-cannot be damaged by that sed. Kotlin blocks containing escaped quotes or
-backslash-n are raw Python strings so anchors and generated source match.
-
-Optimal interaction: the tool-group drawer controls only tool steps;
-reasoning rows remain independently visible. No duplicate full Kotlin file.
+#522/#523 both failed before Kotlin with Python SyntaxError at a multi-line
+parenthesized expression after the CI sed rewrite. v9 removes that whole
+class of failure: no multi-line parenthesized expressions, no raw-string
+ambiguity, no exit(1) literal, and no full-file Kotlin duplication.
 '''
 import sys
 from pathlib import Path
 
 ROOT = Path.cwd()
 NL = chr(10)
+Q = chr(34)
+BS = chr(92)
 MARK = 'rhDrawer290'
 DIAG = 'ci_diag_batch290.txt'
 DRAWER = 'app/src/main/java/me/rerere/rikkahub/ui/components/message/RhThoughtDrawer.kt'
@@ -34,118 +32,221 @@ def fail(message):
     report.append('FAIL ' + str(message)[:420])
 
 
+def lines_of(text):
+    return text.split(NL)
+
+
+def text_of(lines):
+    out = ''
+    for i, line in enumerate(lines):
+        if i:
+            out += NL
+        out += line
+    return out
+
+
+def indent_of(line):
+    stripped = line.lstrip()
+    return line[:len(line) - len(stripped)]
+
+
 def read(rel):
     return (ROOT / rel).read_text(encoding='utf-8')
 
 
-def replace_once(text, old, new, label):
-    count = text.count(old)
-    if count != 1:
-        fail(label + ' count=' + str(count))
-        return text
-    return text.replace(old, new, 1)
+def write(rel, text):
+    (ROOT / rel).write_text(text, encoding='utf-8')
 
 
-def insert_after(text, anchor, addition, label):
-    if addition.strip() in text:
-        return text
-    lines = text.split(NL)
-    hits = [i for i, line in enumerate(lines) if line.strip() == anchor.strip()]
+def find_one(lines, predicate, label):
+    hits = [i for i, line in enumerate(lines) if predicate(line)]
     if len(hits) != 1:
-        fail(label + ' anchor count=' + str(len(hits)))
-        return text
-    i = hits[0]
-    indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
-    lines.insert(i + 1, indent + addition)
-    return NL.join(lines)
+        fail(label + ' count=' + str(len(hits)))
+        return -1
+    return hits[0]
+
+
+def replace_line(lines, predicate, make_line, label):
+    idx = find_one(lines, predicate, label)
+    if idx < 0:
+        return lines
+    lines[idx] = indent_of(lines[idx]) + make_line(indent_of(lines[idx]))
+    return lines
+
+
+def insert_after(lines, predicate, new_lines, label):
+    idx = find_one(lines, predicate, label)
+    if idx < 0:
+        return lines
+    base = indent_of(lines[idx])
+    block = [base + ln if ln else ln for ln in new_lines]
+    return lines[:idx + 1] + block + lines[idx + 1:]
+
+
+def replace_block(lines, predicate, old_tail, new_block, label):
+    start = find_one(lines, predicate, label)
+    if start < 0:
+        return lines
+    end = start + len(old_tail)
+    got = [ln.strip() for ln in lines[start:end]]
+    if got != old_tail:
+        fail(label + ' block mismatch: ' + repr(got[:3]))
+        return lines
+    base = indent_of(lines[start])
+    block = [base + ln if ln else ln for ln in new_block]
+    return lines[:start] + block + lines[end:]
 
 
 def balanced(text):
-    return (text.count('(') == text.count(')') and
-            text.count('{') == text.count('}') and
-            text.count('[') == text.count(']')
+    return text.count('(') == text.count(')') and text.count('{') == text.count('}') and text.count('[') == text.count(']')
 
 
 def part_drawer():
-    text = read(DRAWER)
-    if MARK in text:
+    lines = lines_of(read(DRAWER))
+    if any(MARK in line for line in lines):
         note('drawer already at 290')
         return
-    if 'fun RhThoughtDrawer(' not in text or 'fun RhToolJsonBlock(' not in text:
-        fail('drawer prerequisite missing')
+    if find_one(lines, lambda ln: ln.strip() == 'fun RhThoughtDrawer(', 'drawer fun') < 0:
         return
-    text = text.replace('import me.rerere.hugeicons.stroke.ArrowUp01',
-                        'import me.rerere.hugeicons.stroke.ArrowDown01')
-    text = text.replace('HugeIcons.ArrowUp01', 'HugeIcons.ArrowDown01')
-    text = text.replace('.background(MaterialTheme.colorScheme.surfaceContainerHigh)',
-                        '.background(MaterialTheme.colorScheme.surfaceContainerHighest)')
-    text = replace_once(text, 'modifier = Modifier.weight(1f, fill = false),',
-                        'modifier = Modifier.weight(1f),', 'drawer header weight')
 
-    old_group = '''                if (groupOpened) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        steps.fastForEach { step ->
-                            scope.content(step)
-                        }
-                    }
-                }'''
-    new_group = '''                Column(modifier = Modifier.fillMaxWidth()) {
-                    steps.fastForEach { step ->
-                        if (step is ThinkingStep.ReasoningStep || groupOpened) {
-                            scope.content(step)
-                        }
-                    }
-                }'''
-    text = replace_once(text, old_group, new_group, 'group/reasoning visibility')
+    # Down chevron for expanded rows.
+    lines = replace_line(
+        lines,
+        lambda ln: ln.strip() == 'import me.rerere.hugeicons.stroke.ArrowUp01',
+        lambda ind: 'import me.rerere.hugeicons.stroke.ArrowDown01',
+        'drawer arrow import',
+    )
+    for i, line in enumerate(lines):
+        if 'HugeIcons.ArrowUp01' in line:
+            lines[i] = line.replace('HugeIcons.ArrowUp01', 'HugeIcons.ArrowDown01')
+    for i, line in enumerate(lines):
+        if '.background(MaterialTheme.colorScheme.surfaceContainerHigh)' in line:
+            lines[i] = line.replace('surfaceContainerHigh', 'surfaceContainerHighest')
 
-    text = replace_once(text, r'''    label: String = "",
-''', r'''    label: String = "",
-    onExpand: (() -> Unit)? = null,
-    previewLimit: Int = 0,
-''', 'json block parameters')
-    text = replace_once(text, '''    val body = text.trim()
-    if (body.isEmpty()) {
+    lines = replace_line(
+        lines,
+        lambda ln: ln.strip() == 'modifier = Modifier.weight(1f, fill = false),',
+        lambda ind: 'modifier = Modifier.weight(1f),',
+        'drawer header weight',
+    )
+
+    lines = replace_block(
+        lines,
+        lambda ln: ln.strip() == 'if (groupOpened) {',
+        [
+            'if (groupOpened) {',
+            'Column(modifier = Modifier.fillMaxWidth()) {',
+            'steps.fastForEach { step ->',
+            'scope.content(step)',
+            '}',
+            '}',
+            '}',
+        ],
+        [
+            'Column(modifier = Modifier.fillMaxWidth()) {',
+            'steps.fastForEach { step ->',
+            'if (step is ThinkingStep.ReasoningStep || groupOpened) {',
+            'scope.content(step)',
+            '}',
+            '}',
+            '}',
+        ],
+        'group/reasoning visibility',
+    )
+
+    lines = insert_after(
+        lines,
+        lambda ln: ln.strip() == 'label: String = "",',
+        ['onExpand: (() -> Unit)? = null,', 'previewLimit: Int = 0,'],
+        'json block parameters',
+    )
+
+    lines = replace_block(
+        lines,
+        lambda ln: ln.strip() == 'val body = text.trim()',
+        ['val body = text.trim()', 'if (body.isEmpty()) {', 'return', '}'],
+        [
+            'val raw = text.trim()',
+            'if (raw.isEmpty()) {',
+            'return',
+            '}',
+            'val shown = if (previewLimit > 0 && raw.length > previewLimit) {',
+            'raw.take(previewLimit) + ' + Q + ' ...' + Q,
+            '} else {',
+            'raw',
+            '}',
+        ],
+        'json preview body',
+    )
+    lines = replace_line(
+        lines,
+        lambda ln: ln.strip() == 'text = body,',
+        lambda ind: 'text = shown,',
+        'json preview text',
+    )
+
+    # Add click-to-expand only to the payload block (first surfaceContainerHighest
+    # background after the 14.dp payload corner), not to the small pill.
+    payload_bg = -1
+    for i, line in enumerate(lines):
+        if 'RoundedCornerShape(14.dp)' in line:
+            for j in range(i + 1, min(i + 5, len(lines))):
+                if '.background(MaterialTheme.colorScheme.surfaceContainerHighest)' in lines[j]:
+                    payload_bg = j
+                    break
+            break
+    if payload_bg < 0:
+        fail('payload background anchor missing')
         return
-    }''', '''    val raw = text.trim()
-    if (raw.isEmpty()) {
+    base = indent_of(lines[payload_bg])
+    modifier_block = [
+        '.then(',
+        'if (onExpand != null) {',
+        'Modifier.clickable { onExpand() }',
+        '} else {',
+        'Modifier',
+        '}',
+        ')',
+    ]
+    lines = lines[:payload_bg + 1] + [base + ln for ln in modifier_block] + lines[payload_bg + 1:]
+
+    lines = replace_block(
+        lines,
+        lambda ln: ln.strip() == 'private fun rhStepsStartMillis(steps: List<ThinkingStep>): Long? {',
+        [
+            'private fun rhStepsStartMillis(steps: List<ThinkingStep>): Long? {',
+            'return steps.filterIsInstance<ThinkingStep.ReasoningStep>()',
+            '.map { it.reasoning.createdAt.toEpochMilliseconds() }',
+            '.minOrNull()',
+            '}',
+        ],
+        [
+            'private fun rhStepsStartMillis(steps: List<ThinkingStep>): Long? {',
+            'val candidates = mutableListOf<Long>()',
+            'steps.filterIsInstance<ThinkingStep.ReasoningStep>().forEach { step ->',
+            'candidates.add(step.reasoning.createdAt.toEpochMilliseconds())',
+            '}',
+            'steps.filterIsInstance<ThinkingStep.ToolStep>().forEach { step ->',
+            'step.tool.executionStartedAt?.let { stamp ->',
+            'candidates.add(stamp)',
+            '}',
+            '}',
+            'return candidates.minOrNull()',
+            '}',
+        ],
+        'tool start time',
+    )
+
+    package_idx = find_one(
+        lines,
+        lambda ln: ln.strip() == 'package me.rerere.rikkahub.ui.components.message',
+        'drawer package',
+    )
+    if package_idx < 0:
         return
-    }
-    val shown = if (previewLimit > 0 && raw.length > previewLimit) {
-        raw.take(previewLimit) + " ..."
-    } else {
-        raw
-    }''', 'json preview body')
-    text = replace_once(text, '            text = body,', '            text = shown,', 'json preview text')
-    text = replace_once(text, '''            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .padding(horizontal = 12.dp, vertical = 10.dp),''',
-                        '''            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .then(
-                if (onExpand != null) {
-                    Modifier.clickable { onExpand() }
-                } else {
-                    Modifier
-                }
-            )
-            .padding(horizontal = 12.dp, vertical = 10.dp),''',
-                        'json expand modifier')
-    text = replace_once(text, '''private fun rhStepsStartMillis(steps: List<ThinkingStep>): Long? {
-    return steps.filterIsInstance<ThinkingStep.ReasoningStep>()
-        .map { it.reasoning.createdAt.toEpochMilliseconds() }
-        .minOrNull()
-}''', '''private fun rhStepsStartMillis(steps: List<ThinkingStep>): Long? {
-    val candidates = mutableListOf<Long>()
-    steps.filterIsInstance<ThinkingStep.ReasoningStep>().forEach { step ->
-        candidates.add(step.reasoning.createdAt.toEpochMilliseconds())
-    }
-    steps.filterIsInstance<ThinkingStep.ToolStep>().forEach { step ->
-        step.tool.executionStartedAt?.let { stamp ->
-            candidates.add(stamp)
-        }
-    }
-    return candidates.minOrNull()
-}''', 'tool start time')
-    text = text.replace('package me.rerere.rikkahub.ui.components.message\n',
-                        'package me.rerere.rikkahub.ui.components.message\n\n// rhDrawer290\n', 1)
+    lines.insert(package_idx + 1, '// ' + MARK)
+
+    text = text_of(lines)
     if not balanced(text):
         fail('drawer unbalanced after edits')
         return
@@ -158,61 +259,84 @@ def part_drawer():
     if 'ArrowUp01' in text:
         fail('drawer still has ArrowUp01')
         return
-    (ROOT / DRAWER).write_text(text, encoding='utf-8')
-    note('drawer OK: anchored polish and independent reasoning rows')
+    write(DRAWER, text)
+    note('drawer OK: line-oriented polish')
 
 
 def part_reasoning():
-    text = read(REASON)
-    if MARK in text:
+    lines = lines_of(read(REASON))
+    if any(MARK in line for line in lines):
         note('reasoning already at 290')
         return
-    text = replace_once(text, 'if (showThinkingTitle && state.duration > 0.seconds) {',
-                        'if (!plainLabel && showThinkingTitle && state.duration > 0.seconds) { // ' + MARK,
-                        'reasoning extra guard')
+    lines = replace_line(
+        lines,
+        lambda ln: ln.strip() == 'if (showThinkingTitle && state.duration > 0.seconds) {',
+        lambda ind: 'if (!plainLabel && showThinkingTitle && state.duration > 0.seconds) { // ' + MARK,
+        'reasoning extra guard',
+    )
+    text = text_of(lines)
     if MARK not in text:
         return
-    (ROOT / REASON).write_text(text, encoding='utf-8')
+    write(REASON, text)
     note('reasoning OK: plain label hides seconds')
 
 
 def part_tools():
-    text = read(TOOLS)
-    if MARK in text:
+    lines = lines_of(read(TOOLS))
+    if any(MARK in line for line in lines):
         note('tools already at 290')
         return
-    start_marker = 'private fun rhToolFaviconUrl(tool: UIMessagePart.Tool): String? {'
-    start = text.find(start_marker)
+    start = find_one(
+        lines,
+        lambda ln: ln.strip() == 'private fun rhToolFaviconUrl(tool: UIMessagePart.Tool): String? {',
+        'favicon function start',
+    )
     if start < 0:
-        fail('favicon function missing')
         return
-    end = text.find('\n}\n', start)
+    end = -1
+    for i in range(start + 1, len(lines)):
+        if lines[i].strip() == '}' and indent_of(lines[i]) == '':
+            end = i
+            break
     if end < 0:
         fail('favicon function end missing')
         return
-    end += 3
-    new_function = r'''private fun rhToolFaviconUrl(tool: UIMessagePart.Tool): String? {
-    val args = runCatching { tool.inputAsJson() as? JsonObject }.getOrNull()
-    val direct = args?.get("url")?.jsonPrimitiveOrNull?.contentOrNull
-    if (direct != null && direct.startsWith("http")) {
-        return direct
-    }
-    val outputText = tool.output.filterIsInstance<UIMessagePart.Text>()
-        .joinToString("\\n") { it.text }
-    val content = runCatching { JsonInstant.parseToJsonElement(outputText) }.getOrNull()
-    val root = content as? JsonObject ?: return null
-    val items = root.get("items") as? kotlinx.serialization.json.JsonArray ?: return null
-    val first = items.firstOrNull() as? JsonObject ?: return null
-    val url = first.get("url") as? JsonPrimitive ?: return null
-    return url.content.takeIf { it.startsWith("http") }
-}'''
-    text = text[:start] + new_function + text[end:]
-    text = insert_after(text, 'text = tool.input,', 'previewLimit = 1200, // ' + MARK, 'args preview')
-    text = insert_after(text, 'showExpandIcon = true, // rhDrawer289',
-                        'previewLimit = 2400, // ' + MARK, 'result preview')
-    text = insert_after(text, 'showExpandIcon = true, // rhDrawer289',
-                        'onExpand = if (hasResultDetail) ({ showResult = true }) else null, // ' + MARK,
-                        'result expand callback')
+    new_fn = [
+        'private fun rhToolFaviconUrl(tool: UIMessagePart.Tool): String? {',
+        '    val args = runCatching { tool.inputAsJson() as? JsonObject }.getOrNull()',
+        '    val direct = args?.get(' + Q + 'url' + Q + ')?.jsonPrimitiveOrNull?.contentOrNull',
+        '    if (direct != null && direct.startsWith(' + Q + 'http' + Q + ')) {',
+        '        return direct',
+        '    }',
+        '    val outputText = tool.output.filterIsInstance<UIMessagePart.Text>()',
+        '        .joinToString(' + Q + BS + 'n' + Q + ') { it.text }',
+        '    val content = runCatching { JsonInstant.parseToJsonElement(outputText) }.getOrNull()',
+        '    val root = content as? JsonObject ?: return null',
+        '    val items = root.get(' + Q + 'items' + Q + ') as? kotlinx.serialization.json.JsonArray ?: return null',
+        '    val first = items.firstOrNull() as? JsonObject ?: return null',
+        '    val url = first.get(' + Q + 'url' + Q + ') as? JsonPrimitive ?: return null',
+        '    return url.content.takeIf { it.startsWith(' + Q + 'http' + Q + ') }',
+        '}',
+    ]
+    lines = lines[:start] + new_fn + lines[end + 1:]
+
+    lines = insert_after(
+        lines,
+        lambda ln: ln.strip() == 'text = tool.input,',
+        ['previewLimit = 1200, // ' + MARK],
+        'args preview',
+    )
+    lines = insert_after(
+        lines,
+        lambda ln: ln.strip() == 'showExpandIcon = true, // rhDrawer289',
+        [
+            'onExpand = if (hasResultDetail) ({ showResult = true }) else null, // ' + MARK,
+            'previewLimit = 2400, // ' + MARK,
+        ],
+        'result preview and expand',
+    )
+
+    text = text_of(lines)
     if not balanced(text):
         fail('tools unbalanced after edits')
         return
@@ -221,7 +345,7 @@ def part_tools():
         if token not in text:
             fail('tools missing ' + token)
             return
-    (ROOT / TOOLS).write_text(text, encoding='utf-8')
+    write(TOOLS, text)
     note('tools OK: safe favicon, preview caps, detail callback')
 
 
@@ -241,7 +365,7 @@ def main():
         print('::error::batch290 ' + str(line)[:800])
     if failures:
         print('::error::batch290 FAILED count=' + str(len(failures)))
-        sys.exit(1 + 0)
+        raise SystemExit(1)
     print('batch290: OK')
 
 
