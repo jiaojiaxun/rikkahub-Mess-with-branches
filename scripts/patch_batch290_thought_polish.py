@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch290 v7: minimal anchored drawer polish.
+'''batch290 v8: anchored drawer polish, with CI-safe Python.
 
-Runs after batch286/289 in the CI chain. No duplicate full Kotlin file.
-Each source file is checked before a single write; all edits are idempotent.
+#522 failed before Kotlin: Python SyntaxError at the final exit line.
+The workflow sed rewrites every literal "exit(1)" to "exit(0)", including
+"sys.exit(1)", producing "sys.exit(0))". Use sys.exit(1 + 0) so the source
+cannot be damaged by that sed. Kotlin blocks containing escaped quotes or
+backslash-n are raw Python strings so anchors and generated source match.
 
-UI rules:
-- expanded chevrons point down; opened levels use solid dots;
-- the group drawer controls only tool steps, never hides reasoning steps;
-- reasoning plainLabel hides the seconds in the extra slot;
-- result blocks open the existing detail sheet;
-- favicon parsing is shape-safe and JsonArray is fully qualified;
-- preview strings are capped before Compose layout;
-- Tool.executionStartedAt supplies a start time for tool-only blocks.
+Optimal interaction: the tool-group drawer controls only tool steps;
+reasoning rows remain independently visible. No duplicate full Kotlin file.
 '''
 import sys
 from pathlib import Path
@@ -85,7 +82,6 @@ def part_drawer():
     text = replace_once(text, 'modifier = Modifier.weight(1f, fill = false),',
                         'modifier = Modifier.weight(1f),', 'drawer header weight')
 
-    # A group is a drawer for tools, not a second switch for reasoning.
     old_group = '''                if (groupOpened) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         steps.fastForEach { step ->
@@ -102,9 +98,11 @@ def part_drawer():
                 }'''
     text = replace_once(text, old_group, new_group, 'group/reasoning visibility')
 
-    text = replace_once(text, '    label: String = "",\n',
-                        '    label: String = "",\n    onExpand: (() -> Unit)? = null,\n    previewLimit: Int = 0,\n',
-                        'json block parameters')
+    text = replace_once(text, r'''    label: String = "",
+''', r'''    label: String = "",
+    onExpand: (() -> Unit)? = null,
+    previewLimit: Int = 0,
+''', 'json block parameters')
     text = replace_once(text, '''    val body = text.trim()
     if (body.isEmpty()) {
         return
@@ -193,7 +191,7 @@ def part_tools():
         fail('favicon function end missing')
         return
     end += 3
-    new_function = '''private fun rhToolFaviconUrl(tool: UIMessagePart.Tool): String? {
+    new_function = r'''private fun rhToolFaviconUrl(tool: UIMessagePart.Tool): String? {
     val args = runCatching { tool.inputAsJson() as? JsonObject }.getOrNull()
     val direct = args?.get("url")?.jsonPrimitiveOrNull?.contentOrNull
     if (direct != null && direct.startsWith("http")) {
@@ -243,7 +241,7 @@ def main():
         print('::error::batch290 ' + str(line)[:800])
     if failures:
         print('::error::batch290 FAILED count=' + str(len(failures)))
-        sys.exit(1)
+        sys.exit(1 + 0)
     print('batch290: OK')
 
 
