@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch285: 流式渲染平滑三件套 —— 打字机匀速 + 块冻结 + 新块淡入
+'''batch285 v2: 流式渲染平滑三件套 —— 打字机匀速 + 块冻结 + 新块淡入
+
+【v2 修正: 500ms 延迟门曾被 LaunchedEffect 重启杀死】
+v1 把 delay(500) 放在 drive() 里, 而驱动方是 LaunchedEffect(active, len) ——
+每 80ms 一次新 chunk 就取消旧协程, delay 被打断, 而 started 已在 delay 前置位,
+实际延迟只剩 ~80ms。v2 拆成:
+  · awaitStartDelay(active): 独立 LaunchedEffect(active) 内跑, 只受 active 键影响,
+    delay 完再置 started
+  · drive() 里 if (!started) return —— 延迟未结束不推进
+另修: clip(latest, active) 对"从未流式过的历史消息"(started=false, revealed=0)
+直接返回全文, 消除首帧空白, 且不重放动画。
 
 【用户诉求】流式"一顿一顿的变速" -> 0.5s 延迟缓冲 + 匀速输出 + 文字淡入。
 【根因】ChatService 80ms sample(batch258) 后每帧增量不可预测(一次蹦 0~N 字符),
@@ -15,12 +25,12 @@ Markdown 全文重组合且无打字整流层。
    +import androidx.compose.runtime.key。
    —— batch242 的冻结在当前链上零落地(snapshot 实读 MarkdownBlock 无 marker,
    其 fail 被 warn-only 吞), 本批换名重实现, 不依赖它。
-3. ChatMessage.kt: ContentBlock Text 分支插打字机状态+LaunchedEffect 驱动,
+3. ChatMessage.kt: ContentBlock Text 分支插打字机状态+两个 LaunchedEffect,
    两处助手 MarkdownBlock content=part.text -> content=rhShownText,
    助手分支包 CompositionLocalProvider(LocalRhStreamFade provides rhStreamActive)。
 
-【行为边界】用户消息/历史消息(loading=false)逐字节不变; hasHtml 消息打字机照常
-但冻结/淡入不覆盖; 表格单元格默认 LocalRhStreamFade=false 直通;
+【行为边界】用户消息/历史消息(loading=false 且从未流式)逐字节不变;
+hasHtml 消息打字机照常但冻结/淡入不覆盖; 表格单元格默认 LocalRhStreamFade=false;
 重生成 clip 的 len>=latest.length 检查保证越界安全。
 
 五查:
@@ -132,13 +142,23 @@ internal class RhTypewriterState {
     private var started = false
     private var driven = false
 
-    // 读取当前应显示的文本(组合期调用, 无副作用)
-    fun clip(latest: String): String {
+    // 读取当前应显示的文本(组合期调用, 无副作用)。
+    // 从未流式过的历史消息(started=false, revealed=0)直通全文, 零帧空白。
+    fun clip(latest: String, active: Boolean): String {
+        if (!active && !started && revealed.value == 0f) return latest
         val len = revealed.value.toInt()
         return if (len >= latest.length) latest else latest.substring(0, len)
     }
 
-    // 驱动动画: target 变化时由 LaunchedEffect 重启, 从当前 revealed 匀速推进
+    // 初始缓冲门: 必须在只依赖 active 的独立 LaunchedEffect 里调用,
+    // 否则会随每个 chunk 重启而被取消(v1 的 bug, v2 修正)。
+    suspend fun awaitStartDelay(active: Boolean) {
+        if (!active || started) return
+        delay(RH_TW_START_DELAY_MS)
+        started = true
+    }
+
+    // 驱动动画: target 变化时由 LaunchedEffect 重启, 从当前 revealed 匀速推进。
     suspend fun drive(targetLen: Int, active: Boolean) {
         if (!active) {
             if (revealed.value < targetLen) {
@@ -160,10 +180,7 @@ internal class RhTypewriterState {
                 return
             }
         }
-        if (!started) {
-            started = true
-            delay(RH_TW_START_DELAY_MS)
-        }
+        if (!started) return
         val backlog = targetLen - revealed.value
         if (backlog <= 0f) return
         val rate = maxOf(RH_TW_BASE_RATE, backlog / RH_TW_CATCHUP_WINDOW_S)
@@ -261,7 +278,8 @@ def part_smoothstream():
     p.write_text(SMOOTH_STREAM_KT, encoding='utf-8')
     for need in ['class RhTypewriterState', 'fun RhFadeIn(',
                  'fun rhSplitStreamBlocks285(', 'LocalRhStreamFade',
-                 'rememberSaveable', 'RH_TW_START_DELAY_MS = 500L']:
+                 'rememberSaveable', 'RH_TW_START_DELAY_MS = 500L',
+                 'suspend fun awaitStartDelay(active: Boolean)']:
         if need not in SMOOTH_STREAM_KT:
             note('ABORT selfcheck missing ' + need)
             raise SystemExit(1)
@@ -383,10 +401,13 @@ TYPEWRITER_BLOCK = r'''// rhSmoothStream285: 打字机匀速渲染。0.5s 初始
                         // 滚动销毁重建(len>=64)直接全量不重放。
                         val rhTw = remember { RhTypewriterState() }
                         val rhStreamActive = role != MessageRole.USER && loading
+                        LaunchedEffect(rhStreamActive) {
+                            rhTw.awaitStartDelay(rhStreamActive)
+                        }
                         LaunchedEffect(rhStreamActive, part.text.length) {
                             rhTw.drive(part.text.length, rhStreamActive)
                         }
-                        val rhShownText = rhTw.clip(part.text)
+                        val rhShownText = rhTw.clip(part.text, rhStreamActive)
 '''
 
 PROVIDER_OPEN = '                                CompositionLocalProvider(LocalRhStreamFade provides rhStreamActive) { // rhSmoothStream285'
@@ -465,8 +486,9 @@ def part_chatmessage():
         raise SystemExit(1)
     checks = [
         'RhTypewriterState()',
+        'rhTw.awaitStartDelay(rhStreamActive)',
         'rhTw.drive(part.text.length, rhStreamActive)',
-        'rhTw.clip(part.text)',
+        'rhTw.clip(part.text, rhStreamActive)',
         'CompositionLocalProvider(LocalRhStreamFade provides rhStreamActive)',
         'content = rhShownText.replaceRegexes(',
         'import me.rerere.rikkahub.ui.components.richtext.RhTypewriterState',
