@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch290 v2: 修复重进流式对话时消息整篇重放(打字机+淡入)
+'''batch290 v3: 修复重进流式对话时消息整篇重放(打字机+淡入)
 
 【v1 死因(run 40158258113, diag 实证)】
-    smoothstream OK / part DONE
-    chatmessage dropped rememberSaveable import
-    ABORT chatmessage stale symbol rhIsRebuild   <= 断言误判
-v1 用裸词 `rhIsRebuild` 检查代码残留, 但 v3 打字机块上方的说明注释里就有
-"rhIsRebuild=true -> 直接全量..." 字样 => 断言命中注释 => abort => ChatMessage
-零写盘; 而 SmoothStream.kt 的 clip 已改成 3 参 => 编译错
-"ChatMessage.kt:482 No value passed for parameter 'resumed'"。
-v2 两处修正:
-  1. 注释块随代码一起替换(注释描述新语义, 不再残留旧词)
-  2. 残留检查改精确语法: 'val rhEverDriven' / 'val rhIsRebuild' /
-     '(part.text.length, rhStreamActive, rhIsRebuild)' —— 裸词检查永远会撞注释。
+    ABORT chatmessage stale symbol rhIsRebuild
+裸词残留断言命中 v3 打字机块**上方注释**里的 "rhIsRebuild=true -> ..." =>
+ChatMessage 零写盘; 而 SmoothStream.kt 的 clip 已改 3 参 =>
+编译错 "ChatMessage.kt:482 No value passed for parameter 'resumed'"。
+v1 修正: 残留检查改精确语法 + 注释块随代码一起替换。
+
+【v2 死因(推送后机器复验发现)】
+OLD 块只列了 9 行(2 注释 + everDriven/isRebuild/LaunchedEffect/if/drive/}/clip),
+但真实 v3 形态里注释块与 val rhEverDriven 之间还夹着
+    val rhTw = remember { RhTypewriterState() }
+    val rhStreamActive = role != MessageRole.USER && loading
+两行 => shape 校验必失败 => 同样 ABORT => 同样编译红。
+v3 修正: OLD 块改为**真实连续 11 行**(2 注释 + rhTw + rhStreamActive +
+everDriven + isRebuild + LaunchedEffect + if + drive + } + clip),
+NEW 块 9 行(2 新注释 + rhTw + rhStreamActive + rhResumed + LaunchedEffect +
+drive + } + clip)。已用机器逐行复验: per_row 全 match, balance_delta=0。
 
 【用户报告】每次重进一个正在输出的对话, 消息都会重新显示一遍。
 【根因】batch288 v3 用 rememberSaveable 的 everDriven 判定"滚动重建", 但
@@ -39,16 +44,15 @@ age 从 0 涨到 30s, rhStreamResumed 保持 false(remember 冻结) => 打字机
     -1(rememberSaveable, v3 加入且仅被删代码使用); SmoothStream.kt +0 import。
  2. 同文件冲突: ChatMessage.kt 在链 53/76/88/249/286/289(ThinkingBlock 区+import)
     与 288(textContent 区)。本批锚点: onUserMessageClick 定义/调用两行(形态不同)、
-    v3 打字机块注释+代码(288 自写)、v3 provider 行、colorScheme 行、import 区
-    —— 与 286/289 落点不相交; sort -V 下 290 最后执行。
+    v3 打字机块 11 行(288 自写, 已机器复验逐行匹配)、v3 provider 行、colorScheme 行、
+    import 区 —— 与 286/289 落点不相交; sort -V 下 290 最后执行。
     SmoothStream.kt 由 288 创建, 本批 find/replace 基于 v3 已实读形态。
  3. 作用域: rhStreamResumed 在 ChatMessage 函数体(message/remember 可用);
     streamResumed 为 MessagePartsBlock 默认参数; rhResumed 在 ContentBlock 内,
     drive/clip/provider fade 均在作用域。
- 4. 括号配对: 两文件 balance 前后一致断言; 旧注释+代码 9 行(3 对花括号)换成
-    新注释+代码 7 行(1 对花括号), 净差 0; 新增计算块自身配平;
-    clip 的 (!active || resumed) 与 provider 的 (rhStreamActive && !rhResumed))
-    各增 1 对括号。
+ 4. 括号配对: 两文件 balance 前后一致断言; OLD 11 行净 balance 0 -> NEW 9 行净
+    balance 0(机器复验 delta=0); 新增计算块自身配平; clip 的 (!active || resumed)
+    与 provider 的 (rhStreamActive && !rhResumed)) 各增 1 对括号。
  5. 函数签名: MessagePartsBlock 加默认参数(内部 private, 唯一调用点同步);
     drive isRebuild->skipReplay 改名; clip 加 resumed 形参 —— 同批调用点同步。
 【Python 三查】Kotlin 块 raw 三引号; NL 显式 concat; helper 先定义后用;
@@ -171,7 +175,7 @@ def part_smoothstream():
             note('ABORT smoothstream selfcheck missing ' + need[:70])
             raise SystemExit(1)
     # 精确语法残留检查(裸词会撞注释, v1 的教训)
-    for bad in ['isRebuild: Boolean', 'if (isRebuild) {', 'isRebuild)']:
+    for bad in ['isRebuild: Boolean', 'if (isRebuild) {', 'active, isRebuild)']:
         if bad in t2:
             note('ABORT smoothstream stale syntax ' + bad)
             raise SystemExit(1)
@@ -182,10 +186,13 @@ def part_smoothstream():
 # =========================================================================
 # Part 2: ChatMessage.kt —— 年龄判定 + 参数接线 + import 增删
 # =========================================================================
-# 旧注释+代码共 9 行(v3 形态, strip 比较); 注释必须一起换, 否则旧词残留
+# v3 真实形态连续 11 行(机器复验逐行匹配): 注释 2 行与 val rhEverDriven 之间
+# 夹着 rhTw/rhStreamActive 两行, v2 漏掉导致 shape 校验必失败。
 OLD_TW_BLOCK = [
     '// everDriven 经 rememberSaveable 跨组合保存: 滚动出屏重建时',
     '// rhIsRebuild=true -> 直接全量, 不重放; 首块大 chunk 照常打字。',
+    'val rhTw = remember { RhTypewriterState() }',
+    'val rhStreamActive = role != MessageRole.USER && loading',
     'val rhEverDriven = rememberSaveable { mutableStateOf(false) }',
     'val rhIsRebuild = remember { rhEverDriven.value }',
     'LaunchedEffect(rhStreamActive, part.text.length) {',
@@ -198,6 +205,8 @@ OLD_TW_BLOCK = [
 NEW_TW_BLOCK = [
     '// rhStreamResumeFix290: 重进/重建判定改用消息年龄(rhStreamResumed):',
     '// 已有内容直接全量不重放; 发送瞬间照常打字, 淡入由 provider 控制。',
+    'val rhTw = remember { RhTypewriterState() }',
+    'val rhStreamActive = role != MessageRole.USER && loading',
     'val rhResumed = streamResumed',
     'LaunchedEffect(rhStreamActive, part.text.length) {',
     'rhTw.drive(part.text.length, rhStreamActive, rhResumed)',
@@ -267,7 +276,7 @@ def part_chatmessage():
                            'MessagePartsBlock call arg')
     lines = lines[:call_idx + 1] + ['                    streamResumed = rhStreamResumed, // ' + MARK] + lines[call_idx + 1:]
 
-    # E6: 注释+代码整块替换(9 行 -> 7 行), 逐行 strip 校验
+    # E6: 注释+代码整块替换(11 行 -> 9 行), 逐行 strip 校验
     start_idx = -1
     for i, ln in enumerate(lines):
         if ln.strip() == OLD_TW_BLOCK[0]:
@@ -316,7 +325,7 @@ def part_chatmessage():
         if need not in t2:
             note('ABORT chatmessage selfcheck missing ' + need[:70])
             raise SystemExit(1)
-    # 精确语法残留检查(v1 教训: 裸词撞注释)
+    # 精确语法残留检查(v1 教训: 裸词会撞注释; v2 教训: 块形态必须机器复验)
     for bad in ['val rhEverDriven', 'val rhIsRebuild',
                 '(part.text.length, rhStreamActive, rhIsRebuild)']:
         if bad in t2:
