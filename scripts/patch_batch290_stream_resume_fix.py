@@ -1,15 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch290: 修复重进流式对话时消息整篇重放(打字机+淡入)
+'''batch290 v2: 修复重进流式对话时消息整篇重放(打字机+淡入)
+
+【v1 死因(run 40158258113, diag 实证)】
+    smoothstream OK / part DONE
+    chatmessage dropped rememberSaveable import
+    ABORT chatmessage stale symbol rhIsRebuild   <= 断言误判
+v1 用裸词 `rhIsRebuild` 检查代码残留, 但 v3 打字机块上方的说明注释里就有
+"rhIsRebuild=true -> 直接全量..." 字样 => 断言命中注释 => abort => ChatMessage
+零写盘; 而 SmoothStream.kt 的 clip 已改成 3 参 => 编译错
+"ChatMessage.kt:482 No value passed for parameter 'resumed'"。
+v2 两处修正:
+  1. 注释块随代码一起替换(注释描述新语义, 不再残留旧词)
+  2. 残留检查改精确语法: 'val rhEverDriven' / 'val rhIsRebuild' /
+     '(part.text.length, rhStreamActive, rhIsRebuild)' —— 裸词检查永远会撞注释。
 
 【用户报告】每次重进一个正在输出的对话, 消息都会重新显示一遍。
-【根因】batch288 v3 用 rememberSaveable 的 everDriven 判定"滚动重建"。
-但 LazyColumn item 级 saveable 只在可见+预取范围内保留: 导航离开对话页时
-若该消息不在可见区(或页面整体 dispose), everDriven 恢复失败 =>
-rhIsRebuild=false => drive 从 0 重放全文打字机; RhFadeIn 的 played 同样
-恢复失败 => 所有块重新淡入。两者叠加即"消息重新显示一遍"。
+【根因】batch288 v3 用 rememberSaveable 的 everDriven 判定"滚动重建", 但
+LazyColumn item 级 saveable 只在可见+预取范围内保留: 导航离开对话页时若
+消息不在可见区/页面整体 dispose, everDriven 恢复失败 => 打字机从 0 重放全文;
+RhFadeIn 的 played 同样丢 => 所有块重新淡入。
 
-【修复: 消息年龄判定(数据层事实, 不依赖 saveable 恢复)】
+【修复: 消息年龄判定(数据层事实, 跨导航恒定)】
 UIMessage.createdAt 跨导航/重建恒定:
   · 发送瞬间 age≈0   => 本次组合就是"从头开始流式" => 打字机+淡入照常
   · 打开/重进时 age>1s => 本次组合前已有内容 => drive(skipReplay) 直接全量,
@@ -24,23 +36,23 @@ age 从 0 涨到 30s, rhStreamResumed 保持 false(remember 冻结) => 打字机
 【五查】
  1. import: ChatMessage.kt +5(kotlin.time.Clock / kotlinx.datetime.TimeZone /
     kotlinx.datetime.toInstant / LocalRhStreamResumed / RH_TW_RESUME_AGE_MS),
-    -1(rememberSaveable, v3 加入且仅本批删除处使用); SmoothStream.kt +0 import。
+    -1(rememberSaveable, v3 加入且仅被删代码使用); SmoothStream.kt +0 import。
  2. 同文件冲突: ChatMessage.kt 在链 53/76/88/249/286/289(ThinkingBlock 区+import)
     与 288(textContent 区)。本批锚点: onUserMessageClick 定义/调用两行(形态不同)、
-    v3 打字机块(288 自写, 7 行形态)、v3 provider 行、colorScheme 行、import 区
+    v3 打字机块注释+代码(288 自写)、v3 provider 行、colorScheme 行、import 区
     —— 与 286/289 落点不相交; sort -V 下 290 最后执行。
     SmoothStream.kt 由 288 创建, 本批 find/replace 基于 v3 已实读形态。
  3. 作用域: rhStreamResumed 在 ChatMessage 函数体(message/remember 可用);
     streamResumed 为 MessagePartsBlock 默认参数; rhResumed 在 ContentBlock 内,
     drive/clip/provider fade 均在作用域。
- 4. 括号配对: 两文件 balance 前后一致断言; 新增计算块自身配平; 删 7 行插 5 行
-    均为配平对(rememberSaveable{}/remember{} 各 1 对, 删除后净差 0);
-    clip 的 (!active || resumed) 增 1 对括号; provider (rhStreamActive && !rhResumed))
-    增 1 对括号。
+ 4. 括号配对: 两文件 balance 前后一致断言; 旧注释+代码 9 行(3 对花括号)换成
+    新注释+代码 7 行(1 对花括号), 净差 0; 新增计算块自身配平;
+    clip 的 (!active || resumed) 与 provider 的 (rhStreamActive && !rhResumed))
+    各增 1 对括号。
  5. 函数签名: MessagePartsBlock 加默认参数(内部 private, 唯一调用点同步);
     drive isRebuild->skipReplay 改名; clip 加 resumed 形参 —— 同批调用点同步。
-【Python 三查】无双/单引号拼接歧义, Kotlin 块 raw 三引号; NL 显式 concat;
-helper 先定义后用; 每部分独立 try 捕获继续; 失败 ::error + 独立 diag 落盘。
+【Python 三查】Kotlin 块 raw 三引号; NL 显式 concat; helper 先定义后用;
+每部分独立 try 捕获继续; 失败 ::error + 独立 diag 落盘。
 '''
 import sys
 from pathlib import Path
@@ -158,9 +170,10 @@ def part_smoothstream():
         if need not in t2:
             note('ABORT smoothstream selfcheck missing ' + need[:70])
             raise SystemExit(1)
-    for bad in ['isRebuild', 'everDriven']:
+    # 精确语法残留检查(裸词会撞注释, v1 的教训)
+    for bad in ['isRebuild: Boolean', 'if (isRebuild) {', 'isRebuild)']:
         if bad in t2:
-            note('ABORT smoothstream stale symbol ' + bad)
+            note('ABORT smoothstream stale syntax ' + bad)
             raise SystemExit(1)
     p.write_text(t2, encoding='utf-8')
     note('smoothstream OK: skipReplay + clip resumed + LocalRhStreamResumed wired')
@@ -169,7 +182,10 @@ def part_smoothstream():
 # =========================================================================
 # Part 2: ChatMessage.kt —— 年龄判定 + 参数接线 + import 增删
 # =========================================================================
+# 旧注释+代码共 9 行(v3 形态, strip 比较); 注释必须一起换, 否则旧词残留
 OLD_TW_BLOCK = [
+    '// everDriven 经 rememberSaveable 跨组合保存: 滚动出屏重建时',
+    '// rhIsRebuild=true -> 直接全量, 不重放; 首块大 chunk 照常打字。',
     'val rhEverDriven = rememberSaveable { mutableStateOf(false) }',
     'val rhIsRebuild = remember { rhEverDriven.value }',
     'LaunchedEffect(rhStreamActive, part.text.length) {',
@@ -180,6 +196,8 @@ OLD_TW_BLOCK = [
 ]
 
 NEW_TW_BLOCK = [
+    '// rhStreamResumeFix290: 重进/重建判定改用消息年龄(rhStreamResumed):',
+    '// 已有内容直接全量不重放; 发送瞬间照常打字, 淡入由 provider 控制。',
     'val rhResumed = streamResumed',
     'LaunchedEffect(rhStreamActive, part.text.length) {',
     'rhTw.drive(part.text.length, rhStreamActive, rhResumed)',
@@ -249,7 +267,7 @@ def part_chatmessage():
                            'MessagePartsBlock call arg')
     lines = lines[:call_idx + 1] + ['                    streamResumed = rhStreamResumed, // ' + MARK] + lines[call_idx + 1:]
 
-    # E6: 打字机块 slice 替换(7 行 -> 5 行), 逐行 strip 校验
+    # E6: 注释+代码整块替换(9 行 -> 7 行), 逐行 strip 校验
     start_idx = -1
     for i, ln in enumerate(lines):
         if ln.strip() == OLD_TW_BLOCK[0]:
@@ -259,9 +277,9 @@ def part_chatmessage():
         note('ABORT chatmessage typewriter block start not found')
         raise SystemExit(1)
     for k, needle in enumerate(OLD_TW_BLOCK):
-        if lines[start_idx + k].strip() != needle:
+        if start_idx + k >= len(lines) or lines[start_idx + k].strip() != needle:
             note('ABORT chatmessage typewriter block shape mismatch at +' + str(k)
-                 + ' -> ' + repr(lines[start_idx + k][:70]))
+                 + ' -> ' + repr(lines[start_idx + k][:70] if start_idx + k < len(lines) else 'EOF'))
             raise SystemExit(1)
     end_idx = start_idx + len(OLD_TW_BLOCK) - 1
     indent = lines[start_idx][:len(lines[start_idx]) - len(lines[start_idx].lstrip())]
@@ -292,14 +310,17 @@ def part_chatmessage():
         'provides (rhStreamActive && !rhResumed)) {',
         'import kotlinx.datetime.toInstant',
         'import me.rerere.rikkahub.ui.components.richtext.LocalRhStreamResumed',
+        '// rhStreamResumeFix290: 重进/重建判定改用消息年龄',
     ]
     for need in checks:
         if need not in t2:
             note('ABORT chatmessage selfcheck missing ' + need[:70])
             raise SystemExit(1)
-    for bad in ['rhEverDriven', 'rhIsRebuild']:
+    # 精确语法残留检查(v1 教训: 裸词撞注释)
+    for bad in ['val rhEverDriven', 'val rhIsRebuild',
+                '(part.text.length, rhStreamActive, rhIsRebuild)']:
         if bad in t2:
-            note('ABORT chatmessage stale symbol ' + bad)
+            note('ABORT chatmessage stale syntax ' + bad)
             raise SystemExit(1)
     if 'import androidx.compose.runtime.saveable.rememberSaveable' in t2:
         note('ABORT chatmessage rememberSaveable import still present')
