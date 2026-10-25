@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch305: remove preview search bar below the chat top bar.'''
+'''batch305 v2: remove preview search bar below the chat top bar.'''
 import sys
 from pathlib import Path
 
@@ -26,6 +26,18 @@ def balance(text):
     return (text.count('(') - text.count(')')
             + text.count('{') - text.count('}')
             + text.count('[') - text.count(']'))
+
+
+def remove_import(lines, line, label):
+    stripped = [item.strip() for item in lines]
+    count = stripped.count(line)
+    if count == 0:
+        note(label + ' import already absent')
+        return lines
+    if count != 1:
+        fail(label + ' import count=' + str(count))
+        return lines
+    return [item for item in lines if item.strip() != line]
 
 
 def patch():
@@ -86,20 +98,36 @@ def patch():
     new_tail = new_tail.replace(old_padding, new_padding, 1)
     new_text = text[:start] + new_tail
 
+    if 'OutlinedTextField(' in new_text:
+        fail('preview search call still present')
+        return
+    if 'HugeIcons.Search01' in new_text:
+        fail('search icon call still present')
+        return
+
+    lines = new_text.split(NL)
+    lines = remove_import(lines, 'import me.rerere.hugeicons.stroke.Search01', 'search icon')
+    if failures:
+        return
+    lines = remove_import(lines, 'import androidx.compose.material3.OutlinedTextField', 'OutlinedTextField')
+    if failures:
+        return
+    new_text = NL.join(lines)
+
     if balance(new_text) != balance(text):
         fail('source balance changed')
         return
     if 'OutlinedTextField(' in new_text:
-        fail('preview search call still present')
+        fail('OutlinedTextField call remains after import cleanup')
         return
-    if 'HugeIcons.Search01' not in new_text:
-        fail('preview search icon import missing unexpectedly')
+    if 'HugeIcons.Search01' in new_text:
+        fail('Search01 call remains after import cleanup')
         return
     if new_text.count(MARK) < 2:
         fail('marker count=' + str(new_text.count(MARK)))
         return
     path.write_text(new_text, encoding='utf-8')
-    note('preview OK: search bar removed, top padding 16 -> 8')
+    note('preview OK: search bar removed, top padding 16 -> 8, unused imports cleaned')
 
 
 def write_diag():
