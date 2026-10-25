@@ -185,7 +185,7 @@ dependencies {
 
 
     // DataStore
-    implementation(libs.androidx.datastore.preference)
+    implementation(libs.androidx.datastore.preferences)
 
     // Image metadata extractor
     // https://github.com/drewnoakes/metadata-extractor
@@ -208,13 +208,13 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.sse)
     implementation(libs.retrofit)
-    implementation(libs.retrofit.serialization)
+    implementation(libs.retrofit.serialization.json)
 
     // ktor client
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
-    implementation(libs.ktor.serialization.kotlin.json)
+    implementation(libs.ktor.serialization.kotlinx.json)
 
     // ucrop
     implementation(libs.ucrop)
