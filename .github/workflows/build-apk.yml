@@ -42,6 +42,46 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
+      # Fixed release signing. The keystore is decoded into the runner's temporary
+      # directory and passed to Gradle through ORG_GRADLE_PROJECT_* environment
+      # variables, so no key material ever enters the git workspace or Release.
+      # If the four secrets are absent, Gradle falls back to debug signing.
+      - name: Configure release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          provided=0
+          if [ -n "$KEYSTORE_BASE64" ]; then provided=1; fi
+          if [ -n "$KEYSTORE_ALIAS" ]; then provided=1; fi
+          if [ -n "$KEYSTORE_PASSWORD" ]; then provided=1; fi
+          if [ -n "$KEY_PASSWORD" ]; then provided=1; fi
+          complete=1
+          if [ -z "$KEYSTORE_BASE64" ]; then complete=0; fi
+          if [ -z "$KEYSTORE_ALIAS" ]; then complete=0; fi
+          if [ -z "$KEYSTORE_PASSWORD" ]; then complete=0; fi
+          if [ -z "$KEY_PASSWORD" ]; then complete=0; fi
+          if [ "$provided" -eq 0 ]; then
+            echo "Release signing secrets absent; using temporary debug signing fallback"
+            exit 0
+          fi
+          if [ "$complete" -eq 0 ]; then
+            echo "::error::Release signing secrets are incomplete; set all four or none"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/rikkahub-release.jks"
+          test -s "$RUNNER_TEMP/rikkahub-release.jks"
+          {
+            echo "ORG_GRADLE_PROJECT_RELEASE_STORE_FILE=$RUNNER_TEMP/rikkahub-release.jks"
+            echo "ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS=$KEYSTORE_ALIAS"
+            echo "ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+          echo "Release signing configured from GitHub Secrets"
+
       # Every source patch is an anchored, idempotent python script. They run in a
       # deterministic order: the named feature scripts first, then patch_batchN.py
       # sorted numerically. Adding scripts/patch_batch11.py needs no workflow change.
@@ -206,6 +246,20 @@ jobs:
             "$AAPT2" dump configurations "$APK" > locales.txt 2>&1 || true
             SUMMARY=$(tr '\n' '|' < locales.txt | head -c 900)
             echo "::warning title=LocaleAudit::$SUMMARY"
+          fi
+
+      # Public certificate fingerprint only; no private key material is printed.
+      - name: Report release signature
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -n 1)
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$APK" ] || [ -z "$APKSIGNER" ]; then
+            echo "::warning title=ReleaseSignature::apk or apksigner not found"
+          else
+            "$APKSIGNER" verify --print-certs "$APK" > signature.txt 2>&1 || true
+            grep -E "Signer #1 certificate DN|Signer #1 certificate SHA-256 digest" signature.txt | head -n 4 | sed 's/^/::notice title=ReleaseSignature::/'
           fi
 
       # Release asset: anonymous download URL, usable by download_file on the phone.
