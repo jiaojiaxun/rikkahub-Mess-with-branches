@@ -7,155 +7,168 @@ data class WorkspaceBindMount(
     val target: String,
 ) {
     init {
-        require(target.startsWith("/")) { "Bind mount target must be absolute: $target" }
+        require(target.startsWith("/")) { "Bind mount target must be absolute: " + target }
     }
 }
 
+/**
+ * rhWsProot308 / rhWsFix312: PRoot 执行器。
+ *
+ * exec 入口不是 rootfs 里的解释器，而是经 /rh-libs 映射回宿主 nativeLibraryDir 的静态
+ * busybox —— Android 10+（untrusted_app 禁止 exec 应用数据目录文件）下唯一稳定可执行的
+ * 应用可控位置。详见 WorkspaceBusybox 类注释。
+ *
+ * guest 内 PATH 首项是 /usr/rh-bin（applet 软链农场），所以 ls/sed/awk/grep/stat/mkdir
+ * 全部命中同一个可执行文件。直接写 rootfs 内的绝对路径（例如 bin 目录下的 ls）仍会被
+ * SELinux 拒（设计使然，不是缺陷）。
+ */
 class ProotShellRunner(
-    private val nativeLibraryDir: File,
+    val nativeLibraryDir: File,
     private val patcher: RootfsPatcher = RootfsPatcher(),
 ) : WorkspaceShellRunner {
+
     override fun execute(context: WorkspaceShellContext): WorkspaceCommandResult {
-        if (!context.linuxDir.hasUsableRootfs()) {
-            return WorkspaceCommandResult(
-                exitCode = 127,
-                stdout = "",
-                stderr = "Rootfs is not installed",
-            )
+        val problem = preflight(context)
+        if (problem != null) {
+            return WorkspaceCommandResult(exitCode = 127, stdout = "", stderr = problem)
         }
-
-        val proot = File(nativeLibraryDir, PROOT_EXEC)
-        val loader = File(nativeLibraryDir, PROOT_LOADER)
-        if (!proot.isFile) {
-            return WorkspaceCommandResult(
-                exitCode = 127,
-                stdout = "",
-                stderr = "proot executable not found: ${proot.absolutePath}",
-            )
+        if (context.shellCompatibilityMode) {
+            return compatibilityProcess(context).start().readResult(context.timeoutMillis, context.stdin)
         }
-        if (!loader.isFile) {
-            return WorkspaceCommandResult(
-                exitCode = 127,
-                stdout = "",
-                stderr = "proot loader not found: ${loader.absolutePath}",
-            )
-        }
-
         context.tempDir.mkdirs()
         patcher.patch(context.linuxDir)
-        val process = newProcessBuilder(context, proot, loader).start()
-
-        return process.readResult(context.timeoutMillis, context.stdin)
+        return prootProcess(context).start().readResult(context.timeoutMillis, context.stdin)
     }
 
     override fun start(context: WorkspaceShellContext): Process {
-        if (!context.linuxDir.hasUsableRootfs()) {
-            throw IllegalStateException("Rootfs is not installed")
-        }
-
-        val proot = File(nativeLibraryDir, PROOT_EXEC)
-        val loader = File(nativeLibraryDir, PROOT_LOADER)
-        if (!proot.isFile) {
-            throw IllegalStateException("proot executable not found: ${proot.absolutePath}")
-        }
-        if (!loader.isFile) {
-            throw IllegalStateException("proot loader not found: ${loader.absolutePath}")
-        }
-
+        val problem = preflight(context)
+        if (problem != null) throw IllegalStateException(problem)
+        if (context.shellCompatibilityMode) return compatibilityProcess(context).start()
         context.tempDir.mkdirs()
         patcher.patch(context.linuxDir)
-        return newProcessBuilder(context, proot, loader).start()
+        return prootProcess(context).start()
     }
 
-    private fun newProcessBuilder(
-        context: WorkspaceShellContext,
-        proot: File,
-        loader: File,
-    ): ProcessBuilder =
-        ProcessBuilder(buildCommand(context, proot))
+    /** 返回 null 表示可执行；否则是直接展示给用户/模型的错误文案 */
+    private fun preflight(context: WorkspaceShellContext): String? {
+        if (context.shellCompatibilityMode) return null
+        if (!context.linuxDir.isDirectory) {
+            return "Rootfs is not installed: " + context.linuxDir.absolutePath
+        }
+        if (!WorkspaceBusybox.isReady(context.linuxDir, nativeLibraryDir)) {
+            // rhWsFix312: 行尾 + 而不是行首 +，否则 Kotlin 会把它当一元 plus
+            return "rootfs 未就绪：缺少 /usr/rh-bin busybox 农场或 libbusybox.so。" +
+                "请在 扩展 → 工作区 → 详情 里重新安装 rootfs。"
+        }
+        val proot = File(nativeLibraryDir, PROOT_EXEC)
+        if (!proot.isFile) {
+            return "proot executable not found: " + proot.absolutePath
+        }
+        val loader = File(nativeLibraryDir, PROOT_LOADER)
+        if (!loader.isFile) {
+            return "proot loader not found: " + loader.absolutePath
+        }
+        return null
+    }
+
+    /** 降级路径：完全不经 proot，用系统 shell 直接跑（无 /workspace 与 bind mount） */
+    private fun compatibilityProcess(context: WorkspaceShellContext): ProcessBuilder {
+        val builder = ProcessBuilder(HOST_SHELL, "-c", context.command)
+            .directory(context.workingDir)
+            .redirectErrorStream(false)
+        val env = builder.environment()
+        env["PATH"] = HOST_PATH
+        env["HOME"] = context.filesDir.absolutePath
+        env["TMPDIR"] = context.tempDir.absolutePath
+        env["TERM"] = "dumb"
+        env["LANG"] = "C.UTF-8"
+        env["LC_ALL"] = "C.UTF-8"
+        env["CI"] = "true"
+        env["NO_COLOR"] = "1"
+        env["PAGER"] = "cat"
+        return builder
+    }
+
+    private fun prootProcess(context: WorkspaceShellContext): ProcessBuilder {
+        val proot = File(nativeLibraryDir, PROOT_EXEC)
+        val loader = File(nativeLibraryDir, PROOT_LOADER)
+        val builder = ProcessBuilder(buildArgv(context, proot))
             .directory(context.filesDir)
             .redirectErrorStream(false)
-            .apply {
-                if (context.shellCompatibilityMode) {
-                    environment()["PROOT_NO_SECCOMP"] = "1"
-                } else {
-                    environment().remove("PROOT_NO_SECCOMP")
-                }
-                environment()["PROOT_LOADER"] = loader.absolutePath
-                environment()["PROOT_TMP_DIR"] = context.tempDir.absolutePath
-                environment()["TMPDIR"] = context.tempDir.absolutePath
-            }
+        val env = builder.environment()
+        // 只保留 bionic/平台需要的宿主变量，其余清空 —— 否则 HOME/ANDROID_* 会直接泄进 guest
+        val keep = listOf("ANDROID_ROOT", "ANDROID_DATA", "ANDROID_STORAGE", "EXTERNAL_STORAGE")
+        val saved = HashMap<String, String>()
+        for (key in keep) {
+            val value = env[key]
+            if (value != null) saved[key] = value
+        }
+        env.clear()
+        env.putAll(saved)
+        env["PATH"] = GUEST_PATH
+        env["HOME"] = "/root"
+        env["TERM"] = "dumb"
+        env["LANG"] = "C.UTF-8"
+        env["LC_ALL"] = "C.UTF-8"
+        env["TMPDIR"] = "/tmp"
+        env["CI"] = "true"
+        env["NO_COLOR"] = "1"
+        env["PAGER"] = "cat"
+        // proot 自身的运行时依赖（同目录 libtalloc / libandroid-shmem）靠它找
+        env["LD_LIBRARY_PATH"] = nativeLibraryDir.absolutePath
+        env["PROOT_TMP_DIR"] = context.tempDir.absolutePath
+        env["PROOT_LOADER"] = loader.absolutePath
+        // 部分 ROM 的 seccomp 策略会拦 ptrace；关掉 seccomp 加速换取可运行
+        env["PROOT_NO_SECCOMP"] = "1"
+        return builder
+    }
 
-    private fun buildCommand(
-        context: WorkspaceShellContext,
-        proot: File,
-    ): List<String> {
-        val command = mutableListOf(
+    private fun buildArgv(context: WorkspaceShellContext, proot: File): List<String> {
+        val argv = mutableListOf(
             proot.absolutePath,
             "--root-id",
             "--link2symlink",
-            "--kill-on-exit",
-            "-r",
-            context.linuxDir.absolutePath,
-            "-w",
-            context.prootCwd(),
-            "-b",
-            "${context.filesDir.absolutePath}:$WORKSPACE_DIR",
+            "-r", context.linuxDir.absolutePath,
+            "-b", nativeLibraryDir.absolutePath + ":" + WorkspaceBusybox.RH_LIBS,
+            "-b", context.filesDir.absolutePath + ":" + WorkspaceManager.ROOTFS_WORKSPACE_DIR,
         )
-
-        context.bindMounts.forEach { mount ->
+        for (mount in context.bindMounts) {
             if (mount.source.exists()) {
-                command += "-b"
-                command += "${mount.source.absolutePath}:${mount.target.trimEnd('/')}"
+                argv += "-b"
+                argv += mount.source.absolutePath + ":" + mount.target.trimEnd('/')
             }
         }
-
-        WorkspaceManager.KERNEL_FS_MOUNTS.forEach { path ->
+        for (path in WorkspaceManager.KERNEL_FS_MOUNTS) {
             if (File(path).exists()) {
-                command += "-b"
-                command += path
+                argv += "-b"
+                argv += path
             }
         }
-
-        command += listOf(
-            "/usr/bin/env",
-            "-i",
-            "HOME=/root",
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            "TERM=xterm-256color",
-            "LANG=C.UTF-8",
-            "LC_ALL=C.UTF-8",
-            // 非交互执行约定, 抑制各类 CLI 的交互行为 (确认提示/分页器/颜色转义)
-            "CI=true",
-            "NO_COLOR=1",
-            "PAGER=cat",
-            "/bin/bash",
-            "-l",
-            "-c",
-            // 命令通过位置参数传入, 避免任何转义; eval "$2" 对命令文本只求值一次, 等价于 bash -c "$cmd"
-            "cd -- \"\$1\" && eval \"\$2\"",
-            "rikkahub",
-            context.prootCwd(),
-            context.command,
-        )
-        return command
+        argv += "-w"
+        argv += context.prootCwd()
+        // exec 目标是农场里的 sh（软链 -> /rh-libs/libbusybox.so），不是 rootfs 的 bin/sh。
+        // 命令作为单个 argv 交给 sh -c，全程不经字符串拼接。
+        argv += WorkspaceBusybox.APPLET_PATH + "/sh"
+        argv += "-c"
+        argv += context.command
+        return argv
     }
 
     private fun WorkspaceShellContext.prootCwd(): String {
         val normalized = cwd.trim().trim('/')
         return if (normalized.isBlank()) {
-            WORKSPACE_DIR
+            WorkspaceManager.ROOTFS_WORKSPACE_DIR
         } else {
-            "$WORKSPACE_DIR/$normalized"
+            WorkspaceManager.ROOTFS_WORKSPACE_DIR + "/" + normalized
         }
     }
-
-    private fun File.hasUsableRootfs(): Boolean =
-        isDirectory && File(this, "bin/sh").isFile
 
     private companion object {
         private const val PROOT_EXEC = "libproot_exec.so"
         private const val PROOT_LOADER = "libproot_loader.so"
-        private val WORKSPACE_DIR = WorkspaceManager.ROOTFS_WORKSPACE_DIR
+        private const val HOST_SHELL = "/system/bin/sh"
+        private const val HOST_PATH = "/system/bin:/system/xbin"
+        private const val GUEST_PATH =
+            "/usr/rh-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     }
 }

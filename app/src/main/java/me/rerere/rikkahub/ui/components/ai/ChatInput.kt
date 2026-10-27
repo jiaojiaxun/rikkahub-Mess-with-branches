@@ -83,6 +83,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.PopupProperties
 import com.dokar.sonner.ToastType
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.material3.Material3
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 import me.rerere.ai.provider.Model
@@ -102,6 +107,7 @@ import me.rerere.hugeicons.stroke.Video01
 import me.rerere.hugeicons.stroke.Zap
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.data.datastore.getCurrentChatModel
 import me.rerere.rikkahub.data.datastore.getQuickMessagesOfAssistant
@@ -124,16 +130,20 @@ import me.rerere.rikkahub.utils.SoundEffectPlayer
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid // rhConvModel255
 
 @Composable
 fun ChatInput(
     state: ChatInputState,
     loading: Boolean,
     settings: Settings,
+    hazeState: HazeState,
     enableSearch: Boolean,
     onUpdateSearchMode: (SearchMode) -> Unit,
     modifier: Modifier = Modifier,
     completionProviders: List<ChatCompletionProvider> = emptyList(),
+    // rhConvModel255: 会话级模型 id —— 输入栏的选择器必须显示会话真正的模型
+    conversationChatModelId: Uuid? = null,
     onUpdateChatModel: (Model) -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
     onUpdateSearchService: (Int) -> Unit,
@@ -150,6 +160,8 @@ fun ChatInput(
 ) {
     val toaster = LocalToaster.current
     val assistant = settings.getCurrentAssistant()
+    val hazeTintColor = MaterialTheme.colorScheme.surfaceContainerLow
+    val inputHazeStyle = HazeBlurStyle.Material3(containerColor = hazeTintColor)
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
@@ -225,11 +237,18 @@ fun ChatInput(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(containerShape),
+                    .clip(containerShape)
+                    .then(
+                        if (settings.displaySetting.enableBlurEffect) Modifier.hazeBlur(
+                            input = HazeInput.Sources(hazeState),
+                            style = inputHazeStyle,
+                        )
+                        else Modifier
+                    ),
                 shape = containerShape,
                 tonalElevation = 0.dp,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                color = if (settings.displaySetting.enableBlurEffect) Color.Transparent else hazeTintColor,
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -277,7 +296,7 @@ fun ChatInput(
                         ) {
                             // Model Picker
                             ModelSelector(
-                                modelId = assistant.chatModelId ?: settings.chatModelId,
+                                modelId = conversationChatModelId ?: assistant.chatModelId ?: settings.chatModelId, // rhConvModel255
                                 providers = settings.providers,
                                 onSelect = {
                                     onUpdateChatModel(it)
@@ -290,7 +309,7 @@ fun ChatInput(
                             // Search
                             val enableSearchMsg = stringResource(R.string.web_search_enabled)
                             val disableSearchMsg = stringResource(R.string.web_search_disabled)
-                            val chatModel = settings.getCurrentChatModel()
+                            val chatModel = settings.findModelById(conversationChatModelId ?: assistant.chatModelId ?: settings.chatModelId) // rhConvModel268
                             SearchPickerButton(
                                 enableSearch = enableSearch,
                                 settings = settings,
@@ -312,12 +331,20 @@ fun ChatInput(
                             )
 
                             // Reasoning
-                            val model = settings.getCurrentChatModel()
+                            val model = settings.findModelById(conversationChatModelId ?: assistant.chatModelId ?: settings.chatModelId) // rhConvModel268
                             if (model?.abilities?.contains(ModelAbility.REASONING) == true) {
                                 ReasoningButton(
+                                    tavernMode = state.tavernMode, // rhTavernMode
+                                    onUpdateTavernMode = state.onToggleTavernMode,
+                                    squeezeTokenEnabled = state.squeezeTokenEnabled, // rhSqueezeWire
+                                    onUpdateSqueezeToken = state.onToggleSqueezeToken, // rhSqueezeWire
                                     reasoningLevel = assistant.reasoningLevel,
                                     onUpdateReasoningLevel = {
                                         onUpdateAssistant(assistant.copy(reasoningLevel = it))
+                                    },
+                                    streamOutput = assistant.streamOutput, // rhStreamToggle
+                                    onUpdateStreamOutput = { enabled ->
+                                        onUpdateAssistant(assistant.copy(streamOutput = enabled))
                                     },
                                     onlyIcon = true,
                                 )

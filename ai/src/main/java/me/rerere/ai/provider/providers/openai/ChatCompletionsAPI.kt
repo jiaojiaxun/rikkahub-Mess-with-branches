@@ -81,6 +81,21 @@ private const val TAG = "ChatCompletionsAPI"
 private const val IMAGE_UNSUPPORTED_PLACEHOLDER =
     "[Image output omitted: current model does not support image input]"
 
+// rh-batch1:reasoning-off - hosts whose branch in buildChatCompletionRequest sends an
+// explicit disable switch (thinking.type=disabled / enable_thinking=false /
+// thinking_mode=false) that non-thinking models accept too. Generic OpenAI-compatible
+// hosts are excluded: an unknown server may reject reasoning_effort for a model without
+// reasoning support. DashScope is excluded because its branch sends reasoning_effort.
+private val RH_THINKING_DISABLE_HOSTS = setOf(
+    "api.deepseek.com",
+    "ark.cn-beijing.volces.com",
+    "open.bigmodel.cn",
+    "api.moonshot.cn",
+    "api.siliconflow.cn",
+    "aiping.cn",
+    "chat.intern-ai.org.cn",
+)
+
 class ChatCompletionsAPI(
     private val client: OkHttpClient,
     private val keyRoulette: KeyRoulette
@@ -305,7 +320,12 @@ class ChatCompletionsAPI(
                 }
             }
 
-            if (params.model.abilities.contains(ModelAbility.REASONING)) {
+            // rh-batch1:reasoning-off - OFF must also reach hosts that think by default when the
+            // model has no REASONING flag (e.g. manually added Qwen3 / DeepSeek).
+            val rhHasReasoning = params.model.abilities.contains(ModelAbility.REASONING)
+            val rhForceOff = !rhHasReasoning && params.reasoningLevel == ReasoningLevel.OFF &&
+                host in RH_THINKING_DISABLE_HOSTS
+            if (rhHasReasoning || rhForceOff) {
                 val level = params.reasoningLevel
                 when (host) {
                     "openrouter.ai" -> {

@@ -36,6 +36,14 @@
   <uses-permission android:name="android.permission.READ_CALL_LOG" />
   <uses-permission android:name="android.permission.READ_SMS" />
   <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <!-- rhHeartRate -->
+  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+  <uses-permission
+    android:name="android.permission.BLUETOOTH_SCAN"
+    android:usesPermissionFlags="neverForLocation" />
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+  <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
   <!-- Required so list_files / find_files / read_file can enumerate and read
        files the app didn't create itself. Without this, scoped storage on
        Android 11+ hides every pre-existing file from File.listFiles(), even
@@ -60,6 +68,7 @@
   <uses-permission android:name="android.permission.SEND_SMS" />
   <uses-permission android:name="android.permission.SET_WALLPAPER" />
   <uses-permission android:name="android.permission.NFC" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
   <uses-feature
     android:name="android.hardware.nfc"
@@ -153,6 +162,11 @@
         <data android:mimeType="text/plain" />
       </intent-filter>
 
+      <intent-filter>
+        <action android:name="me.rerere.rikkahub.action.TRANSLATE" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+
       <meta-data
         android:name="android.app.shortcuts"
         android:resource="@xml/shortcuts" />
@@ -238,6 +252,12 @@
       android:configChanges="screenSize|orientation|keyboardHidden"
       android:hardwareAccelerated="true"
       android:theme="@style/Theme.Rikkahub" />
+    <receiver android:name=".service.CronBootReceiver" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
 
     <service
       android:name=".service.MediaPlaybackService"

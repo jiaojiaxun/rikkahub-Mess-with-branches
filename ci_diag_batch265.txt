@@ -1,0 +1,4 @@
+WebDavSync OK: trees include scripts (full + lite)
+1 WebDavSync trees DONE
+BackupArchiveRestorer OK: scripts entries resolve back to filesDir/scripts
+2 BackupArchiveRestorer DONE

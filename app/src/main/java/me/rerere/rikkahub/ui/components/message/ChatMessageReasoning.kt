@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Size
@@ -35,12 +37,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.Clock02
 import me.rerere.hugeicons.stroke.Idea01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.model.Assistant
@@ -167,13 +171,24 @@ private fun ReasoningContent(
                 }
             }
     ) {
+        // rhReasoningRegCache243: 正则替换结果按 (文本, 助手) 缓存。
+        // 原实现每次重组都重跑整段 reasoning 的 replaceRegexes —— 滚动/展开折叠/
+        // 主题字号变化等任何重组都会触发全文正则, 与文本是否变化无关。
+        // 文本变化(流式增长)仍会重算; 渲染内容与修复前逐字节相同。
+        val reasoningVisualText = remember(
+            reasoning.reasoning,
+            assistant?.id,
+            assistant?.regexes,
+        ) {
+            reasoning.reasoning.replaceRegexes(
+                assistant = assistant,
+                scope = AssistantAffectScope.ASSISTANT,
+                visual = true,
+            )
+        }
         val reasoningContent = @Composable {
             MarkdownBlock(
-                content = reasoning.reasoning.replaceRegexes(
-                    assistant = assistant,
-                    scope = AssistantAffectScope.ASSISTANT,
-                    visual = true,
-                ),
+                content = reasoningVisualText,
                 style = reasoningTextStyle,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -197,6 +212,7 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
     assistant: Assistant?,
     fadeHeight: Float = 64f,
     collapsedAdaptiveWidth: Boolean = false,
+    plainLabel: Boolean = false, // rhDrawer289
 ) {
     val (state, loading) = rememberReasoningState(reasoning)
     val thinkingTitle = reasoning.reasoning.extractThinkingTitle()
@@ -208,14 +224,21 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
         onExpandedChange = { state.onExpandedChange(it, loading) },
         icon = {
             Icon(
-                imageVector = HugeIcons.Idea01,
+                imageVector = HugeIcons.Clock02,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.secondary,
             )
         },
         label = {
-            if (showThinkingTitle) {
+            if (plainLabel) {
+                Text(
+                    text = stringResource(R.string.rh_thought_process),
+                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = chatFontFamily),
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.shimmer(isLoading = loading),
+                )
+            } else if (showThinkingTitle) {
                 ReasoningTitle(title = thinkingTitle)
             } else {
                 Text(
@@ -230,7 +253,7 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
             }
         },
         extra = {
-            if (showThinkingTitle && state.duration > 0.seconds) {
+            if (!plainLabel && showThinkingTitle && state.duration > 0.seconds) { // rhDrawer290
                 Text(
                     text = state.duration.toString(DurationUnit.SECONDS, 1),
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = chatFontFamily),
@@ -242,14 +265,22 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
         collapsedAdaptiveWidth = collapsedAdaptiveWidth,
         contentVisible = state.expandState != ReasoningCardState.Collapsed,
         content = {
-            ReasoningContent(
-                reasoning = reasoning,
-                assistant = assistant,
-                expandState = state.expandState,
-                scrollState = state.scrollState,
-                fadeHeight = fadeHeight,
-                loading = loading,
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                ReasoningContent(
+                    reasoning = reasoning,
+                    assistant = assistant,
+                    expandState = state.expandState,
+                    scrollState = state.scrollState,
+                    fadeHeight = fadeHeight,
+                    loading = loading,
+                )
+            }
         },
     )
 }

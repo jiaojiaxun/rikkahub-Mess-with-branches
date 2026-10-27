@@ -1,0 +1,4 @@
+stage enum adds FINALIZING (INSTALLED kept)
+installer written chars=21699 balance=0
+WorkspaceManager.shellRunner -> public val
+ProotShellRunner.nativeLibraryDir -> public val

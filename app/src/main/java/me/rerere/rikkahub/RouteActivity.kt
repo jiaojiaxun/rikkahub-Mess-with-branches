@@ -116,12 +116,14 @@ import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesNotificationPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesNetworkPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesGeneralPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesUIPage
+import me.rerere.rikkahub.ui.pages.setting.SettingRpOptimizationsPage // rhRpOpt139
 import me.rerere.rikkahub.ui.pages.setting.SettingThemePage
 import me.rerere.rikkahub.ui.pages.setting.SettingDonatePage
 import me.rerere.rikkahub.ui.pages.setting.SettingFilesPage
 import me.rerere.rikkahub.ui.pages.setting.SettingMcpPage
 import me.rerere.rikkahub.ui.pages.setting.SettingModelPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPage
+import me.rerere.rikkahub.ui.pages.setting.SettingScheduledJobsPage
 import me.rerere.rikkahub.ui.pages.setting.SettingProviderDetailPage
 import me.rerere.rikkahub.ui.pages.setting.SettingProviderPage
 import me.rerere.rikkahub.ui.pages.setting.SettingSearchDetailPage
@@ -144,6 +146,8 @@ import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
 
 private const val TAG = "RouteActivity"
+// rhTranslateShortcut (upstream 513b784c): 翻译快捷入口 action
+private const val ACTION_TRANSLATE = "me.rerere.rikkahub.action.TRANSLATE"
 
 class RouteActivity : ComponentActivity() {
     companion object {
@@ -175,6 +179,14 @@ class RouteActivity : ComponentActivity() {
         enableEdgeToEdge()
         disableNavigationBarContrast()
         super.onCreate(savedInstanceState)
+        // rhNotifPerm (batch97): Android 13+ 需运行时请求通知权限,否则所有通知被静默丢弃
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
         if (CrashHandler.hasCrashed(this)) {
             startActivity(Intent(this, SafeModeActivity::class.java))
             finish()
@@ -224,6 +236,11 @@ class RouteActivity : ComponentActivity() {
 
         LaunchedEffect(backStack) {
             when (shareIntent.action) {
+                // rhTranslateShortcut: 长按图标快捷方式直达翻译页
+                ACTION_TRANSLATE -> {
+                    backStack.add(Screen.Translator)
+                }
+
                 Intent.ACTION_SEND -> {
                     val text = shareIntent.getStringExtra(Intent.EXTRA_TEXT) ?: ""
                     val imageUri = shareIntent.getStringExtra(Intent.EXTRA_STREAM)
@@ -483,6 +500,9 @@ class RouteActivity : ComponentActivity() {
                             entry<Screen.SettingPreferencesUI> {
                                 SettingPreferencesUIPage()
                             }
+                            entry<Screen.SettingRpOptimizations> { // rhRpOpt139
+                                SettingRpOptimizationsPage()
+                            }
 
                             entry<Screen.SettingProvider> {
                                 SettingProviderPage()
@@ -545,6 +565,16 @@ class RouteActivity : ComponentActivity() {
 
                             entry<Screen.SettingToolApprovals> {
                                 me.rerere.rikkahub.ui.pages.setting.SettingToolApprovalsPage()
+                            }
+
+                            /* rhScheduledJobs */
+                            entry<Screen.SettingScheduledJobs> {
+                                me.rerere.rikkahub.ui.pages.setting.SettingScheduledJobsPage()
+                            }
+
+                            /* rhCustomTools */
+                            entry<Screen.SettingCustomTools> {
+                                me.rerere.rikkahub.ui.pages.setting.SettingCustomToolsPage()
                             }
 
 
@@ -778,6 +808,8 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object SettingPreferencesUI : Screen
+    @Serializable
+    data object SettingRpOptimizations : Screen // rhRpOpt139
 
     @Serializable
     data object SettingProvider : Screen
@@ -866,5 +898,13 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object Stats : Screen
+
+    /** rhScheduledJobs */
+    @Serializable
+    data object SettingScheduledJobs : Screen
+
+    /** rhCustomTools */
+    @Serializable
+    data object SettingCustomTools : Screen
 
 }

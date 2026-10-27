@@ -6,9 +6,19 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
@@ -43,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -54,7 +65,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.dokar.sonner.ToastType
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.rememberHazeState
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -63,6 +78,7 @@ import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.ai.ui.UIMessage
 import me.rerere.common.android.appTempFolder
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
@@ -78,6 +94,8 @@ import me.rerere.rikkahub.data.datastore.getCurrentChatModel
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.getAssistantOf // rhTopModel259
+import me.rerere.rikkahub.data.model.getChatModelOf // rhTopModel259
 import me.rerere.rikkahub.data.translation.TranslationMode
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.service.ChatError
@@ -89,6 +107,9 @@ import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvide
 import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.useCropLauncher
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionCamera
+import me.rerere.rikkahub.ui.components.ui.MiffanPresentation
+import me.rerere.rikkahub.ui.components.ui.MiffanMascotState
+import me.rerere.rikkahub.ui.components.ui.WhaleGirlMascot
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionManager
 import me.rerere.rikkahub.ui.components.ui.permission.rememberPermissionState
 import me.rerere.rikkahub.ui.context.LocalNavController
@@ -319,8 +340,17 @@ private fun ChatPageContent(
             }
         }
     }
+    // rhUserInfoEdit: 用户昵称编辑状态(对话页为唯一编辑入口)
+    val nicknameEditState = useEditState<String> { newNickname ->
+        vm.updateSettings(
+            setting.copy(
+                displaySetting = setting.displaySetting.copy(userNickname = newNickname)
+            )
+        )
+    }
+    
     var previewMode by rememberSaveable { mutableStateOf(false) }
-    val assistant = setting.getCurrentAssistant()
+    val assistant = setting.getAssistantOf(conversation) // rhTopModel260
     var showFilesSheet by remember { mutableStateOf(false) }
     val attachmentPickerActions = rememberChatAttachmentPickerActions(
         inputState = inputState,
@@ -328,8 +358,26 @@ private fun ChatPageContent(
         onAttachmentAdded = { showFilesSheet = false },
     )
     val allowAudioVideoAttachments =
-        setting.getCurrentChatModel()?.findProvider(setting.providers) is ProviderSetting.Google
+        currentChatModel?.findProvider(setting.providers) is ProviderSetting.Google // rhTopModel260
     val hazeState = rememberHazeState()
+    // rhPlanBar228 + rhCtxOn2Fix238: 流式期间仅按 (会话id, 节点数, 末条消息最新 todo_write 输入) 触发重算,
+    // 避免普通文本流式每 token 分配 currentMessages 与 O(n) 列表对比
+    val rhLastTodoInput = conversation.messageNodes.lastOrNull()?.currentMessage?.parts
+        ?.lastOrNull { it is UIMessagePart.Tool && it.toolName == me.rerere.rikkahub.data.ai.tools.TODO_TOOL_NAME }
+        ?.let { (it as UIMessagePart.Tool).input }
+    val rhPlanKey: Any = if (loadingJob != null) {
+        Triple(conversation.id, conversation.messageNodes.size, rhLastTodoInput)
+    } else {
+        conversation.messageNodes
+    }
+    val rhPlanTodos = if (setting.displaySetting.showPlanBar) {
+        remember(rhPlanKey) {
+            me.rerere.rikkahub.ui.components.message.findActivePlan(conversation.currentMessages)
+        }
+    } else {
+        emptyList()
+    }
+    var quotingMessage by remember { mutableStateOf<UIMessage?>(null) } // rhQuoteSend
 
     val completionProviders = remember(assistant.workspaceId, conversation.workspaceCwd, workspaceRepository) {
         assistant.workspaceId?.let { workspaceId ->
@@ -350,10 +398,39 @@ private fun ChatPageContent(
         modifier = Modifier.fillMaxSize()
     ) {
         AssistantBackground(setting = setting, modifier = Modifier)
+        // Dual-mode chat: AI-authored html skin layer. Sits above the native background
+        // and below the Scaffold, so the native message list and input bar keep working.
+        // No-op unless html mode is enabled. Fully-qualified refs only: no new imports.
+        if (me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.isReady) {
+            me.rerere.rikkahub.ui.pages.chat.ChatHtmlLayer(
+                skinStore = me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store,
+                onBridgeEvent = { type, payload ->
+                    when (type) {
+                        "send_message" -> {
+                            val el = payload["text"]
+                            val text = if (el is kotlinx.serialization.json.JsonPrimitive &&
+                                el !is kotlinx.serialization.json.JsonNull
+                            ) el.content else null
+                            if (!text.isNullOrBlank()) {
+                                vm.handleMessageSend(content = listOf(UIMessagePart.Text(text)))
+                            }
+                        }
+                        "request_exit" -> {
+                            me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store.setMode(false)
+                        }
+                        else -> android.util.Log.d("ChatHtmlLayer", "skin event: " + type)
+                    }
+                },
+            )
+        }
+
         Scaffold(
             topBar = {
                 TopBar(
+                    hazeState = hazeState,
                     settings = setting,
+                    assistant = assistant, // rhTopModel260
+                    currentChatModel = currentChatModel, // rhTopModel260
                     conversation = conversation,
                     bigScreen = bigScreen,
                     drawerState = drawerState,
@@ -373,10 +450,39 @@ private fun ChatPageContent(
                 )
             },
             bottomBar = {
+                Column {
+                    // rhPlanBar228: 计划细条,常驻输入框正上方,收起一行,点击展开完整清单
+                    me.rerere.rikkahub.ui.components.message.PlanBar(
+                        todos = rhPlanTodos,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), // rhTopBarBubbles300-dock
+                    )
+                    val quotePreview = quotingMessage
+                    if (quotePreview != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text(
+                                    text = "引用: " + quotePreview.toText().take(80),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                TextButton(onClick = { quotingMessage = null }) {
+                                    Text("取消", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
                 ChatInput(
                     state = inputState,
                     loading = loadingJob != null,
                     settings = setting,
+                    hazeState = hazeState,
                     completionProviders = completionProviders,
                     onCancelClick = {
                         vm.stopGeneration()
@@ -426,8 +532,9 @@ private fun ChatPageContent(
                                 messageId = inputState.editingMessage!!,
                             )
                         } else {
-                            vm.handleMessageSend(inputState.getContents())
+                            vm.handleMessageSend(inputState.getContents(), quotedMessageId = quotingMessage?.id)
                         }
+                        quotingMessage = null
                         inputState.clearInput()
                     },
                     onLongSendClick = {
@@ -437,10 +544,13 @@ private fun ChatPageContent(
                                 messageId = inputState.editingMessage!!,
                             )
                         } else {
-                            vm.handleMessageSend(content = inputState.getContents(), answer = false)
+                            vm.handleMessageSend(content = inputState.getContents(), answer = false, quotedMessageId = quotingMessage?.id)
                         }
+                        quotingMessage = null
                         inputState.clearInput()
                     },
+                    // rhConvModel255: 把会话级模型 id 传进输入栏，选择器才会显示会话真实模型
+                    conversationChatModelId = setting.getChatModelOf(conversation)?.id, // rhPerConversationModel299
                     onUpdateChatModel = {
                         vm.setChatModel(assistant = setting.getCurrentAssistant(), model = it)
                     },
@@ -474,11 +584,14 @@ private fun ChatPageContent(
                     onPickAudio = attachmentPickerActions.onPickAudio,
                     onPickFile = attachmentPickerActions.onPickFile,
                 )
+                }
             },
             containerColor = Color.Transparent,
         ) { innerPadding ->
+            Box(modifier = Modifier.fillMaxSize()) {
             ChatList(
                 innerPadding = innerPadding,
+                onQuote = { quotingMessage = it },
                 conversation = conversation,
                 state = chatListState,
                 loading = loadingJob != null,
@@ -565,7 +678,66 @@ private fun ChatPageContent(
                     vm.updateConversation(conversation.copy(customSystemPrompt = newPrompt))
                     vm.saveConversationAsync()
                 },
+            // rhUserInfoEdit
+            onChangeUserAvatar = { newAvatar ->
+                vm.updateSettings(
+                    setting.copy(
+                        displaySetting = setting.displaySetting.copy(userAvatar = newAvatar)
+                    )
+                )
+            },
+            onEditUserNickname = {
+                nicknameEditState.open(setting.displaySetting.userNickname)
+            },
             )
+    
+    // rhUserInfoEdit: 昵称编辑对话框(从抽屉搬到对话页)
+    nicknameEditState.EditStateContent { nickname, onUpdate ->
+        AlertDialog(
+            onDismissRequest = { nicknameEditState.dismiss() },
+            title = { Text(stringResource(R.string.chat_page_edit_nickname)) },
+            text = {
+                OutlinedTextField(
+                    value = nickname,
+                    onValueChange = onUpdate,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.chat_page_nickname_placeholder)) },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        nicknameEditState.confirm()
+                    },
+                    enabled = nickname.isNotBlank(),
+                ) { Text(stringResource(R.string.chat_page_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { nicknameEditState.dismiss() }) {
+                    Text(stringResource(R.string.chat_page_cancel))
+                }
+            },
+        )
+    }
+            if (setting.displaySetting.mascotEnabled) {
+                WhaleGirlMascot(
+                    state = if (errors.isNotEmpty()) {
+                        MiffanMascotState.Error
+                    } else if (loadingJob != null) {
+                        MiffanMascotState.Thinking
+                    } else {
+                        MiffanMascotState.Idle
+                    },
+                    interactive = true,
+                    presentation = MiffanPresentation.Avatar,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 12.dp)
+                        .size(96.dp),
+                )
+            }
+            }
         }
 
         if (showFilesSheet) {
@@ -788,9 +960,13 @@ private fun ChatFilesPickerSheet(
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 private fun TopBar(
+    hazeState: HazeState,
     settings: Settings,
+    assistant: Assistant, // rhTopModel260
+    currentChatModel: Model?, // rhTopModel260
     conversation: Conversation,
     drawerState: DrawerState,
     bigScreen: Boolean,
@@ -805,95 +981,100 @@ private fun TopBar(
     val titleState = useEditState<String> {
         onUpdateTitle(it)
     }
+    var showUtilitiesMenu by remember { mutableStateOf(false) }
+    val rhHtmlMode = if (me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.isReady) {
+        val rhSkinState by me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store
+            .stateFlow.collectAsStateWithLifecycle()
+        rhSkinState.htmlModeEnabled
+    } else {
+        false
+    }
+    val rhHasUserMessage = conversation.messageNodes.any { node ->
+        node.messages.any { it.role == me.rerere.ai.core.MessageRole.USER }
+    }
+    val rhEditTitleWarning = stringResource(R.string.chat_page_edit_title_warning)
+    val rhSecondBubbleLabel = stringResource(
+        if (rhHtmlMode) R.string.chat_html_exit_native else R.string.accessibility_chat_options
+    )
 
-    TopAppBar(
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-        navigationIcon = {
-            if (!bigScreen) {
-                IconButton(
-                    onClick = {
-                        scope.launch { drawerState.open() }
-                    }
-                ) {
-                    Icon(HugeIcons.Menu03, stringResource(R.string.accessibility_messages))
-                }
-            }
-        },
-        title = {
-            val editTitleWarning = stringResource(R.string.chat_page_edit_title_warning)
-            Surface(
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .heightIn(min = 50.dp) // rhTopBarHeight315: total 50 + 7*2 = 64dp
+                .padding(horizontal = 16.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RhChatTopBarBubble(
+                icon = HugeIcons.Menu03,
+                contentDescription = stringResource(R.string.accessibility_messages),
                 onClick = {
+                    scope.launch { drawerState.open() }
+                },
+                onLongClick = {
+                    showUtilitiesMenu = true
+                },
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RhChatTopBarPreviewBubble(
+                    close = previewMode || rhHtmlMode,
+                    contentDescription = rhSecondBubbleLabel,
+                    onClick = {
+                        if (rhHtmlMode) {
+                            me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store.setMode(false)
+                        } else {
+                            onClickMenu()
+                        }
+                    },
+                )
+                RhChatTopBarBubble(
+                    icon = HugeIcons.MessageAdd01,
+                    contentDescription = stringResource(R.string.chat_page_new_message),
+                    onClick = onNewChat,
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = showUtilitiesMenu,
+            onDismissRequest = { showUtilitiesMenu = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_page_edit_title)) },
+                onClick = {
+                    showUtilitiesMenu = false
                     if (conversation.messageNodes.isNotEmpty()) {
                         titleState.open(conversation.title)
                     } else {
-                        toaster.show(editTitleWarning, type = ToastType.Warning)
+                        toaster.show(rhEditTitleWarning, type = ToastType.Warning)
                     }
                 },
-                color = Color.Transparent,
-            ) {
-                Column {
-                    val assistant = settings.getCurrentAssistant()
-                    val model = settings.getCurrentChatModel()
-                    val provider = model?.findProvider(providers = settings.providers, checkOverwrite = false)
-                    Text(
-                        text = conversation.title.ifBlank { stringResource(R.string.chat_page_new_chat) },
-                        maxLines = 1,
-                        style = MaterialTheme.typography.bodyMedium,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (model != null && provider != null) {
-                        Text(
-                            text = "${assistant.name.ifBlank { stringResource(R.string.assistant_page_default_assistant) }} / ${model.displayName} (${provider.name})",
-                            overflow = TextOverflow.Ellipsis,
-                            maxLines = 1,
-                            color = LocalContentColor.current.copy(0.65f),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 8.sp,
-                            )
-                        )
-                    }
-                }
+            )
+            if (!rhHasUserMessage) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.chat_page_import_shared_conversation)) },
+                    leadingIcon = { Icon(HugeIcons.FileImport, contentDescription = null) },
+                    onClick = {
+                        showUtilitiesMenu = false
+                        onImportSharedConversation()
+                    },
+                )
             }
-        },
-        actions = {
-            var showShareMenu by remember { mutableStateOf(false) }
-            Box {
-                IconButton(
-                    onClick = { showShareMenu = true }
-                ) {
-                    Icon(HugeIcons.FileImport, stringResource(R.string.chat_page_import_shared_conversation))
-                }
-                DropdownMenu(
-                    expanded = showShareMenu,
-                    onDismissRequest = { showShareMenu = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.chat_page_import_shared_conversation)) },
-                        leadingIcon = { Icon(HugeIcons.FileImport, contentDescription = null) },
-                        onClick = {
-                            showShareMenu = false
-                            onImportSharedConversation()
-                        },
-                    )
-                }
+            if (rhHtmlMode) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.chat_html_exit_native)) },
+                    leadingIcon = { Icon(HugeIcons.Cancel01, contentDescription = null) },
+                    onClick = {
+                        showUtilitiesMenu = false
+                        me.rerere.rikkahub.data.ai.tools.local.ChatHtmlSkinGlobal.store.setMode(false)
+                    },
+                )
             }
-            IconButton(
-                onClick = {
-                    onClickMenu()
-                }
-            ) {
-                Icon(if (previewMode) HugeIcons.Cancel01 else HugeIcons.LeftToRightListBullet, stringResource(R.string.accessibility_chat_options))
-            }
+        }
+    }
 
-            IconButton(
-                onClick = {
-                    onNewChat()
-                }
-            ) {
-                Icon(HugeIcons.MessageAdd01, stringResource(R.string.chat_page_new_message))
-            }
-        },
-    )
     titleState.EditStateContent { title, onUpdate ->
         AlertDialog(
             onDismissRequest = {
@@ -920,14 +1101,10 @@ private fun TopBar(
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        titleState.dismiss()
-                    }
-                ) {
+                TextButton(onClick = { titleState.dismiss() }) {
                     Text(stringResource(R.string.chat_page_cancel))
                 }
-            }
+            },
         )
     }
 }

@@ -52,6 +52,8 @@ class ToolApprovalPreferences(private val context: Context) {
     private val store = context.toolApprovalDataStore
     private val K_ALWAYS_ALLOW = stringSetPreferencesKey("always_allow_tool_names")
     private val K_GLOBAL_YOLO = booleanPreferencesKey("global_auto_approve_yolo")
+    // rhApprovalIdentity: 「始终允许整台 MCP 服务器」集合（元素形如 mcp__<slug>_<服务器名>）
+    private val K_MCP_SERVER_ALWAYS = stringSetPreferencesKey("mcp_server_always")
 
     // Filtered on every read: a stale workspace_-prefixed entry (from before this
     // filtering existed) must never resurface in the settings list or an auto-approve
@@ -63,6 +65,27 @@ class ToolApprovalPreferences(private val context: Context) {
     /** Live flow of the "I AM STUPID" global auto-approve flag. Default false. */
     val globalYoloFlow: Flow<Boolean> = store.data.map {
         it[K_GLOBAL_YOLO] ?: false
+    }
+
+    /** rhApprovalIdentity: 「始终允许整个服务器」的实时集合（设置页开关读取）。 */
+    val mcpServerAlwaysFlow: Flow<Set<String>> = store.data.map {
+        it[K_MCP_SERVER_ALWAYS].orEmpty()
+    }
+
+    suspend fun currentMcpServerAlways(): Set<String> = mcpServerAlwaysFlow.first()
+
+    suspend fun grantMcpServerAlways(serverKey: String) {
+        // 服务器键永不以 workspace_ 开头；这里再加一道守卫，与 grantAlways 同一策略：
+        // 宁可拒绝并记日志，也不静默污染全局集合。
+        if (isWorkspaceToolName(serverKey)) {
+            Log.w(TAG, "refusing to grant server-level approval to '" + serverKey)
+            return
+        }
+        store.edit { it[K_MCP_SERVER_ALWAYS] = (it[K_MCP_SERVER_ALWAYS].orEmpty()) + serverKey }
+    }
+
+    suspend fun revokeMcpServerAlways(serverKey: String) {
+        store.edit { it[K_MCP_SERVER_ALWAYS] = (it[K_MCP_SERVER_ALWAYS].orEmpty()) - serverKey }
     }
 
     suspend fun current(): Set<String> = migrateAwayWorkspaceTools()

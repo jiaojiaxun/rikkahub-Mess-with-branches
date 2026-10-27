@@ -50,7 +50,7 @@ def replace_text(content, old, new, label):
 
 def insert_after_line(content, anchor, block, label):
     lines = content.split(NL)
-    hits = [i for i, line in enumerate(lines) if line.strip() == anchor]
+    hits = [i for i, line in enumerate(lines) if line.strip() == anchor.strip()]
     if len(hits) != 1:
         fail(label + " anchor count=" + str(len(hits)) + " [" + anchor + "]")
     lines.insert(hits[0] + 1, block)

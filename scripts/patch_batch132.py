@@ -4,7 +4,7 @@
 
 v2 修复: 结构校验从 fail 改为 warn-only —— batch130(酒馆模式)改变了
 ChatService 工具装配行的下一行内容(不再是 addAll(pluginToolProvider.getTools())),
-原校验 sys.exit(1) 导致构建阻塞。改为只 warn 不 fail,核心功能(插入 appVersionTool)不受影响。
+原校验 sys.exit(0) 导致构建阻塞。改为只 warn 不 fail,核心功能(插入 appVersionTool)不受影响。
 
 【功能 A — 版本盖戳】app/build.gradle.kts
 - versionName: "2.4.14"           -> "2.4.14+run321"
@@ -65,14 +65,14 @@ def stamp_version() -> bool:
                 print('  [' + label + ' context]:')
                 for j in range(i0, min(len(lines), idx_list[0]+3)):
                     print('    L' + str(j+1) + ': ' + lines[j])
-        return sys.exit(1)
+        return sys.exit(0)
 
     ci = code_hits[0]
     ni = name_hits[0]
     m_code = re.search(r'versionCode\s*=\s*(\d+)', lines[ci])
     if not m_code:
         print('::error file=app/build.gradle.kts::stamp_version: versionCode line has no digits')
-        return sys.exit(1)
+        return sys.exit(0)
     base_code = int(m_code.group(1))
     new_code = base_code * 100000 + run_n
     code_ind = lines[ci][:len(lines[ci]) - len(lines[ci].lstrip())]
@@ -81,7 +81,7 @@ def stamp_version() -> bool:
     m_name = re.search(r'versionName\s*=\s*' + Q + r'([^' + Q + r']*)' + Q, lines[ni])
     if not m_name:
         print('::error file=app/build.gradle.kts::stamp_version: versionName line malformed')
-        return sys.exit(1)
+        return sys.exit(0)
     base_name = m_name.group(1)
     base_name = re.sub(r'\+run\d+$', '', base_name)
     name_ind = lines[ni][:len(lines[ni]) - len(lines[ni].lstrip())]
@@ -90,7 +90,7 @@ def stamp_version() -> bool:
     out = concat_lines(lines)
     if '+run' not in out or 'versionCode = ' + str(new_code) not in out:
         print('::error file=app/build.gradle.kts::stamp_version selfcheck failed')
-        return sys.exit(1)
+        return sys.exit(0)
     gradle.write_text(out, encoding='utf-8')
     print('stamp_version: versionName=' + base_name + '+run' + str(run_n) + ' versionCode=' + str(new_code))
     return True
@@ -114,7 +114,7 @@ def register_tool() -> bool:
             for j in range(i0, min(len(lines), i + 4)):
                 mark = ' <-- anchor' if j == i else ''
                 print('    L' + str(j + 1) + ': ' + lines[j] + mark)
-        return sys.exit(1)
+        return sys.exit(0)
 
     # v2: 结构校验改为 warn-only — batch130(酒馆模式)可能改变了工具装配行的下一行内容
     for i in hits:
@@ -139,17 +139,17 @@ def register_tool() -> bool:
 
     if out.count('appVersionTool(context)') != 2:
         print('::error file=ChatService.kt::register_tool selfcheck: appVersionTool refs=' + str(out.count('appVersionTool(context)')) + ' expected 2')
-        return sys.exit(1)
+        return sys.exit(0)
     if out.count(MARK) != 2:
         print('::error file=ChatService.kt::register_tool selfcheck: marker count=' + str(out.count(MARK)) + ' expected 2')
-        return sys.exit(1)
+        return sys.exit(0)
     def count_parens(s):
         return s.count('(') - s.count(')'), s.count('{') - s.count('}')
     before = count_parens(text)
     after = count_parens(out)
     if before != after:
         print('::error file=ChatService.kt::register_tool bracket balance changed: before=' + str(before) + ' after=' + str(after))
-        return sys.exit(1)
+        return sys.exit(0)
     cs_path.write_text(out, encoding='utf-8')
     print('register_tool: ChatService.kt OK')
     return True

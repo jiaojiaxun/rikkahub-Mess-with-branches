@@ -1,0 +1,5 @@
+OK inserted localeFilters into app/build.gradle.kts
+OK removed values-ar,values-ja,values-ko-rKR,values-ru
+localeFilters=zh,en
+kept=values,values-zh,values-zh-rTW
+dropped=values-ar,values-ja,values-ko-rKR,values-ru

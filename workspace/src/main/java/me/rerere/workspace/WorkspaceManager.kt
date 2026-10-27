@@ -5,11 +5,12 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 
 class WorkspaceManager(
     private val baseDir: File,
     private val config: WorkspaceConfig = WorkspaceConfig(),
-    private val shellRunner: WorkspaceShellRunner = HostShellRunner(),
+    val shellRunner: WorkspaceShellRunner = HostShellRunner(),
     private val bindMounts: List<WorkspaceBindMount> = emptyList(),
 ) {
     private val fileSystem = WorkspaceFileSystem(config)
@@ -27,11 +28,18 @@ class WorkspaceManager(
         baseDir.mkdirs()
     }
 
-    fun ensureWorkspace(root: String): File {
+    fun ensureWorkspace(root: String): File { // rhWsFix313
         val dir = workspaceDir(root)
         filesDir(root).mkdirs()
         linuxDir(root).mkdirs()
         tempDir(root).mkdirs()
+        // rhWsBind311: proot 的 -b 要求 guest 挂载点存在。按 bindMounts 补建空目录,
+        // 已经装过旧 rootfs 的用户不需要重装; 每次.executeCommand 前都会走到这里。
+        File(linuxDir(root), WorkspaceBusybox.RH_LIBS.trimStart('/')).mkdirs()
+        File(linuxDir(root), ROOTFS_WORKSPACE_DIR.trimStart('/')).mkdirs()
+        for (mount in sortedBindMounts) {
+            File(linuxDir(root), mount.target.trimStart('/')).mkdirs()
+        }
         return dir
     }
 
@@ -46,7 +54,15 @@ class WorkspaceManager(
 
     fun tempDir(root: String): File = File(workspaceDir(root), TEMP_DIR)
 
-    fun hasRootfs(root: String): Boolean = File(linuxDir(root), "bin/sh").isFile
+    fun hasRootfs(root: String): Boolean {
+        val dir = linuxDir(root)
+        val sh = File(dir, "bin/sh")
+        // rhWsStage307: 安装后 bin/sh 指向 /rh-libs/libbusybox.so, 该目标在宿主不存在;
+        // 只认 isFile 会让 checkIntegrity 把刚装好的 READY 误判为文件缺失并重置 DISABLED。
+        val shPresent = sh.isFile || Files.isSymbolicLink(sh.toPath())
+        // 同时要求 applet 农场已建: 旧版 rootfs(无 /usr/rh-bin)在 API 29+ 仍跑不了命令。
+        return shPresent && WorkspaceBusybox.hasFarm(dir)
+    }
 
     fun deleteWorkspace(root: String): Boolean = synchronized(backgroundLifecycleLock) {
         // 先杀掉该 workspace 所有后台进程, 再删目录, 避免进程仍持有已删除目录下的 fd
@@ -289,6 +305,33 @@ class WorkspaceManager(
         WorkspaceStorageArea.LINUX -> linuxDir(root)
     }
 
+/** rhWsStage307: 在 workspace 根下开一个干净的中转目录, 失败就整体丢弃, 不碰现有 rootfs。 */
+fun createRootfsStaging(root: String): File {
+    val dir = File(workspaceDir(root), ROOTFS_STAGING_DIR)
+    dir.deleteRecursively()
+    dir.mkdirs()
+    require(dir.isDirectory) { "Failed to create rootfs staging directory: " + dir.absolutePath }
+    return dir
+}
+
+/** rhWsStage307: 原子上线 — 旧 rootfs 先改名备份, 再换入 staging; 换入失败时回滚。 */
+fun commitRootfs(root: String, stagingDir: File) {
+    require(stagingDir.isDirectory) { "Rootfs staging directory is missing: " + stagingDir.absolutePath }
+    val target = linuxDir(root)
+    val backup = File(workspaceDir(root), ROOTFS_BACKUP_DIR)
+    backup.deleteRecursively()
+    if (target.exists() && !target.renameTo(backup)) {
+        error("Failed to move existing rootfs aside: " + target.absolutePath)
+    }
+    if (!stagingDir.renameTo(target)) {
+        if (backup.exists() && !target.exists()) {
+            backup.renameTo(target)
+        }
+        error("Failed to move new rootfs into place: " + target.absolutePath)
+    }
+    backup.deleteRecursively()
+}
+
     fun cleanupAllTempDirs() {
         val roots = baseDir.listFiles()?.filter { it.isDirectory } ?: return
         for (dir in roots) {
@@ -307,6 +350,9 @@ class WorkspaceManager(
         private const val LINUX_DIR = "linux"
         private const val TEMP_DIR = "tmp"
         const val DEFAULT_COMMAND_TIMEOUT_MS = 30_000L
+        // rhWsStage307: rootfs 安装中转目录 / 回滚备份目录(均置于 workspace 根下)
+        private const val ROOTFS_STAGING_DIR = "rootfs.staging"
+        private const val ROOTFS_BACKUP_DIR = "rootfs.old"
 
         /** Rootfs 内工作区文件区的挂载点 */
         const val ROOTFS_WORKSPACE_DIR = "/workspace"

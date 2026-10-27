@@ -35,6 +35,10 @@ import kotlin.time.Clock
  */
 class StreamChunkHandler(private val model: Model? = null) {
     // Map 的值是对应 part 在当前助手消息 parts 列表中的下标。
+    // rh-batch2:tps - wall-clock of the first / latest output chunk of this stream.
+    private var firstOutputAt = 0L
+    private var lastOutputAt = 0L
+
     private val textPartIndexes = mutableMapOf<String, Int>()
     private val reasoningPartIndexes = mutableMapOf<String, Int>()
     private val imagePartIndexes = mutableMapOf<String, Int>()
@@ -57,6 +61,11 @@ class StreamChunkHandler(private val model: Model? = null) {
             messages + UIMessage(modelId = model?.id, role = MessageRole.ASSISTANT, parts = emptyList())
         } else {
             messages
+        }
+        if (chunk.isModelOutput()) {
+            val now = System.currentTimeMillis()
+            if (firstOutputAt == 0L) firstOutputAt = now
+            lastOutputAt = now
         }
         val updatedMessage = append(targetMessages.last(), chunk)
         return targetMessages.dropLast(1) + updatedMessage
@@ -278,8 +287,14 @@ class StreamChunkHandler(private val model: Model? = null) {
                 copy(usage = merged.copy(cost = sumCost(stepBaseCost, merged.cost)))
             }
             is StreamChunk.Finish -> copy(
-                finishedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-            ).finishReasoning().also {
+                finishedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()),
+                finishReason = chunk.finishReason, // rhAutoResume
+                // Replaced (not summed) per step, matching TokenUsage.merge which keeps the
+                // last step's completion tokens. Windows under 50ms (single-chunk streams)
+                // are not a meaningful speed sample.
+                generationMillis = (lastOutputAt - firstOutputAt)
+                    .takeIf { firstOutputAt > 0L && it >= 50L },
+            ).also { firstOutputAt = 0L; lastOutputAt = 0L }.finishReasoning().also {
                 // Finish 同时结束尚未显式结束的 reasoning，并释放本次响应流的索引状态。
                 textPartIndexes.clear()
                 reasoningPartIndexes.clear()
@@ -334,6 +349,8 @@ fun List<UIMessage>.handleTextGenerationResult(
         modelId = model?.id,
         usage = result.usage,
         finishedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()),
+        finishReason = result.finishReason, // rhAutoResume
+        generationMillis = null,
     ).finishReasoning()
     return if (last().role != incoming.role) {
         this + incoming
@@ -342,6 +359,7 @@ fun List<UIMessage>.handleTextGenerationResult(
             modelId = model?.id ?: last().modelId,
             usage = nextStepUsage(last().usage, result.usage),
             finishedAt = incoming.finishedAt,
+            generationMillis = null,
         ).finishReasoning()
     }
 }
@@ -454,4 +472,16 @@ private fun UIMessage.appendMessage(delta: UIMessage): UIMessage {
         parts = newParts,
         annotations = delta.annotations.ifEmpty { annotations },
     )
+}
+
+/** Chunks that carry generated output (used for the TPS window). */
+private fun StreamChunk.isModelOutput(): Boolean = when (this) {
+    is StreamChunk.TextDelta,
+    is StreamChunk.ReasoningDelta,
+    is StreamChunk.ToolCallStart,
+    is StreamChunk.ToolCallDelta,
+    is StreamChunk.ImageDelta,
+    is StreamChunk.ImageSnapshot,
+    is StreamChunk.ServerToolInputDelta -> true
+    else -> false
 }

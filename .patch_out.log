@@ -1,0 +1,7 @@
+batch316: P1_TYPES OK
+batch316: P2_FACTORY OK
+batch316: P3_OPTIONS OK
+batch316: P4_UI_WHEN OK
+batch316: P5_UI_FORM OK
+batch316: P6_DUPLICATE OK
+::notice title=batch316::all parts applied, see ci_diag_batch316_deepseek.txt

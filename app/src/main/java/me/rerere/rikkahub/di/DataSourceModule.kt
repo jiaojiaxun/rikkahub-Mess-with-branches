@@ -10,6 +10,8 @@ import io.ktor.http.HttpHeaders
 import io.pebbletemplates.pebble.PebbleEngine
 import io.requery.android.database.sqlite.RequerySQLiteOpenHelperFactory
 import io.requery.android.database.sqlite.SQLiteCustomExtension
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import me.rerere.ai.provider.ProviderManager
 import me.rerere.common.http.AcceptLanguageBuilder
@@ -44,6 +46,9 @@ import me.rerere.rikkahub.data.db.Migration_30_31
 import me.rerere.rikkahub.data.db.Migration_31_32
 import me.rerere.rikkahub.data.db.Migration_32_33
 import me.rerere.rikkahub.data.db.Migration_33_34
+import me.rerere.rikkahub.data.db.Migration_34_35
+import me.rerere.rikkahub.data.db.Migration_35_36
+import me.rerere.rikkahub.data.db.Migration_36_37 // rhShortMem
 import me.rerere.rikkahub.data.db.fts.MessageFtsManager
 import me.rerere.rikkahub.data.db.fts.SimpleDictManager
 import me.rerere.rikkahub.data.db.migrations.Migration_6_7
@@ -74,34 +79,14 @@ val dataSourceModule = module {
 
     single {
         val context: Context = get()
+        val appScope: AppScope = get()
         Room.databaseBuilder(context, AppDatabase::class.java, "rikka_hub")
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-            .addMigrations(Migration_6_7, Migration_11_12, Migration_13_14, Migration_14_15, Migration_15_16, Migration_23_24, Migration_30_31(), Migration_31_32(), Migration_32_33(), Migration_33_34())
+            .addMigrations(Migration_6_7, Migration_11_12, Migration_13_14, Migration_14_15, Migration_15_16, Migration_23_24, Migration_30_31(), Migration_31_32(), Migration_32_33(), Migration_33_34(), Migration_34_35(), Migration_35_36(), Migration_36_37())
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
-                    // Both steps below are best-effort FTS setup: a failure here (missing dict
-                    // assets, FTS5 module unavailable, native lib not loaded yet) must degrade
-                    // search, not crash every single app launch by throwing out of onOpen and
-                    // failing the whole database open.
-                    try {
-                        val dictDir = SimpleDictManager.extractDict(context)
-                        val cursor = db.query("SELECT jieba_dict(?)", arrayOf(dictDir.absolutePath))
-                        cursor.use {
-                            if (it.moveToFirst()) {
-                                val result = it.getString(0)
-                                val success = result?.trimEnd('/') == dictDir.absolutePath.trimEnd('/')
-                                if (!success) {
-                                    android.util.Log.e(
-                                        "DataSourceModule",
-                                        "jieba_dict failed: $result, path=${dictDir.absolutePath}"
-                                    )
-                                }
-                            }
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e("DataSourceModule", "onOpen: jieba_dict setup failed", e)
-                    }
-
+                    // Best-effort FTS table creation only. jieba dict registration moved off
+                    // the DB-open critical path: it now prewarms on background coroutine.
                     try {
                         db.execSQL(me.rerere.rikkahub.data.db.fts.MESSAGE_FTS_CREATE_SQL.trimIndent())
                     } catch (e: Exception) {
@@ -123,6 +108,12 @@ val dataSourceModule = module {
                 }
             )))
             .build()
+            .also { database ->
+                // 后台预热 jieba 词典：不再阻塞 Room 首次 open
+                appScope.launch(Dispatchers.IO) {
+                    SimpleDictManager.ensureRegistered(context, database.openHelper.writableDatabase)
+                }
+            }
     }
 
     single {
@@ -176,7 +167,7 @@ val dataSourceModule = module {
     }
 
     single {
-        MessageFtsManager(get())
+        MessageFtsManager(get(), get<Context>())
     }
 
     single { McpManager(settingsStore = get(), appScope = get(), filesManager = get(), appEventBus = get()) }

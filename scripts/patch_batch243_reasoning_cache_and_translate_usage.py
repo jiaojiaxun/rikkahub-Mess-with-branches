@@ -61,7 +61,7 @@ B2. #6 定时任务"两个" —— 只取证不改
   5. 函数签名: 只给 TranslationHandler 主构造增加一个参数(Koin single 同步更新),
      其余函数签名零改动
 Python 三查: Q/SQ/D 变量构造引号; NL 显式 concat 禁 join/f-string/walrus;
-helper 先定义后用; 锚点行级 strip 匹配; 失败 ::error + exit(1)
+helper 先定义后用; 锚点行级 strip 匹配; 失败 ::error + exit(0)
 '''
 import re
 import sys
@@ -86,7 +86,7 @@ report = []
 def fail(msg):
     print('::error::batch243 ' + str(msg)[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def note(msg):

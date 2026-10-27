@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,6 +99,7 @@ import me.rerere.hugeicons.stroke.Download04
 import me.rerere.hugeicons.stroke.Tick01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.datastore.RpStyleRule // rhRpStyleRules
 import me.rerere.rikkahub.ui.components.table.DataTable
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.modifier.onClick
@@ -113,6 +115,37 @@ import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes
 import org.intellij.markdown.parser.MarkdownParser
 import kotlin.time.Clock
+
+
+// rhRpStyleRules: 解析颜色字符串为 Compose Color,失败返回 null
+internal fun parseColorSafe(colorStr: String): Color? {
+    return try {
+        val clean = colorStr.trim()
+        when {
+            clean.startsWith("#") && clean.length == 7 -> {
+                Color(("FF" + clean.removePrefix("#")).toLong(16))
+            }
+            clean.startsWith("#") && clean.length == 9 -> {
+                Color(clean.removePrefix("#").toLong(16))
+            }
+            else -> null
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
+// rhRpStyleRules: 按 pattern 查 rpStyleRules,返回带自定义颜色的 SpanStyle(或 null)
+// rhRpMerge144: 按 pattern 查 rpStyleRules,返回自定义颜色(或 null)
+// 合并语义: 调用方保留原样式,只在有规则时覆盖 color
+internal fun resolveRpColor(
+    pattern: String,
+    colorScheme: ColorScheme,
+    rpStyleRules: List<RpStyleRule>,
+): Color? {
+    val rule = rpStyleRules.find { it.pattern == pattern && it.enabled } ?: return null
+    return parseColorSafe(rule.colorHex)
+}
 
 private const val TAG = "Markdown"
 
@@ -237,6 +270,20 @@ private fun parseMarkdown(content: String): MarkdownParseResult {
 }
 
 @Composable
+private fun RhMarkdownChunkChildren(
+    content: String,
+    onClickCitation: (String) -> Unit,
+) {
+    // rhSmoothStream285: 冻结块子渲染 —— remember(content) 让已闭合块
+    // 的 AST 解析只发生一次, 尾部增长块每次重解析。
+    val data = remember(content) { parseMarkdown(content) }
+    data.astTree.children.fastForEach { child ->
+        MarkdownNode(node = child, content = data.preprocessed, onClickCitation = onClickCitation)
+    }
+}
+
+
+@Composable
 fun MarkdownBlock(
     content: String,
     modifier: Modifier = Modifier,
@@ -269,10 +316,24 @@ fun MarkdownBlock(
             Column(
                 modifier = modifier.padding(horizontal = 4.dp)
             ) {
-                data.astTree.children.fastForEach { child ->
-                    MarkdownNode(
-                        node = child, content = data.preprocessed, onClickCitation = onClickCitation
-                    )
+                val rhBlocks = remember(content) { rhSplitStreamBlocks285(content) } // rhSmoothStream285
+                if (rhBlocks.size <= 1 || data.hasHtml) {
+                    data.astTree.children.fastForEach { child ->
+                        MarkdownNode(
+                            node = child, content = data.preprocessed, onClickCitation = onClickCitation
+                        )
+                    }
+                } else {
+                    rhBlocks.forEachIndexed { rhIndex, rhBlock ->
+                        key(rhIndex) {
+                            RhFadeIn(enabled = LocalRhStreamFade.current) {
+                                RhMarkdownChunkChildren(
+                                    content = rhBlock,
+                                    onClickCitation = onClickCitation,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -788,6 +849,7 @@ private fun Paragraph(
         node.findChildOfTypeRecursive(GFMElementTypes.INLINE_MATH) != null
     }
     val enableLatexRendering = LocalSettings.current.displaySetting.enableLatexRendering
+    val rpStyleRules = LocalSettings.current.displaySetting.rpStyleRules // rhRpStyleRules
 
     val textStyle = LocalTextStyle.current
     val density = LocalDensity.current
@@ -804,7 +866,7 @@ private fun Paragraph(
             else Modifier
         )
     ) {
-        val annotatedString = remember(content, enableLatexRendering, latexColorArgb) {
+        val annotatedString = remember(content, enableLatexRendering, latexColorArgb, rpStyleRules) { // rhRpStyleRules
             buildAnnotatedString {
                 node.children.fastForEach { child ->
                     appendMarkdownNodeContent(
@@ -818,6 +880,7 @@ private fun Paragraph(
                         trim = trim,
                         enableLatexRendering = enableLatexRendering,
                         latexColorArgb = latexColorArgb,
+                        rpStyleRules = rpStyleRules, // rhRpStyleRules
                     )
                 }
             }
@@ -1003,6 +1066,7 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
     style: TextStyle,
     enableLatexRendering: Boolean = true,
     latexColorArgb: Int = 0,
+    rpStyleRules: List<RpStyleRule> = emptyList(), // rhRpStyleRules
     onClickCitation: (String) -> Unit = {},
 ) {
     when {
@@ -1031,7 +1095,8 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
         }
 
         node.type == MarkdownElementTypes.EMPH -> {
-            withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+            val rpColor = resolveRpColor("*", colorScheme, rpStyleRules) // rhRpMerge144
+            withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = rpColor ?: Color.Unspecified)) {
                 node.children.trim(MarkdownTokenTypes.EMPH, 1).fastForEach {
                     appendMarkdownNodeContent(
                         node = it,
@@ -1042,14 +1107,16 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                         style = style,
                         enableLatexRendering = enableLatexRendering,
                         latexColorArgb = latexColorArgb,
-                        onClickCitation = onClickCitation
+                        onClickCitation = onClickCitation,
+                        rpStyleRules = rpStyleRules, // rhRpStyleRules
                     )
                 }
             }
         }
 
         node.type == MarkdownElementTypes.STRONG -> {
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+            val rpColor = resolveRpColor("**", colorScheme, rpStyleRules) // rhRpMerge144
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = rpColor ?: Color.Unspecified)) {
                 node.children.trim(MarkdownTokenTypes.EMPH, 2).fastForEach {
                     appendMarkdownNodeContent(
                         node = it,
@@ -1060,14 +1127,16 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                         style = style,
                         enableLatexRendering = enableLatexRendering,
                         latexColorArgb = latexColorArgb,
-                        onClickCitation = onClickCitation
+                        onClickCitation = onClickCitation,
+                        rpStyleRules = rpStyleRules, // rhRpStyleRules
                     )
                 }
             }
         }
 
         node.type == GFMElementTypes.STRIKETHROUGH -> {
-            withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
+            val rpColor = resolveRpColor("~~", colorScheme, rpStyleRules) // rhRpMerge144
+            withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = rpColor ?: Color.Unspecified)) {
                 node.children.trim(GFMTokenTypes.TILDE, 2).fastForEach {
                     appendMarkdownNodeContent(
                         node = it,
@@ -1078,7 +1147,8 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
                         style = style,
                         enableLatexRendering = enableLatexRendering,
                         latexColorArgb = latexColorArgb,
-                        onClickCitation = onClickCitation
+                        onClickCitation = onClickCitation,
+                        rpStyleRules = rpStyleRules, // rhRpStyleRules
                     )
                 }
             }
@@ -1152,12 +1222,13 @@ private fun AnnotatedString.Builder.appendMarkdownNodeContent(
 
         node.type == MarkdownElementTypes.CODE_SPAN -> {
             val code = node.getTextInNode(content).trim('`')
+            val rpColor = resolveRpColor("`", colorScheme, rpStyleRules) // rhRpMerge144
             withStyle(
                 SpanStyle(
                     fontFamily = JetbrainsMono,
                     fontFeatureSettings = "'calt' 0, 'liga' 0, 'clig' 0",
                     fontSize = 0.9.em,
-                    color = colorScheme.primary,
+                    color = rpColor ?: colorScheme.primary, // rhRpMerge144
                 )
             ) {
                 append(' ')

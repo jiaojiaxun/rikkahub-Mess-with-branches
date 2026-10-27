@@ -1,5 +1,23 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <resources>
+    <!-- rhKeyMerge -->
+    <string name="setting_provider_merge_title">Duplicate provider found</string>
+    <string name="setting_provider_merge_message">%1$s already uses the same URL or API Key. Merge the new keys into it?</string>
+    <string name="setting_provider_merge_confirm">Merge</string>
+    <string name="setting_provider_merge_keep">Create anyway</string>
+    <!-- rhProviderTidy -->
+    <string name="setting_provider_page_tidy">Tidy</string>
+    <!-- rhSubAgentModel: sub-agent model -->
+    <string name="setting_model_page_sub_agent_model">Sub-agent model</string>
+    <string name="setting_model_page_sub_agent_model_desc">Model used by dispatched sub-agents. Leave unset to reuse the parent assistant model.</string>
+    <!-- rhLiteStreamSwitch -->
+    <string name="rh_lite_stream_render_title">Lite streaming render</string>
+    <string name="rh_lite_stream_render_desc">Stream the in-progress message as plain text (skips Markdown and thinking-card animations); switches back to full rendering when generation finishes. Helps with long-session lag.</string>
+    <!-- rhDrawer48: drawer segmented tabs -->
+    <string name="rh_drawer_tab_chats">Chats</string>
+    <string name="rh_drawer_tab_files">Files</string>
+  <string name="setting_page_scheduled_jobs">Scheduled Jobs</string>
+  <string name="setting_page_scheduled_jobs_desc">View, toggle or delete AI-created scheduled jobs</string>
   <string name="about_page_github">Github</string>
   <string name="about_page_license">License</string>
   <string name="about_page_system">System</string>
@@ -95,9 +113,9 @@
   <string name="assistant_page_max_tokens_limit">Limit: %d tokens</string>
   <string name="assistant_page_max_tokens_no_limit">No limit</string>
   <string name="assistant_page_max_tokens_no_token_limit">No token limit</string>
-  <string name="assistant_page_memory">Memory</string>
+  <string name="assistant_page_memory">Long-term memory</string>
   <string name="assistant_page_memory_count">Memory: %d</string>
-  <string name="assistant_page_memory_desc">When memory is enabled, the model will try to actively record your information during conversations and use it in subsequent conversations. This feature requires the model to support tool calls to work properly</string>
+  <string name="assistant_page_memory_desc">Long-term memory is shared across all conversations of this assistant. This feature requires the model to support tool calls to work properly</string>
   <string name="assistant_page_message_template">Message Content Template</string>
   <string name="assistant_page_message_template_desc">Controls the content format of chat messages before being sent to the LLM, usually no need to modify</string>
   <string name="assistant_page_message_template_missing_message">Template does not contain {{ message }}, user messages will not be sent</string>
@@ -185,8 +203,8 @@
   <string name="backup_page_importing">Importing...</string>
   <string name="backup_page_loading_failed">Failed to load backup files: %s</string>
   <string name="backup_page_local_backup_export">Export to File</string>
-  <string name="backup_page_local_backup_export_official">Official-compatible backup</string>
-  <string name="backup_page_local_backup_export_official_desc">Export a RikkaHub 2.4.14-compatible backup</string>
+  <string name="backup_page_local_backup_export_official">Compatible export (lenient)</string>
+  <string name="backup_page_local_backup_export_official_desc">The previous official-compatible export: RikkaHub 2.4.14 can restore it; fork-only fields are kept and ignored by the official app</string>
   <string name="backup_page_local_backup_export_full">Full Agent backup</string>
   <string name="backup_page_local_backup_export_full_desc">Export all current fork data and files</string>
   <string name="backup_page_local_backup_import">Import from File</string>
@@ -1840,4 +1858,102 @@
   <string name="setting_page_preferences_network_proxy">Proxy</string>
   <string name="setting_page_preferences_network_proxy_desc">Supports HTTP and SOCKS5 proxy URLs. Leave blank to use system settings.</string>
   <string name="setting_page_preferences_network_proxy_invalid">Enter a valid proxy URL with a host and port.</string>
+    <!-- rh-batch1 -->
+    <string name="chat_tool_approval_allow_chat">Allow for this chat</string>
+    <string name="chat_tool_approval_allow_always">Always allow</string>
+    <string name="chat_tool_approval_hint">Long-press Allow for more options. Long-press Deny to give a reason.</string>
+    <string name="chat_html_exit_native">Native UI</string>
+    <string name="setting_display_page_collapse_user_message_title" formatted="true">Collapse long user messages</string>
+    <string name="setting_display_page_collapse_user_message_desc" formatted="true">Long messages you send are folded; tap Expand to read all</string>
+    <string name="setting_display_page_collapse_user_message_lines" formatted="true">Fold after %d lines</string>
+    <string name="chat_message_expand" formatted="true">Expand</string>
+    <string name="chat_message_collapse" formatted="true">Collapse</string>
+    <string name="compaction_stream_title" formatted="true">Compression model output</string>
+    <string name="chat_input_file_imported_to_workspace" formatted="true">%1$s was imported to the workspace: %2$s</string>
+    <string name="chat_input_file_no_workspace" formatted="true">%s cannot be attached. Bind a workspace to the assistant to import it</string>
+    <string name="backup_page_local_backup_export_pure">Lite backup (no attachments)</string>
+    <string name="backup_page_local_backup_export_pure_desc">Backs up conversation data and settings only, without uploads/ attachments. Much smaller than a full backup</string>
+  <string name="search_duplicate_key_title">Duplicate API key</string>
+  <string name="search_duplicate_key_message">This API key is already configured for %s. The key itself is hidden.</string>
+  <string name="search_duplicate_key_continue">Save anyway</string>
+    <string name="workspace_detail_selected_count">已选 %1$d/%2$d 项</string>
+    <string name="workspace_detail_select_all">全选</string>
+    <string name="workspace_detail_deselect_all">取消全选</string>
+    <string name="workspace_detail_export_selected">导出选中</string>
+    <string name="workspace_detail_exit_selection">退出多选</string>
+    <string name="setting_tavern_mode">Tavern mode</string> <!-- rhTavernMode -->
+    <string name="setting_tavern_mode_desc">Only persona, memory, search and files; all other tools are off</string>
+    <string name="setting_page_custom_tools">AI Custom Tools</string>
+    <string name="setting_page_custom_tools_desc">Let the AI write and call its own JavaScript tools</string>
+    <!-- rhHeartRate -->
+    <string name="heart_rate_title">Live Heart Rate</string>
+    <string name="heart_rate_bpm_unit">BPM</string>
+    <string name="heart_rate_connected_to">Connected: %1$s</string>
+    <string name="heart_rate_connecting">Connecting...</string>
+    <string name="heart_rate_scanning">Scanning...</string>
+    <string name="heart_rate_not_connected">Not connected</string>
+    <string name="heart_rate_last_update">Last update: %1$s</string>
+    <string name="heart_rate_permission_hint">Bluetooth permission is needed to receive the heart-rate broadcast.</string>
+    <string name="heart_rate_grant_permission">Grant</string>
+    <string name="heart_rate_bluetooth_off">Bluetooth is off.</string>
+    <string name="heart_rate_no_devices">No devices found. Enable heart-rate broadcast on the watch first.</string>
+    <string name="heart_rate_last_device">Last device: %1$s</string>
+    <string name="heart_rate_connect">Connect</string>
+    <string name="heart_rate_disconnect">Disconnect</string>
+    <string name="heart_rate_scan">Scan</string>
+    <string name="heart_rate_stop_scan">Stop</string>
+    <string name="heart_rate_close">Close</string>
+    <string name="chat_message_todo_title">Plan</string> <!-- rhPlanBar228 -->
+    <string name="chat_message_todo_update">Update plan</string>
+    <string name="chat_message_todo_all_done">All steps completed</string>
+    <string name="chat_message_todo_count_hint" formatted="true">%1$d of %2$d completed</string>
+    <string name="chat_message_todo_collapse">Collapse</string>
+    <string name="plan_bar_expand">Expand plan</string>
+    <string name="setting_display_page_plan_bar_title">Show plan bar</string>
+    <string name="setting_display_page_plan_bar_desc">Pin the AI task plan above the input box, powered by the todo_write tool</string>
+  <!-- rhShortMemUI -->
+  <string name="assistant_page_short_memory">Short-term memory</string>
+  <string name="assistant_page_short_memory_desc">Short-term memory is private to each conversation: memories are only visible within the conversation where they were created. Cannot be enabled together with long-term memory.</string>
+  <string name="assistant_page_short_memory_empty">No short-term memories yet. Memories the AI saves in each conversation appear here, grouped by conversation.</string>
+  <string name="assistant_page_memory_unknown_conversation">Unknown conversation</string>
+    <!-- rhToolExpand249 -->
+    <string name="chat_message_tool_view_detail">View full result</string>
+    <!-- rhApprovalIdentity -->
+    <string name="tool_approval_mcp_server_group_hint">Approve the whole MCP server instead of this single tool</string>
+    <string name="tool_approval_mcp_server_allow_chat">Server: this chat</string>
+    <string name="tool_approval_mcp_server_allow_always">Server: always</string>
+    <!-- rhApprovalIdentityMcpUi -->
+    <string name="setting_page_tool_approvals_mcp_header">MCP server approvals</string>
+    <string name="setting_page_tool_approvals_mcp_on">Whole server allowed</string>
+    <string name="setting_page_tool_approvals_mcp_off">Ask for every tool</string>
+    <!-- rhHeartRateShare -->
+    <string name="heart_rate_connected_badge">Connected: %1$d/min</string>
+    <string name="heart_rate_disconnected_badge">Not connected</string>
+    <string name="heart_rate_share_with_ai">Attach heart rate to messages</string>
+    <!-- rhApprovalIdentityCovered -->
+    <string name="setting_page_tool_approvals_mcp_covered">Covered by server-level approval</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_thought_worked">Worked for %1$ds</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_thought_process">Thinking</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_thought_used_tools">Used %1$d %2$s tools</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_thought_used_tools_generic">Used %1$d tools</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_cat_web">web</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_cat_file">file</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_cat_mcp">MCP</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_cat_tool"></string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_tool_args">Arguments</string>
+    <!-- rhThoughtDrawer286 -->
+    <string name="rh_tool_result">Result</string>
+    <string name="rh_verb_search">Search</string>
+    <string name="rh_verb_fetch">Fetch</string>
+    <string name="rh_verb_browse">Browse</string>
+    <string name="rh_thought_activity_thinking">Thinking %1$ds</string>
 </resources>

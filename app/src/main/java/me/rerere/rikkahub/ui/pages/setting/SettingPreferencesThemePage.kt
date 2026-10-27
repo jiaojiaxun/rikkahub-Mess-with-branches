@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -31,6 +32,8 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
+import me.rerere.rikkahub.ui.components.ui.WhaleGirlMascot
+import me.rerere.rikkahub.ui.components.ui.MiffanMascotState
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.hooks.rememberAmoledDarkMode
 import me.rerere.rikkahub.ui.theme.CustomColors
@@ -95,6 +98,31 @@ fun SettingPreferencesThemePage(vm: SettingVM = koinViewModel()) {
                             )
                         },
                     )
+                    item(
+                        headlineContent = { Text("吉祥物") },
+                        supportingContent = { Text("在设置页预览蓝色大肥鱼吉祥物") },
+                        trailingContent = {
+                            Switch(
+                                checked = settings.displaySetting.mascotEnabled,
+                                onCheckedChange = {
+                                    vm.updateSettings(settings.copy(
+                                        displaySetting = settings.displaySetting.copy(mascotEnabled = it)
+                                    ))
+                                }
+                            )
+                        },
+                    )
+                    item(
+                        headlineContent = { Text("吉祥物预览") },
+                        supportingContent = {
+                            WhaleGirlMascot(
+                                state = MiffanMascotState.Idle,
+                                interactive = true,
+                                modifier = Modifier.size(120.dp),
+                            )
+                        },
+                    )
+
                 }
             }
         }

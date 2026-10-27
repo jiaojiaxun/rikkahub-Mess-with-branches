@@ -1,0 +1,2 @@
+McpPicker OK: avatar replaces default icon when configured
+1 picker fix DONE

@@ -10,6 +10,7 @@ import me.rerere.ai.core.InputSchema
 import me.rerere.ai.core.Tool
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.cron.CronJobStore
+import me.rerere.rikkahub.data.cron.CronPresets // rhCronPresets
 import me.rerere.rikkahub.data.model.CronJob
 import me.rerere.rikkahub.data.model.CronParser
 import me.rerere.rikkahub.service.CronJobScheduler
@@ -67,6 +68,8 @@ fun createCronTools(
             When the job fires, the prompt is sent to the target conversation as a new user message and the
             assistant generates a reply. By default the target is the current conversation; pass
             conversation_id="new" to create a fresh conversation on every fire. Every schedule needs approval.
+            Pass preset=<id> to use a built-in schedule instead of a raw cron expression; 
+            explicit name/cron/prompt still win over the preset values. Presets: ${CronPresets.ids()}.
         """.trimIndent(),
         parameters = {
             InputSchema.Obj(
@@ -91,18 +94,35 @@ fun createCronTools(
                         put("type", "string")
                         put("description", "Assistant UUID for new conversations (omit for current)")
                     })
+                    put("preset", buildJsonObject {
+                        put("type", "string")
+                        put("description", "Preset id; supplies name/cron/prompt: " + CronPresets.ids())
+                    })
                 },
-                required = listOf("name", "cron", "prompt"),
+                // rhCronPresets: name/cron/prompt 可由 preset 供值，因此不再强制必填（缺失仍会报错）
+                required = emptyList(),
             )
         },
         needsApproval = { true },
         execute = { args ->
             val params = args.jsonObject
+            // rhCronPresets: preset 与 cron 同源（CronPresets），预设值可被显式参数覆盖
+            val presetId = params["preset"]?.jsonPrimitive?.contentOrNull
+            val preset = if (presetId != null) {
+                CronPresets.resolve(presetId)
+                    ?: return@Tool errEnv(
+                        "unknown_preset",
+                        "unknown preset id: " + presetId + " (available: " + CronPresets.ids() + ")",
+                    )
+            } else null
             val name = params["name"]?.jsonPrimitive?.contentOrNull
+                ?: preset?.title
                 ?: return@Tool errEnv("invalid_name", "name is required")
             val cron = params["cron"]?.jsonPrimitive?.contentOrNull
+                ?: preset?.cronExpression
                 ?: return@Tool errEnv("invalid_cron", "cron is required")
             val prompt = params["prompt"]?.jsonPrimitive?.contentOrNull
+                ?: preset?.suggestedPrompt?.takeIf { it.isNotBlank() }
                 ?: return@Tool errEnv("invalid_prompt", "prompt is required")
             if (!CronParser.isValid(cron)) {
                 return@Tool errEnv("invalid_cron", "not a valid 5-field cron expression: $cron")

@@ -1,0 +1,5 @@
+FAIL tools-approvalKey anchor count=0 [        needsApproval = { true },]
+FAIL service-whitelist anchor count=0 [        "trigger_cron_job" -> triggerCronJob(args)]
+applied=0 failed=2
+EXCEPTION service: TypeError('replace() argument 2 must be str, not tuple')
+applied=8 failed=1

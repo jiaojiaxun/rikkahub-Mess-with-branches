@@ -1,0 +1,132 @@
+P1 keys en=1904 zh=1728
+P1 zh missing count=176
+P1 MISSING_IN_ZH accessibility_add_provider :: <string name="accessibility_add_provider">Add provider</string>
+P1 MISSING_IN_ZH accessibility_add_quick_message :: <string name="accessibility_add_quick_message">Add quick message</string>
+P1 MISSING_IN_ZH accessibility_add_reference_image :: <string name="accessibility_add_reference_image">Add reference image</string>
+P1 MISSING_IN_ZH accessibility_add_skill :: <string name="accessibility_add_skill">Add skill</string>
+P1 MISSING_IN_ZH accessibility_add_workspace :: <string name="accessibility_add_workspace">Add workspace</string>
+P1 MISSING_IN_ZH accessibility_app_logo :: <string name="accessibility_app_logo">App logo</string>
+P1 MISSING_IN_ZH accessibility_chat_options :: <string name="accessibility_chat_options">Chat Options</string>
+P1 MISSING_IN_ZH accessibility_clear_model_selection :: <string name="accessibility_clear_model_selection">Clear model selection</string>
+P1 MISSING_IN_ZH accessibility_clear_text :: <string name="accessibility_clear_text">Clear text</string>
+P1 MISSING_IN_ZH accessibility_code_view :: <string name="accessibility_code_view">Code view</string>
+P1 MISSING_IN_ZH accessibility_copy_error_message :: <string name="accessibility_copy_error_message">Copy error message</string>
+P1 MISSING_IN_ZH accessibility_copy_prompt :: <string name="accessibility_copy_prompt">Copy prompt</string>
+P1 MISSING_IN_ZH accessibility_copy_table :: <string name="accessibility_copy_table">Copy table</string>
+P1 MISSING_IN_ZH accessibility_cost :: <string name="accessibility_cost">Cost</string>
+P1 MISSING_IN_ZH accessibility_developer_options :: <string name="accessibility_developer_options">Developer options</string>
+P1 MISSING_IN_ZH accessibility_discord :: <string name="accessibility_discord">Discord</string>
+P1 MISSING_IN_ZH accessibility_download_table :: <string name="accessibility_download_table">Download table</string>
+P1 MISSING_IN_ZH accessibility_duration :: <string name="accessibility_duration">Duration</string>
+P1 MISSING_IN_ZH accessibility_edit_assistant :: <string name="accessibility_edit_assistant">Edit assistant</string>
+P1 MISSING_IN_ZH accessibility_edit_avatar :: <string name="accessibility_edit_avatar">Edit avatar</string>
+P1 MISSING_IN_ZH accessibility_edit_model :: <string name="accessibility_edit_model">Edit model</string>
+P1 MISSING_IN_ZH accessibility_edit_nickname :: <string name="accessibility_edit_nickname">Edit nickname</string>
+P1 MISSING_IN_ZH accessibility_edit_override :: <string name="accessibility_edit_override">Edit override</string>
+P1 MISSING_IN_ZH accessibility_expand_options :: <string name="accessibility_expand_options">Expand options</string>
+P1 MISSING_IN_ZH accessibility_forward :: <string name="accessibility_forward">Forward</string>
+P1 MISSING_IN_ZH accessibility_hide_password :: <string name="accessibility_hide_password">Hide password</string>
+P1 MISSING_IN_ZH accessibility_import_skill :: <string name="accessibility_import_skill">Import skill</string>
+P1 MISSING_IN_ZH accessibility_input_tokens :: <string name="accessibility_input_tokens">Input tokens</string>
+P1 MISSING_IN_ZH accessibility_loading :: <string name="accessibility_loading">Loading</string>
+P1 MISSING_IN_ZH accessibility_messages :: <string name="accessibility_messages">Messages</string>
+P1 MISSING_IN_ZH accessibility_more_options :: <string name="accessibility_more_options">More options</string>
+P1 MISSING_IN_ZH accessibility_navigate_up_directory :: <string name="accessibility_navigate_up_directory">Go up one level</string>
+P1 MISSING_IN_ZH accessibility_new_session :: <string name="accessibility_new_session">New session</string>
+P1 MISSING_IN_ZH accessibility_next_branch :: <string name="accessibility_next_branch">Next branch</string>
+P1 MISSING_IN_ZH accessibility_output_tokens :: <string name="accessibility_output_tokens">Output tokens</string>
+P1 MISSING_IN_ZH accessibility_pinned :: <string name="accessibility_pinned">Pinned</string>
+P1 MISSING_IN_ZH accessibility_previous_branch :: <string name="accessibility_previous_branch">Previous branch</string>
+P1 MISSING_IN_ZH accessibility_qq :: <string name="accessibility_qq">QQ</string>
+P1 MISSING_IN_ZH accessibility_qr_code_value :: <string name="accessibility_qr_code_value">QR code: %1$s</string>
+P1 MISSING_IN_ZH accessibility_refresh_page :: <string name="accessibility_refresh_page">Refresh page</string>
+P1 MISSING_IN_ZH accessibility_refresh_workspace :: <string name="accessibility_refresh_workspace">Refresh workspace</string>
+P1 MISSING_IN_ZH accessibility_remove_attachment :: <string name="accessibility_remove_attachment">Remove attachment</string>
+P1 MISSING_IN_ZH accessibility_remove_override :: <string name="accessibility_remove_override">Remove override</string>
+P1 MISSING_IN_ZH accessibility_search :: <string name="accessibility_search">Search</string>
+P1 MISSING_IN_ZH accessibility_show_password :: <string name="accessibility_show_password">Show password</string>
+P1 MISSING_IN_ZH accessibility_speed :: <string name="accessibility_speed">Speed</string>
+P1 MISSING_IN_ZH accessibility_toggle_key_visibility :: <string name="accessibility_toggle_key_visibility">Toggle key visibility</string>
+P1 MISSING_IN_ZH accessibility_toggle_token_visibility :: <string name="accessibility_toggle_token_visibility">Toggle token visibility</string>
+P1 MISSING_IN_ZH accessibility_tts_close :: <string name="accessibility_tts_close">Close player</string>
+P1 MISSING_IN_ZH accessibility_tts_collapse :: <string name="accessibility_tts_collapse">Collapse controls</string>
+P1 MISSING_IN_ZH accessibility_tts_expand :: <string name="accessibility_tts_expand">Expand controls</string>
+P1 MISSING_IN_ZH accessibility_tts_fast_forward :: <string name="accessibility_tts_fast_forward">Fast forward 5 seconds</string>
+P1 MISSING_IN_ZH accessibility_tts_pause :: <string name="accessibility_tts_pause">Pause speech</string>
+P1 MISSING_IN_ZH accessibility_tts_play :: <string name="accessibility_tts_play">Play speech</string>
+P1 MISSING_IN_ZH accessibility_tts_stop :: <string name="accessibility_tts_stop">Stop speech</string>
+P1 MISSING_IN_ZH assistant_page_local_tools_archive_desc :: <string name="assistant_page_local_tools_archive_desc">Create and extract .zip archives directly. No password support in v1. Works on file:// and content:// URIs.</string>
+P1 MISSING_IN_ZH assistant_page_local_tools_archive_title :: <string name="assistant_page_local_tools_archive_title">Archive (zip)</string>
+P1 MISSING_IN_ZH assistant_page_local_tools_external_storage_desc :: <string name="assistant_page_local_tools_external_storage_desc">Lets file tools work on USB drives, SD cards, Downloads, and cloud storage. Each tree requires a one-time grant via 
+P1 MISSING_IN_ZH assistant_page_local_tools_external_storage_title :: <string name="assistant_page_local_tools_external_storage_title">External storage</string>
+P1 MISSING_IN_ZH assistant_page_local_tools_keyboard_desc :: <string name="assistant_page_local_tools_keyboard_desc">Drive the active text field through the co-signed agent-keyboard app: type, read, press keys, delete, move the cursor, and s
+P1 zh-only keys=0
+P1 key gap OK
+P2 scanned kt files=636
+P2 [rh_lite] hits=16
+P2 [rh_lite] ChatMessage.kt L197:} / L198:// rhLiteStream (batch53): 精简流式——流式末条消息纯文本直出, 生成完成自动切回完整渲染 / L199:if (settings.liteStreamRender && loading && lastMessage) {
+P2 [rh_lite] ChatMessage.kt L200:ProvideTextStyle(textStyle) { / L201:LiteStreamingText(parts = message.parts) / L202:}
+P2 [rh_lite] ChatMessage.kt L316:@Composable / L317:private fun LiteStreamingText( / L318:parts: List<UIMessagePart>,
+P2 [rh_lite] ChatMessage.kt L319:) { / L320:// rhLiteStream (batch53): 最轻量流式渲染——纯 Text 直出, 跳过 Markdown / L321:// 解析/SelectionContainer/ChainOfThought 动画。chunk 只触发一个 Text 重绘。
+P2 [rh_lite] SettingPreferencesUIPage.kt L307:) / L308:// rhLiteStreamSwitch (batch54a): 精简版流式渲染开关 / L309:item(
+P2 [rh_lite] SettingPreferencesUIPage.kt L309:item( / L310:headlineContent = { Text(stringResource(R.string.rh_lite_stream_render_title)) }, / L311:supportingContent = { Text(stringResource(R.string.rh_lite_stream_render_desc)) },
+P2 [rh_lite] SettingPreferencesUIPage.kt L310:headlineContent = { Text(stringResource(R.string.rh_lite_stream_render_title)) }, / L311:supportingContent = { Text(stringResource(R.string.rh_lite_stream_render_desc)) }, / L312:trailingContent = {
+P2 [rh_lite] ChatList.kt L537:androidx.compose.foundation.layout.Column { / L538:// rhLiteStreamLoading (batch53): 精简模式下去掉动画加载指示器 / L539:if (settings.displaySetting.liteStreamRender) {
+P2 [rh_lite] ImportExportTab.kt L203:} / L204:item(key = "lite_types") { // rhLiteTypesIE / L205:CardGroup(modifier = Modifier.padding(horizontal = 0.dp), title = { Text("轻量备份附件") }) {
+P2 [rh_lite] PreferencesStore.kt L1022:val showPlanBar: Boolean = true, // rhPlanBar228 / L1023:// rhLiteStream (batch53): 精简版流式渲染——流式中的末条消息纯文本直出, / L1024:// 生成完成自动切回完整渲染。长会话防卡顿。默认 false = 原版行为。
+P2 [rh_lite] PreferencesStore.kt L1037:), / L1038:val liteAttachmentTypes: List<LiteAttachmentType> = listOf(LiteAttachmentType.TEXT, LiteAttachmentType.IMAGE), / L1039:) {
+P2 [rh_lite] PreferencesStore.kt L1045: / L1046:enum class LiteAttachmentType { // rhLiteTypesPS / L1047:TEXT,
+P2 [rh_lite] WebDavSync.kt L40:private const val COPY_BUFFER_SIZE = 16 * 1024 / L41:private const val LITE_MAX_FILE_SIZE = 3L * 1024 * 1024 // rhLiteThreshold / L42:private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif") // rhLiteThreshold
+P2 [rh_lite] WebDavSync.kt L41:private const val LITE_MAX_FILE_SIZE = 3L * 1024 * 1024 // rhLiteThreshold / L42:private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif") // rhLiteThreshold / L43:
+P2 [rh_lite] WebDavSync.kt L250:} / L251:val includeImages = config.liteAttachmentTypes.isEmpty() || WebDavConfig.LiteAttachmentType.IMAGE in config.li / L252:val liteMax = if (format == BackupExportFormat.LITE) LITE_MAX_FILE_SIZE else Long.MAX_VALUE // rhLiteThreshold
+P2 [rh_lite] WebDavSync.kt L251:val includeImages = config.liteAttachmentTypes.isEmpty() || WebDavConfig.LiteAttachmentType.IMAGE in config.li / L252:val liteMax = if (format == BackupExportFormat.LITE) LITE_MAX_FILE_SIZE else Long.MAX_VALUE // rhLiteThreshold / L253:val fileEntries = if (includeFiles) backupFil
+P2 [lowtext] hits=12
+P2 [lowtext] ChatInput.kt L596:var completionList by remember { mutableStateOf<ChatCompletionList?>(null) } / L597:val receiveContentListener = rememberPasteLongTextAsFileListener(state) / L598:
+P2 [lowtext] ChatInput.kt L711:@Composable / L712:private fun rememberPasteLongTextAsFileListener(state: ChatInputState): ReceiveContentListener { / L713:val settings = LocalSettings.current
+P2 [lowtext] ChatInput.kt L715:return remember( / L716:settings.displaySetting.pasteLongTextAsFile, settings.displaySetting.pasteLongTextThreshold / L717:) {
+P2 [lowtext] ChatInput.kt L733: / L734:settings.displaySetting.pasteLongTextAsFile && transferableContent.hasMediaType(MediaType.Text) -> { / L735:transferableContent.consume { item ->
+P2 [lowtext] ChatInput.kt L921:} / L922:val receiveContentListener = rememberPasteLongTextAsFileListener(state) / L923:TextField(
+P2 [lowtext] SettingPreferencesGeneralPage.kt L197:item( / L198:headlineContent = { Text(stringResource(R.string.setting_display_page_paste_long_text_as_file_title)) }, / L199:supportingContent = { Text(stringResource(R.string.setting_display_page_paste_long_text_as_file_desc)) },
+P2 [lowtext] SettingPreferencesGeneralPage.kt L198:headlineContent = { Text(stringResource(R.string.setting_display_page_paste_long_text_as_file_title)) }, / L199:supportingContent = { Text(stringResource(R.string.setting_display_page_paste_long_text_as_file_desc)) }, / L200:trailingContent = {
+P2 [lowtext] SettingPreferencesGeneralPage.kt L201:Switch( / L202:checked = displaySetting.pasteLongTextAsFile, / L203:onCheckedChange = {
+P2 [lowtext] SettingPreferencesGeneralPage.kt L203:onCheckedChange = { / L204:updateDisplaySetting(displaySetting.copy(pasteLongTextAsFile = it)) / L205:}
+P2 [lowtext] SettingPreferencesGeneralPage.kt L208:) / L209:if (displaySetting.pasteLongTextAsFile) { / L210:item(
+P2 [lowtext] PreferencesStore.kt L1009:val autoPlayTTSAfterGeneration: Boolean = false, / L1010:val pasteLongTextAsFile: Boolean = false, / L1011:val pasteLongTextThreshold: Int = 1000,
+P2 [lowtext] OfficialPurifier.kt L340:"codeBlockAutoWrap", "codeBlockAutoCollapse", "showLineNumbers", "ttsOnlyReadQuoted", / L341:"ttsOnlyReadOutsideBrackets", "autoPlayTTSAfterGeneration", "pasteLongTextAsFile", / L342:"pasteLongTextThreshold", "sendOnEnter", "enableAutoScroll", "enableLatexRendering",
+P2 [cn_zhuanwenjian] hits=13
+P2 [cn_zhuanwenjian] SettingLocalLlmViewModel.kt L19:import me.rerere.ai.provider.ProviderSetting / L20:import me.rerere.ai.provider.LITERT_PROVIDER_ID / L21:import me.rerere.ai.provider.LLAMACPP_PROVIDER_ID
+P2 [cn_zhuanwenjian] SettingLocalLlmViewModel.kt L162:private fun providerIdForRuntime(): kotlin.uuid.Uuid = when (runtime) { / L163:LocalRuntime.LiteRT -> LITERT_PROVIDER_ID / L164:LocalRuntime.LlamaCpp -> LLAMACPP_PROVIDER_ID
+P2 [cn_zhuanwenjian] AssistantLocalToolPage.kt L752:} // rhToolSearch225 / L753:rhToolItem(rhToolQuery, "Download 下载 Download files from URLs into the public Downloads folder, and save text  / L754:item(
+P2 [cn_zhuanwenjian] ImportExportTab.kt L254:{ / L255:selectedExportFormat = BackupExportFormat.LITE / L256:createDocumentLauncher.launch("rikkahub_lite_backup.zip")
+P2 [cn_zhuanwenjian] ImportExportTab.kt L261:Text( / L262:if (isExporting && selectedExportFormat == BackupExportFormat.LITE) { / L263:"正在导出：${progress?.detail.orEmpty()}"
+P2 [cn_zhuanwenjian] ImportExportTab.kt L267:leadingContent = { / L268:if (isExporting && selectedExportFormat == BackupExportFormat.LITE) { / L269:CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
+P2 [cn_zhuanwenjian] BackupExportFormat.kt L22:*/ / L23:LITE, / L24:}
+P2 [cn_zhuanwenjian] BackupExportFormat.kt L32:BackupExportFormat.OFFICIAL -> "backup_${timestamp}_official.zip" / L33:BackupExportFormat.LITE -> "backup_${timestamp}_lite.zip" / L34:}
+P2 [cn_zhuanwenjian] GuardedDns.kt L69: / L70:private val IPV4_LITERAL_RE = Regex("""^\d{1,3}(\.\d{1,3}){3}$""") / L71:
+P2 [cn_zhuanwenjian] GuardedDns.kt L83:internal fun hostIsBlockedLiteral(host: String): Boolean { / L84:val isLiteral = IPV4_LITERAL_RE.matches(host) || host.contains(':') / L85:if (!isLiteral) return false
+P2 [cn_zhuanwenjian] WebDavSync.kt L40:private const val COPY_BUFFER_SIZE = 16 * 1024 / L41:private const val LITE_MAX_FILE_SIZE = 3L * 1024 * 1024 // rhLiteThreshold / L42:private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif") // rhLiteThreshold
+P2 [cn_zhuanwenjian] WebDavSync.kt L224:// rh-batch6v2:lite-db (lite = full agent DB snapshot, but no uploads/ in archive) / L225:if (full || format == BackupExportFormat.LITE) agentDb = createFullDatabaseSnapshot(dbRoot) / L226:}
+P2 [cn_zhuanwenjian] WebDavSync.kt L251:val includeImages = config.liteAttachmentTypes.isEmpty() || WebDavConfig.LiteAttachmentType.IMAGE in config.li / L252:val liteMax = if (format == BackupExportFormat.LITE) LITE_MAX_FILE_SIZE else Long.MAX_VALUE // rhLiteThreshold / L253:val fileEntries = if (includeFiles) backupFil
+P2 [quote] hits=21
+P2 [quote] ChatService.kt L592: / L593:fun sendMessage(conversationId: Uuid, content: List<UIMessagePart>, answer: Boolean = true, quotedMessageId: U / L594:if (content.isEmptyInputMessage()) return
+P2 [quote] ChatService.kt L627:// rhQuoteFix (batch95): 把被引消息文本注入,让模型能看到引用内容 / L628:val quotedContext = quotedMessageId?.let { qid -> / L629:currentConversation.messageNodes
+P2 [quote] ChatService.kt L648:parts = processedContent, / L649:quotedMessageId = quotedMessageId, // rhQuoteSend / L650:).toMessageNode(),
+P2 [quote] ChatMessage.kt L144:onRerunTool: (suspend (toolCallId: String) -> me.rerere.rikkahub.service.ChatService.RerunToolResult)? = null, / L145:onQuote: (() -> Unit)? = null, // rhQuoteMenu / L146:// rhUserAvatarEdit: 点消息处头像/昵称分别弹改头像/改昵称(对话页为唯一编辑入口)
+P2 [quote] ChatMessage.kt L297:}, / L298:onQuote = onQuote, / L299:onDismissRequest = {
+P2 [quote] ChatMessage.kt L864:@Composable / L865:fun ChatMessageQuoteBlock( / L866:senderName: String,
+P2 [quote] ChatMessageActions.kt L296:onWebViewPreview: () -> Unit, / L297:onQuote: (() -> Unit)? = null, // rhQuoteMenu / L298:onDismissRequest: () -> Unit
+P2 [quote] ChatMessageActions.kt L338:// rhQuoteMenu: 引用回复 / L339:if (onQuote != null) { / L340:Card(
+P2 [quote] ChatMessageActions.kt L342:onDismissRequest() / L343:onQuote() / L344:},
+P2 [quote] ChatPage.kt L522:} else { / L523:vm.handleMessageSend(inputState.getContents(), quotedMessageId = quotingMessage?.id) / L524:}
+P2 [quote] ChatPage.kt L534:} else { / L535:vm.handleMessageSend(content = inputState.getContents(), answer = false, quotedMessageId = quotingMessage?.id) / L536:}
+P2 [quote] ChatPage.kt L579:innerPadding = innerPadding, / L580:onQuote = { quotingMessage = it }, / L581:conversation = conversation,
+P2 [quote] ChatVM.kt L222:*/ / L223:fun handleMessageSend(content: List<UIMessagePart>,answer: Boolean = true, quotedMessageId: Uuid? = null) { / L224:if (content.isEmptyInputMessage()) return
+P2 [quote] ChatVM.kt L227:if (!answer) { / L228:chatService.sendMessage(_conversationId, content, false, quotedMessageId) / L229:return
+P2 [quote] ChatList.kt L103:import me.rerere.rikkahub.ui.components.message.ChatMessage / L104:import me.rerere.rikkahub.ui.components.message.ChatMessageQuoteBlock / L105:import me.rerere.rikkahub.ui.components.ui.ErrorCardsDisplay
+P2 [quote] ChatList.kt L148:subAgentPendingCount: Int = 0, // rhSubAgentBanner / L149:onQuote: (UIMessage) -> Unit = {}, // rhQuoteMount / L150:// rhUserAvatarEdit
+P2 [quote] ChatList.kt L198:subAgentPendingCount = subAgentPendingCount, // rhSubAgentBanner / L199:onQuote = onQuote, / L200:// rhUserAvatarEdit
+P2 [quote] ChatList.kt L236:subAgentPendingCount: Int = 0, // rhSubAgentBanner / L237:onQuote: (UIMessage) -> Unit = {}, // rhQuoteMount / L238:// rhUserAvatarEdit
+P2 [quote] ChatList.kt L438:Column(modifier = Modifier.animateItem(fadeInSpec = tween(220), fadeOutSpec = tween(220))) { / L439:val rhQuoteId = group.displayMessage.quotedMessageId ?: node.currentMessage.quotedMessageId // rhQuoteRepair12 / L440:rhQuoteId?.let { quotedId ->
+P2 [quote] ChatList.kt L441:val quotedMsg = rhMessageByIdMap[quotedId] / L442:ChatMessageQuoteBlock( / L443:senderName = quotedMsg?.let { msg ->
+P2 [quote] ChatList.kt L515:lastMessage = node.id == lastMessageNodeId, / L516:onQuote = { onQuote(node.currentMessage) }, / L517:// rhUserAvatarEdit
+P2 keyword refs OK

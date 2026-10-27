@@ -1,5 +1,16 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -78,6 +89,42 @@ private fun JsonElement?.getStringContent(key: String): String? =
 
 private const val ASK_USER_TOOL_NAME = "ask_user"
 
+// rhDrawer289: verb + pill rendering for the web tools, mirroring the reference
+// screenshots (icon | verb | [favicon] argument | chevron).
+private fun rhToolVerbRes(name: String): Int? = when {
+    name == "search_web" || name == "search_image" -> R.string.rh_verb_search
+    name == "web_fetch" || name == "web_extract" -> R.string.rh_verb_fetch
+    name.startsWith("browser_") -> R.string.rh_verb_browse
+    else -> null
+}
+
+private fun rhToolPillText(tool: UIMessagePart.Tool): String? {
+    val args = runCatching { tool.inputAsJson() as? JsonObject }.getOrNull()
+    return when {
+        tool.toolName == "search_web" || tool.toolName == "search_image" ->
+            args?.get("query")?.jsonPrimitiveOrNull?.contentOrNull
+        tool.toolName == "web_fetch" || tool.toolName == "web_extract" ->
+            args?.get("url")?.jsonPrimitiveOrNull?.contentOrNull
+        else -> null
+    }
+}
+
+private fun rhToolFaviconUrl(tool: UIMessagePart.Tool): String? {
+    val args = runCatching { tool.inputAsJson() as? JsonObject }.getOrNull()
+    val direct = args?.get("url")?.jsonPrimitiveOrNull?.contentOrNull
+    if (direct != null && direct.startsWith("http")) {
+        return direct
+    }
+    val outputText = tool.output.filterIsInstance<UIMessagePart.Text>()
+        .joinToString("\n") { it.text }
+    val content = runCatching { JsonInstant.parseToJsonElement(outputText) }.getOrNull()
+    val root = content as? JsonObject ?: return null
+    val items = root.get("items") as? kotlinx.serialization.json.JsonArray ?: return null
+    val first = items.firstOrNull() as? JsonObject ?: return null
+    val url = first.get("url") as? JsonPrimitive ?: return null
+    return url.content.takeIf { it.startsWith("http") }
+}
+
 @Composable
 fun ChainOfThoughtScope.ChatMessageServerToolStep(tool: UIMessagePart.ServerTool) {
     val loading = !tool.isFinished
@@ -100,7 +147,7 @@ fun ChainOfThoughtScope.ChatMessageServerToolStep(tool: UIMessagePart.ServerTool
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.shimmer(isLoading = loading),
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         },
@@ -118,6 +165,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
     onToolApproval: ((toolCallId: String, approved: Boolean, reason: String, scope: me.rerere.rikkahub.service.ChatService.ApprovalScope, toolName: String) -> Unit)? = null,
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)? = null,
     onRerunTool: (suspend (toolCallId: String) -> me.rerere.rikkahub.service.ChatService.RerunToolResult)? = null,
+    stepNumber: Int? = null,
 ) {
     // ask_user 是交互式问答流程, 不走注册式渲染框架
     if (tool.toolName == ASK_USER_TOOL_NAME) {
@@ -145,7 +193,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
 
     var showResult by remember { mutableStateOf(false) }
     var showDenyDialog by remember { mutableStateOf(false) }
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) } // rhThoughtDrawer286: collapse by default so the drawer opens layer by layer
     val isPending = tool.approvalState is ToolApprovalState.Pending
     val isDenied = tool.approvalState is ToolApprovalState.Denied
     val images = tool.output.filterIsInstance<UIMessagePart.Image>()
@@ -158,7 +206,9 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
 
     // Summary detection is delegated to the registered renderer; image output, webview
     // cards, and denial reasons are common to all tools.
-    val hasExtraContent = renderer.hasSummary(context) || isDenied || images.isNotEmpty() || webviewParts.isNotEmpty()
+    val hasExtraContent = true // rhToolCallLine: 工具调用本身始终可见
+    // rhToolExpand249: 行点击交给就地展开，完整结果走下方按钮
+    val hasResultDetail = context.content != null || isPending || images.isNotEmpty() || webviewParts.isNotEmpty()
 
     ControlledChainOfThoughtStep(
         expanded = expanded,
@@ -169,23 +219,69 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                     size = 10.dp
                 )
             } else {
-                Icon(
-                    imageVector = renderer.icon(context),
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = LocalContentColor.current.copy(alpha = 0.7f)
-                )
+                // rhMcpToolAvatar261: MCP 工具行优先显示服务器头像（有的话）
+                val rhMcpServers = me.rerere.rikkahub.ui.context.LocalSettings.current.mcpServers
+                val rhMcpAvatar: me.rerere.rikkahub.data.model.Avatar? = remember(tool.toolName, rhMcpServers) {
+                    if (!tool.toolName.startsWith("mcp__")) {
+                        null
+                    } else {
+                        val parts = tool.toolName.split("__")
+                        if (parts.size < 3) {
+                            null
+                        } else {
+                            val chain = parts[1]
+                            rhMcpServers.firstOrNull { server -> chain.startsWith(server.id.toString()) }
+                                ?.commonOptions?.avatar
+                        }
+                    }
+                }
+                if (rhMcpAvatar != null && rhMcpAvatar != me.rerere.rikkahub.data.model.Avatar.Dummy) {
+                    me.rerere.rikkahub.ui.components.ui.UIAvatar(
+                        name = "",
+                        value = rhMcpAvatar,
+                        modifier = Modifier.size(16.dp),
+                        showEditBadge = false,
+                    )
+                } else {
+                    Icon(
+                        imageVector = renderer.icon(context),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = LocalContentColor.current.copy(alpha = 0.7f),
+                    )
+                }
             }
         },
         label = {
-            Text(
-                text = renderer.title(context),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.shimmer(isLoading = loading),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            val rhVerbRes = rhToolVerbRes(tool.toolName)
+            val rhPillText = rhToolPillText(tool)
+            if (rhVerbRes != null && rhPillText != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Text(
+                        text = stringResource(rhVerbRes),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.shimmer(isLoading = loading),
+                    )
+                    RhToolPill(
+                        text = rhPillText,
+                        faviconUrl = rhToolFaviconUrl(tool),
+                    )
+                }
+            } else {
+                val rhTitleText = renderer.title(context)
+                Text(
+                    text = rhTitleText,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.shimmer(isLoading = loading),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         },
         extra = if (isPending && onToolApproval != null) {
             {
@@ -214,17 +310,56 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                             )
                         }
                     }
-                    // Four-button row: Allow / Always Allow / Allow for this chat / Deny.
+                    // rh-batch1:approval - two large buttons; scopes and deny reason via long-press.
                     // Keep the order stable so the approval decision is easy to scan.
                     // Tools listed in ToolApprovalDefaults.NO_ALWAYS_ALLOW (e.g. mcp_add /
                     // mcp_update — adding an MCP server is a privilege-escalation surface)
                     // drop the Always-Allow button so each call requires fresh confirmation.
                     val allowAlwaysButton = me.rerere.rikkahub.data.ai.tools.ToolApprovalDefaults
                         .allowsAlwaysAllow(tool.toolName)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (inFlight) return@FilledTonalIconButton
+                    // rhApprovalIdentity: MCP 服务器级授权（组级按钮）。只在工具本身允许
+                    // 「始终允许」时出现，点一下等于对整台服务器授权。
+                    if (allowAlwaysButton) {
+                        val rhMcpServerKey = me.rerere.rikkahub.data.ai.tools.ToolApprovalIdentity
+                            .mcpServerKeyOf(tool.toolName)
+                        if (rhMcpServerKey != null) {
+                            val rhServerTarget = me.rerere.rikkahub.data.ai.tools.ToolApprovalIdentity
+                                .encodeMcpServerTarget(rhMcpServerKey)
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = stringResource(R.string.tool_approval_mcp_server_group_hint),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    androidx.compose.material3.OutlinedButton(onClick = {
+                                        inFlight = true
+                                        onToolApproval(
+                                            tool.toolCallId, true, "",
+                                            me.rerere.rikkahub.service.ChatService.ApprovalScope.ChatScope,
+                                            rhServerTarget,
+                                        )
+                                    }) {
+                                        Text(stringResource(R.string.tool_approval_mcp_server_allow_chat))
+                                    }
+                                    androidx.compose.material3.OutlinedButton(onClick = {
+                                        inFlight = true
+                                        onToolApproval(
+                                            tool.toolCallId, true, "",
+                                            me.rerere.rikkahub.service.ChatService.ApprovalScope.Always,
+                                            rhServerTarget,
+                                        )
+                                    }) {
+                                        Text(stringResource(R.string.tool_approval_mcp_server_allow_always))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ToolApprovalButtons(
+                            enabled = !inFlight,
+                            allowAlways = allowAlwaysButton,
+                            onAllowOnce = {
                                 inFlight = true
                                 onToolApproval(
                                     tool.toolCallId, true, "",
@@ -232,35 +367,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                                     tool.toolName,
                                 )
                             },
-                            enabled = !inFlight,
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                imageVector = HugeIcons.Tick01,
-                                contentDescription = stringResource(R.string.chat_message_tool_approve),
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                        if (allowAlwaysButton) {
-                            FilledTonalIconButton(
-                                onClick = {
-                                    if (inFlight) return@FilledTonalIconButton
-                                    inFlight = true
-                                    onToolApproval(
-                                        tool.toolCallId, true, "",
-                                        me.rerere.rikkahub.service.ChatService.ApprovalScope.Always,
-                                        tool.toolName,
-                                    )
-                                },
-                                enabled = !inFlight,
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                Text("∞", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (inFlight) return@FilledTonalIconButton
+                            onAllowChat = {
                                 inFlight = true
                                 onToolApproval(
                                     tool.toolCallId, true, "",
@@ -268,39 +375,72 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                                     tool.toolName,
                                 )
                             },
-                            enabled = !inFlight,
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Text("💬", style = MaterialTheme.typography.labelSmall)
-                        }
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (inFlight) return@FilledTonalIconButton
-                                showDenyDialog = true
+                            onAllowAlways = {
+                                inFlight = true
+                                onToolApproval(
+                                    tool.toolCallId, true, "",
+                                    me.rerere.rikkahub.service.ChatService.ApprovalScope.Always,
+                                    tool.toolName,
+                                )
                             },
-                            enabled = !inFlight,
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                imageVector = HugeIcons.Cancel01,
-                                contentDescription = stringResource(R.string.chat_message_tool_deny),
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                    }
+                            onDeny = {
+                                inFlight = true
+                                onToolApproval(
+                                    tool.toolCallId, false, "",
+                                    me.rerere.rikkahub.service.ChatService.ApprovalScope.Once,
+                                    tool.toolName,
+                                )
+                            },
+                            onDenyWithReason = { showDenyDialog = true },
+                        )
                 }
             }
         } else {
             null
         },
-        onClick = if (context.content != null || isPending || images.isNotEmpty() || webviewParts.isNotEmpty()) {
-            { showResult = true }
-        } else {
-            null
-        },
+        onClick = null, // rhToolExpand249: 交还就地展开/收起
         content = if (hasExtraContent) {
             {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // rhToolCallLine: 折叠区显示工具调用本身(名称+入参截断)
+                    Text(
+                        // rhToolCallClean (batch81): 清爽单行 toolName(key=value, ...)
+                        text = buildString {
+                            append(tool.toolName)
+                            append("(")
+                            val argsObj = context.arguments as? JsonObject
+                            if (argsObj != null) {
+                                argsObj.entries.take(3).forEachIndexed { i, entry ->
+                                    if (i > 0) append(", ")
+                                    append(entry.key)
+                                    append("=")
+                                    append(entry.value.toString().trim('"').take(40))
+                                }
+                                if (argsObj.entries.size > 3) append(", ...")
+                            }
+                            append(")")
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    RhToolJsonBlock(
+                        label = stringResource(R.string.rh_tool_args),
+                        text = tool.input,
+                        previewLimit = 1200, // rhDrawer290
+                        maxLines = 8,
+                    )
+                    if (tool.isExecuted) {
+                        RhToolJsonBlock(
+                            label = stringResource(R.string.rh_tool_result),
+                            text = tool.output.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text },
+                            maxLines = 10,
+                            showExpandIcon = true, // rhDrawer289
+                            onExpand = if (hasResultDetail) ({ showResult = true }) else null, // rhDrawer290
+                            previewLimit = 2400, // rhDrawer290
+                        )
+                    }
                     renderer.Summary(context)
                     webviewParts.forEach { webviewPart ->
                         SkillWebviewCardOrNull(part = webviewPart)
@@ -329,6 +469,14 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
                         )
+                    }
+                    if (hasResultDetail) {
+                        TextButton(onClick = { showResult = true }) {
+                            Text(
+                                text = stringResource(R.string.chat_message_tool_view_detail),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
                     }
                 }
             }
@@ -508,7 +656,7 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.shimmer(isLoading = loading),
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         },
@@ -710,4 +858,122 @@ private fun ToolDenyReasonDialog(
             }
         }
     )
+}
+
+// rh-batch1:approval - large two-button approval row.
+// Tap Allow = allow once; long-press Allow = "allow for this chat" / "always allow"
+// (unless the tool forbids it). Tap Deny = deny; long-press Deny = deny with a reason.
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ToolApprovalButtons(
+    enabled: Boolean,
+    allowAlways: Boolean,
+    onAllowOnce: () -> Unit,
+    onAllowChat: () -> Unit,
+    onAllowAlways: () -> Unit,
+    onDeny: () -> Unit,
+    onDenyWithReason: () -> Unit,
+) {
+    var showScopes by remember { mutableStateOf(false) }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                ApprovalBigButton(
+                    label = stringResource(R.string.chat_message_tool_approve),
+                    icon = HugeIcons.Tick01,
+                    container = MaterialTheme.colorScheme.primary,
+                    content = MaterialTheme.colorScheme.onPrimary,
+                    enabled = enabled,
+                    onClick = onAllowOnce,
+                    onLongClick = { showScopes = true },
+                )
+                DropdownMenu(
+                    expanded = showScopes,
+                    onDismissRequest = { showScopes = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_tool_approval_allow_chat)) },
+                        onClick = {
+                            showScopes = false
+                            onAllowChat()
+                        },
+                    )
+                    if (allowAlways) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_tool_approval_allow_always)) },
+                            onClick = {
+                                showScopes = false
+                                onAllowAlways()
+                            },
+                        )
+                    }
+                }
+            }
+            ApprovalBigButton(
+                label = stringResource(R.string.chat_message_tool_deny),
+                icon = HugeIcons.Cancel01,
+                container = MaterialTheme.colorScheme.errorContainer,
+                content = MaterialTheme.colorScheme.onErrorContainer,
+                enabled = enabled,
+                onClick = onDeny,
+                onLongClick = onDenyWithReason,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            text = stringResource(R.string.chat_tool_approval_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ApprovalBigButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    container: Color,
+    content: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clip(shape)
+            .background(if (enabled) container else container.copy(alpha = 0.4f))
+            .combinedClickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = label,
+            color = content,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+    }
 }

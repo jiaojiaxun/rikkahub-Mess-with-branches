@@ -44,4 +44,9 @@ data class ConversationEntity(
     val folderId: String = "",
     @ColumnInfo("chat_model_id", defaultValue = "")
     val chatModelId: String = "",
+    @ColumnInfo("config", defaultValue = "")
+    val config: String = "", // rhConversationConfigDb
+    // rhParentChat (batch55): 子代理对话的父对话 id；空串表示普通对话（folder_id 同模式）。
+    @ColumnInfo("parent_chat_id", defaultValue = "")
+    val parentChatId: String = "",
 )

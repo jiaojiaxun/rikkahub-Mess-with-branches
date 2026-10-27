@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch // rhStreamToggle
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
@@ -42,6 +43,7 @@ import me.rerere.rikkahub.ui.components.ui.icons.ReasoningHigh
 import me.rerere.rikkahub.ui.components.ui.icons.ReasoningLow
 import me.rerere.rikkahub.ui.components.ui.icons.ReasoningMedium
 import kotlin.math.roundToInt
+import androidx.compose.material3.HorizontalDivider // rhPickerBeauty
 
 private val levels = ReasoningLevel.entries
 private val levelCount = levels.size
@@ -52,14 +54,26 @@ fun ReasoningButton(
     onlyIcon: Boolean = false,
     reasoningLevel: ReasoningLevel,
     onUpdateReasoningLevel: (ReasoningLevel) -> Unit,
+    squeezeTokenEnabled: Boolean = false, // rhBatch164Fix
+    onUpdateSqueezeToken: ((Boolean) -> Unit)? = null, // rhBatch164Fix
+    tavernMode: Boolean = false, // rhTavernMode
+    onUpdateTavernMode: ((Boolean) -> Unit)? = null, // rhTavernMode
+    streamOutput: Boolean = true, // rhStreamToggle
+    onUpdateStreamOutput: (Boolean) -> Unit = {}, // rhStreamToggle
 ) {
     var showPicker by remember { mutableStateOf(false) }
 
     if (showPicker) {
         ReasoningPicker(
+            tavernMode = tavernMode,
+            onUpdateTavernMode = onUpdateTavernMode,
             reasoningLevel = reasoningLevel,
             onDismissRequest = { showPicker = false },
-            onUpdateReasoningLevel = onUpdateReasoningLevel
+            onUpdateReasoningLevel = onUpdateReasoningLevel,
+            squeezeTokenEnabled = squeezeTokenEnabled, // rhBatch217Wire (batch217)
+            onUpdateSqueezeToken = onUpdateSqueezeToken, // rhBatch217Wire (batch217)
+            streamOutput = streamOutput,
+            onUpdateStreamOutput = onUpdateStreamOutput,
         )
     }
 
@@ -89,6 +103,12 @@ fun ReasoningPicker(
     reasoningLevel: ReasoningLevel,
     onDismissRequest: () -> Unit = {},
     onUpdateReasoningLevel: (ReasoningLevel) -> Unit,
+    squeezeTokenEnabled: Boolean = false, // rhBatch164Fix
+    onUpdateSqueezeToken: ((Boolean) -> Unit)? = null, // rhBatch164Fix
+    tavernMode: Boolean = false, // rhTavernMode
+    onUpdateTavernMode: ((Boolean) -> Unit)? = null, // rhTavernMode
+    streamOutput: Boolean = true, // rhStreamToggle
+    onUpdateStreamOutput: (Boolean) -> Unit = {}, // rhStreamToggle
 ) {
     val currentIndex = levels.indexOf(reasoningLevel).coerceAtLeast(0)
     var sliderValue by remember { mutableFloatStateOf(currentIndex.toFloat()) }
@@ -190,6 +210,80 @@ fun ReasoningPicker(
                     )
                 }
             )
+
+            // rhTavernMode: 会话级酒馆模式开关(移到面板底部, 已有分割线下方) [rhTavernBelowDivider]
+            if (onUpdateTavernMode != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.setting_tavern_mode),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = stringResource(R.string.setting_tavern_mode_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = tavernMode,
+                        onCheckedChange = { onUpdateTavernMode?.invoke(it) },
+                    )
+                }
+            }
+
+            // rhSqueezeToken: 榨干 token 开关(会话级,自动续跑)
+            if (onUpdateSqueezeToken != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "榨干 token",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = "模型结束时自动发送提示词继续生成",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = squeezeTokenEnabled,
+                        onCheckedChange = { onUpdateSqueezeToken?.invoke(it) },
+                    )
+                }
+            }
+            
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp)) // rhPickerBeauty
+            // rhStreamToggle: stream output toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column {
+                    Text(
+                        text = "流式输出",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = "关闭后等待完整回复再显示",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = streamOutput,
+                    onCheckedChange = onUpdateStreamOutput,
+                )
+            }
         }
     }
 }
