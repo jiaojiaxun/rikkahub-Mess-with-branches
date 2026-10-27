@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch295: live current-activity header for the thought drawer.
+'''batch295 v2: live current-activity header for the thought drawer.
 
-The top row used to show a total "已工作 N秒". It now shows the latest action:
+The top row now shows the latest action:
+  ReasoningStep -> "思考N秒" (live until finished)
+  ToolStep    -> existing ToolUIRenderer.title (e.g. "核对apk")
+  ServerTool  -> existing generic title
+  no steps    -> existing "思考过程" fallback
 
-  - ReasoningStep: "思考N秒" (live while reasoning is unfinished)
-  - ToolStep: the existing ToolUIRenderer.title (e.g. "核对apk"), reused
-    rather than generating or summarizing the tool purpose again
-  - ServerToolStep: the existing generic tool-call title
-  - no steps: existing "思考过程" fallback
+The tool row keeps its title, so both places display it. AnimatedContent
+animates step changes; per-second reasoning updates do not retrigger it.
 
-The tool row keeps its own title, so both places show the action title at the
-same time. AnimatedContent animates step-to-step changes (fade + vertical
-slide); per-second reasoning text updates do not retrigger the animation.
-
-A new self-contained RhThoughtHeader.kt is added; RhThoughtDrawer.kt only
-replaces the top RhDrawerRow call. No full-file rewrite of the drawer.
+v2 fixes the string patch loop: STR_EN/STR_ZH are repository-relative path
+strings, so each must be joined to ROOT before calling exists().
 '''
 from pathlib import Path
 
@@ -281,14 +278,11 @@ def part_drawer():
             text = text.replace(package_line, package_line + NL + '// ' + MARK, 1)
         else:
             fail('package line missing')
-    checks = ['RhThoughtHeader(', 'steps = steps,', 'loading = loading,']
-    for token in checks:
+    for token in ['RhThoughtHeader(', 'steps = steps,', 'loading = loading,']:
         if token not in text:
             fail('drawer missing ' + token)
-    if 'rh_thought_worked' in text and 'RhDrawerRow(' in text:
-        # The string may remain in strings.xml, but this call site must be gone.
-        if 'label = if (seconds > 0L)' in text:
-            fail('old worked header still present')
+    if 'label = if (seconds > 0L)' in text:
+        fail('old worked header still present')
     if text.count('(') != text.count(')') or text.count('{') != text.count('}'):
         fail('drawer unbalanced')
     if not failures:
@@ -300,23 +294,24 @@ def part_strings():
     entries = [
         ('rh_thought_activity_thinking', 'Thinking %1$ds', '思考%1$d秒'),
     ]
-    for rel, english, chinese in entries:
-        for path, value in [(STR_EN, english), (STR_ZH, chinese)]:
+    for key, english, chinese in entries:
+        for rel_path, value in [(STR_EN, english), (STR_ZH, chinese)]:
+            path = ROOT / rel_path
             if not path.exists():
-                fail('missing strings file ' + str(path))
+                fail('missing strings file ' + rel_path)
                 continue
             content = path.read_text(encoding='utf-8')
-            key = 'name="' + rel + '"'
-            if key in content:
+            marker = 'name="' + key + '"'
+            if marker in content:
                 continue
             closing = content.rfind('</resources>')
             if closing < 0:
-                fail('no </resources> in ' + str(path))
+                fail('no </resources> in ' + rel_path)
                 continue
-            row = '    <string ' + key + '>' + value + '</string>' + NL
+            row = '    <string ' + marker + '>' + value + '</string>' + NL
             content = content[:closing] + row + content[closing:]
             path.write_text(content, encoding='utf-8')
-            note('string added ' + str(path))
+            note('string added ' + rel_path)
 
 
 def main():
