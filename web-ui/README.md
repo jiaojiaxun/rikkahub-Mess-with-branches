@@ -1,88 +1,46 @@
-# Welcome to React Router!
+# Web UI
 
-A modern, production-ready template for building full-stack React applications using React Router.
+`web-ui` 是 RikkaHub Android 应用 Web 界面的前端。它使用 React Router 与 Vite 构建为客户端 SPA（当前 `react-router.config.ts` 设置 `ssr: false`），静态文件随后由 Android `:web` 模块打包；它不是本仓库独立部署的 SSR 服务。
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
+## 环境要求
 
-## Features
+- Node.js
+- Bun（安装前端依赖）
+- pnpm（运行前端脚本）
 
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
+依赖版本由 `pnpm-lock.yaml` 管理。Android 工程中的 `:web` 构建任务会在需要时通过 Bun 安装依赖，再调用 `pnpm run build`。
 
-## Getting Started
-
-### Installation
-
-Install the dependencies:
+## 本地开发
 
 ```bash
-npm install
+cd web-ui
+bun install --frozen-lockfile
+pnpm run dev
 ```
 
-### Development
+开发服务器默认位于 `http://localhost:5173`。Vite 会把 `/api` 请求代理到 `http://localhost:8080`；调试需要 API 的功能时，请确保相应的本地后端服务已在该地址运行。代理规则见 `vite.config.ts`。
 
-Start the development server with HMR:
+## 构建与 Android 集成
 
 ```bash
-npm run dev
+cd web-ui
+bun install --frozen-lockfile
+pnpm run build
 ```
 
-Your application will be available at `http://localhost:5173`.
+`pnpm run build` 会运行 React Router 构建，然后执行 `copy.ts`，将 `build/client/` 复制到 `../web/src/main/resources/static/`。复制脚本会先清理并重建目标目录，因此不要在该生成目录中手工维护需要保留的文件。
 
-## Building for Production
-
-Create a production build:
+从仓库根目录构建 Android `:web` 模块时，Gradle 的 `preBuild` 会自动执行前端依赖安装和构建：
 
 ```bash
-npm run build
+./gradlew :web:assembleDebug
 ```
 
-## Deployment
-
-### Docker Deployment
-
-To build and run using Docker:
+Windows 可使用 `gradlew.bat :web:assembleDebug`。如需单独检查前端类型，可运行：
 
 ```bash
-docker build -t my-app .
-
-# Run the container
-docker run -p 3000:3000 my-app
+cd web-ui
+pnpm run typecheck
 ```
 
-The containerized application can be deployed to any platform that supports Docker, including:
-
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
-
-### DIY Deployment
-
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
-
-```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
-```
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting
-experience. You can use whatever CSS framework you prefer.
-
----
-
-Built with ❤️ using React Router.
+本仓库的默认交付路径是将静态前端打包进 Android `:web` 模块；旧模板中提到的 Docker/独立 SSR 部署流程不适用于当前配置。
