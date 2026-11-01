@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''batch317: 修 WebDAV / S3 备份「刚开始就提示成功」
+'''batch317 v2: 修 WebDAV / S3 备份「刚开始就提示成功」
+
+v1 死因（run#555 的 ci_diag 实证）:
+  OK VM imports +2 / OK VM.backup / restore / backupToS3 / restoreFromS3
+  FAIL VM Deferred<Unit> count=8 -> ABORT nothing written
+  四个函数其实全部替换成功, 是我把断言写错了:
+  `CompletableDeferred<Unit>()` 里本身就含子串 `Deferred<Unit>`,
+  于是 4 个签名 + 4 个实例 = 8, 不等于我断言的 4。
+  教训再次命中: 断言必须断言真实的量, 且不能用会误伤同类名字的子串。
+v2 把断改成 `: Deferred<Unit>`（返回类型前缀）与整行
+  `val done = CompletableDeferred<Unit>()`, 均为 4。
 
 现象: 点「立即备份」或「覆盖恢复」后约 0.1 秒就弹「备份成功 / 恢复成功」,
       实际传输/恢复才刚开始; 覆盖恢复还会立刻弹出重启对话框。
@@ -28,6 +38,8 @@ VM = 'app/src/main/java/me/rerere/rikkahub/ui/pages/backup/BackupVM.kt'
 WDAV = 'app/src/main/java/me/rerere/rikkahub/ui/pages/backup/tabs/WebDavTab.kt'
 S3T = 'app/src/main/java/me/rerere/rikkahub/ui/pages/backup/tabs/S3Tab.kt'
 CANCEL = 'kotlinx.coroutines.CancellationException'
+RET = ': Deferred<Unit>'
+DONE_LINE = 'val done = CompletableDeferred<Unit>()'
 
 
 def note(msg):
@@ -225,11 +237,11 @@ def prep_vm(text):
     if bal(out) != b0:
         note('FAIL VM balance ' + str(b0) + ' -> ' + str(bal(out)))
         return False, text
-    if out.count('Deferred<Unit>') != 4:
-        note('FAIL VM Deferred<Unit> count=' + str(out.count('Deferred<Unit>')))
+    if out.count(RET) != 4:
+        note('FAIL VM return-type count=' + str(out.count(RET)))
         return False, text
-    if out.count('CompletableDeferred<Unit>()') != 4:
-        note('FAIL VM CompletableDeferred count=' + str(out.count('CompletableDeferred<Unit>()')))
+    if out.count(DONE_LINE) != 4:
+        note('FAIL VM done-line count=' + str(out.count(DONE_LINE)))
         return False, text
     if out.count(MARK) != 4:
         note('FAIL VM MARK count=' + str(out.count(MARK)))
@@ -239,6 +251,9 @@ def prep_vm(text):
         return False, text
     if 'import kotlinx.coroutines.CompletableDeferred' not in out:
         note('FAIL VM CompletableDeferred import missing')
+        return False, text
+    if 'done.completeExceptionally(e)' not in out:
+        note('FAIL VM completeExceptionally missing')
         return False, text
     return True, out
 
@@ -308,6 +323,7 @@ def read_text(path):
 
 
 def main():
+    note('--- batch317 v2 (fix Deferred count assert) ---')
     vm_text = read_text(VM)
     wd_text = read_text(WDAV)
     s3_text = read_text(S3T)
@@ -330,11 +346,12 @@ def main():
     back_wd = (ROOT / WDAV).read_text(encoding='utf-8')
     back_s3 = (ROOT / S3T).read_text(encoding='utf-8')
     checks = [
-        ('VM.Deferred', back_vm.count('Deferred<Unit>') == 4),
-        ('VM.Completable', back_vm.count('CompletableDeferred<Unit>()') == 4),
+        ('VM.returnType', back_vm.count(RET) == 4),
+        ('VM.doneLine', back_vm.count(DONE_LINE) == 4),
         ('VM.importDeferred', 'import kotlinx.coroutines.Deferred' in back_vm),
         ('VM.importCompletable', 'import kotlinx.coroutines.CompletableDeferred' in back_vm),
         ('VM.MARK', back_vm.count(MARK) == 4),
+        ('VM.suspendGone', 'fun backup(): Deferred' in back_vm),
         ('WebDav.await', back_wd.count('.await()') == 2),
         ('WebDav.guard', back_wd.count(CANCEL) == 2),
         ('S3.await', back_s3.count('.await()') == 2),
