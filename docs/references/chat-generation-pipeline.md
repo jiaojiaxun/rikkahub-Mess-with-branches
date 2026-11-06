@@ -29,7 +29,7 @@ ChatService.sendMessage()
             │
             ▼
         GenerationHandler.generateText()   ← Flow<GenerationChunk>
-            │  (最多 maxSteps=256 轮循环)
+            │  (最多 ToolRuntimeLimits.maxToolSteps 轮，当前默认 32)
             │
             ├─ [若无待处理 Tool] generateInternal()
             │       ├── 构建 internalMessages
@@ -58,11 +58,16 @@ ChatService.sendMessage()
             │       ├── Denied  → 输出 {"error": "denied by user"}
             │       ├── Answered → 直接使用用户提供的答案
             │       └── Auto / Approved → toolDef.execute(args)
-            │               ├── 若输出超 32KB 且有 shell 权限 → 截断并写入文件
+            │               ├── 若工具文本输出超过 32 × 1024 字符 → 保留 4 × 1024 字符预览
             │               └── CancellationException 必须向上传播（不能吞掉）
             │
-            └─ 将执行结果写回 messages → emit → 继续下一 Step
-                    (Tool 结果内联在 ASSISTANT 消息的 parts 中，不创建 TOOL 角色消息)
+            ├─ 将执行结果写回 messages → emit → 继续下一 Step
+            │       (Tool 结果内联在 ASSISTANT 消息的 parts 中，不创建 TOOL 角色消息)
+            │
+            └─ 自动压缩（开启时）
+                    ├── 工具结果后的下一请求估算达到阈值 → 写入摘要与边界
+                    └── provider 返回 context-limit 错误 → 全量压缩并满足条件时重试当前轮次一次
+                            （原始消息节点保留；模型视图为摘要 + 边界后的原始消息）
 
     ▼
 onCompletion（Flow 结束或取消）
@@ -85,6 +90,17 @@ onSuccess
 
 对用户输入的 `UIMessagePart.Text` 执行 `Assistant.replaceRegexes(scope=USER)`，即助手配置中 `AffectScope.USER`
 的正则替换规则，用于规范化或脱敏输入文本。非文本 Part（图片、文档等）不参与处理。
+
+---
+
+## 自动上下文压缩
+
+`ChatService.prepareMessagesForGeneration()` 在开启 `enableAutoCompaction` 时加载已有的压缩摘要与消息边界；普通请求开始前不会仅根据本地估算预先压缩历史。自动压缩在以下情况触发：
+
+- 工具结果写回后，已有 provider 报告的 prompt usage，且包含工具结果的下一请求 token 估算达到设置的百分比或固定 token 阈值时，创建摘要和边界。
+- provider 返回 context-limit 错误时，满足恢复条件后压缩整个活动上下文，并对当前轮次最多重试一次。
+
+压缩记录与原始消息节点分开保存。后续模型请求读取“摘要 + 边界之后的原始消息”；原始会话消息仍保留。具体执行路径位于 `ChatService.kt`、`ContextBudgetPlanner.kt` 和 `ContextCompactionPlanner.kt`。
 
 ---
 
@@ -169,11 +185,9 @@ Pending ──── 用户操作 ────► Approved → 执行工具
 
 ### 工具输出截断
 
-当 Workspace Shell 工具可用且工具输出超过 **32KB** 时，输出被截断：
+当工具返回的文本总量超过 **32 × 1024 个字符**时，`GenerationHandler` 仅保留前 **4 × 1024 个字符**作为预览，并附带截断提示。该流程不会把完整输出写入 `filesDir/tool_outputs/`，也不会提供 shell 读取指令。
 
-- 前 4KB 保留在消息中
-- 完整输出写入 `filesDir/tool_outputs/{toolCallId}.txt`
-- 消息中附带 shell 读取指令提示
+此限制按字符数计算，不是 UTF-8 字节数；非文本结果部分会与预览一并保留。
 
 ---
 
@@ -211,6 +225,8 @@ app/src/main/java/me/rerere/rikkahub/
 │   └── ConversationSession.kt      # 会话状态容器
 └── data/ai/
     ├── GenerationHandler.kt        # 核心生成逻辑
+    ├── ContextBudgetPlanner.kt     # 请求 token 估算与阈值规划
+    ├── ContextCompactionPlanner.kt # 压缩摘要与保留消息边界
     ├── transformers/
     │   ├── Transformer.kt          # 接口定义与扩展函数
     │   ├── PromptInjectionTransformer.kt
