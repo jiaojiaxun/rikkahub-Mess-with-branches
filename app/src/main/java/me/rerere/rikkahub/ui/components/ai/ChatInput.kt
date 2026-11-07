@@ -83,6 +83,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.PopupProperties
 import com.dokar.sonner.ToastType
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.material3.Material3
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 import me.rerere.ai.provider.Model
@@ -102,6 +107,7 @@ import me.rerere.hugeicons.stroke.Video01
 import me.rerere.hugeicons.stroke.Zap
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.data.datastore.getCurrentChatModel
 import me.rerere.rikkahub.data.datastore.getQuickMessagesOfAssistant
@@ -124,16 +130,20 @@ import me.rerere.rikkahub.utils.SoundEffectPlayer
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid // rhConvModel255
 
 @Composable
 fun ChatInput(
     state: ChatInputState,
     loading: Boolean,
     settings: Settings,
+    hazeState: HazeState,
     enableSearch: Boolean,
     onUpdateSearchMode: (SearchMode) -> Unit,
     modifier: Modifier = Modifier,
     completionProviders: List<ChatCompletionProvider> = emptyList(),
+    // rhConvModel255: 会话级模型 id —— 输入栏的选择器必须显示会话真正的模型
+    conversationChatModelId: Uuid? = null,
     onUpdateChatModel: (Model) -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
     onUpdateSearchService: (Int) -> Unit,
@@ -147,11 +157,15 @@ fun ChatInput(
     onPickVideo: () -> Unit = {},
     onPickAudio: () -> Unit = {},
     onPickFile: () -> Unit = {},
+    rhDshUsage: RhDshUsage = RhDshUsage(), // rhDshComposer319
 ) {
     val toaster = LocalToaster.current
     val assistant = settings.getCurrentAssistant()
+    val hazeTintColor = MaterialTheme.colorScheme.surfaceContainerLow
+    val inputHazeStyle = HazeBlurStyle.Material3(containerColor = hazeTintColor)
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    var rhDshUsageVisible by remember { mutableStateOf(false) } // rhDshComposer319
 
     // 键盘弹出时让底部两角变直角，贴合 IME
     val imeVisible = WindowInsets.isImeVisible
@@ -159,14 +173,7 @@ fun ChatInput(
     val imeAnimationSource = WindowInsets.imeAnimationSource
     val imeAnimationTarget = WindowInsets.imeAnimationTarget
     val imeTargetVisible = imeAnimationTarget.getBottom(LocalDensity.current) > 0
-    val containerShape = if (imeVisible) {
-        MaterialTheme.shapes.largeIncreased.copy(
-            bottomStart = CornerSize(0.dp),
-            bottomEnd = CornerSize(0.dp),
-        )
-    } else {
-        MaterialTheme.shapes.largeIncreased
-    }
+    val containerShape = RoundedCornerShape(28.dp) // rhDshComposer319
 
     fun sendMessage() {
         focusManager.clearFocus(force = true)
@@ -218,124 +225,64 @@ fun ChatInput(
             modifier = modifier
                 .imePadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 8.dp)
+                .padding(horizontal = 12.dp) // rhDshComposer319
                 .padding(bottom = if (imeVisible) 0.dp else 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(containerShape),
+                    .clip(containerShape)
+                    .then(
+                        if (settings.displaySetting.enableBlurEffect) Modifier.hazeBlur(
+                            input = HazeInput.Sources(hazeState),
+                            style = inputHazeStyle,
+                        )
+                        else Modifier
+                    ),
                 shape = containerShape,
                 tonalElevation = 0.dp,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                color = if (settings.displaySetting.enableBlurEffect) Color.Transparent else hazeTintColor,
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 0.dp), // rhDshComposer319
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     if (state.messageContent.isNotEmpty()) {
                         MediaFileInputRow(state = state)
                     }
 
-                    TextInputRow(
-                        state = state,
-                        completionProviders = completionProviders,
-                        onSendMessage = { sendMessage() },
-                        showFullScreenButton = !imeTargetVisible,
-                        showLeadingContent = imeTargetVisible,
-                        leadingContent = {
-                            CompactAttachmentMenuButton(
-                                allowAudioVideo = allowAudioVideoAttachments,
-                                onTakePicture = onTakePicture,
-                                onPickImage = onPickImage,
-                                onPickVideo = onPickVideo,
-                                onPickAudio = onPickAudio,
-                                onPickFile = onPickFile,
-                            )
-                        },
-                    )
-
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .imeProgressiveCollapse(
-                                ime = imeInsets,
-                                source = imeAnimationSource,
-                                target = imeAnimationTarget,
-                            )
-                            .padding(horizontal = 4.dp),
+                        modifier = Modifier.fillMaxWidth(), // rhDshComposer319
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            // Model Picker
-                            ModelSelector(
-                                modelId = assistant.chatModelId ?: settings.chatModelId,
-                                providers = settings.providers,
-                                onSelect = {
-                                    onUpdateChatModel(it)
-                                },
-                                type = ModelType.CHAT,
-                                onlyIcon = true,
-                                modifier = Modifier,
+                        RhDshPlusKey(
+                            allowAudioVideo = allowAudioVideoAttachments,
+                            onTakePicture = onTakePicture,
+                            onPickImage = onPickImage,
+                            onPickVideo = onPickVideo,
+                            onPickAudio = onPickAudio,
+                            onPickFile = onPickFile,
+                            onMoreClick = onMoreClick, // rhDshFix320
+                        ) 
+                        Spacer(Modifier.size(8.dp))
+                        Box(modifier = Modifier.weight(1f)) {
+                            TextInputRow(
+                                state = state,
+                                completionProviders = completionProviders,
+                                onSendMessage = { sendMessage() },
+                                showFullScreenButton = false,
+                                showLeadingContent = false,
                             )
-
-                            // Search
-                            val enableSearchMsg = stringResource(R.string.web_search_enabled)
-                            val disableSearchMsg = stringResource(R.string.web_search_disabled)
-                            val chatModel = settings.getCurrentChatModel()
-                            SearchPickerButton(
-                                enableSearch = enableSearch,
-                                settings = settings,
-                                onUpdateSearchMode = { mode ->
-                                    onUpdateSearchMode(mode)
-                                    val enabled = mode != SearchMode.OFF
-                                    toaster.show(
-                                        message = if (enabled) enableSearchMsg else disableSearchMsg,
-                                        duration = 1.seconds,
-                                        type = if (enabled) {
-                                            ToastType.Success
-                                        } else {
-                                            ToastType.Normal
-                                        }
-                                    )
-                                },
-                                onUpdateSearchService = onUpdateSearchService,
-                                model = chatModel,
-                            )
-
-                            // Reasoning
-                            val model = settings.getCurrentChatModel()
-                            if (model?.abilities?.contains(ModelAbility.REASONING) == true) {
-                                ReasoningButton(
-                                    reasoningLevel = assistant.reasoningLevel,
-                                    onUpdateReasoningLevel = {
-                                        onUpdateAssistant(assistant.copy(reasoningLevel = it))
-                                    },
-                                    onlyIcon = true,
-                                )
-                            }
-
                         }
-
-                        if (!imeTargetVisible) {
-                            ActionIconButton(
-                                onClick = onMoreClick
-                            ) {
-                            Icon(
-                                imageVector = HugeIcons.Add01,
-                                contentDescription = stringResource(R.string.more_options)
-                            )
-                            }
-                        }
-
+                        Spacer(Modifier.size(8.dp))
+                        RhDshContextRing(
+                            usage = rhDshUsage,
+                            onClick = { rhDshUsageVisible = true },
+                        )
+                        Spacer(Modifier.size(2.dp))
+                        if ((asrState.isAvailable || asrState.isRecording) && state.isEmpty() && !loading) {
                         if (asrState.isAvailable || asrState.isRecording) {
                             AsrButton(
                                 state = asrState,
@@ -360,61 +307,29 @@ fun ChatInput(
                                 }
                             )
                         }
-
-                        AnimatedVisibility(
-                            visible = !asrState.isRecording,
-                            enter = fadeIn() + scaleIn(),
-                            exit = fadeOut() + scaleOut(),
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .testTag("chat_send_button")
-                                    .clip(CircleShape)
-                                    .combinedClickable(
-                                        enabled = loading || !state.isEmpty(),
-                                        onClick = {
-                                            sendMessage()
-                                        }, onLongClick = {
-                                            sendMessageWithoutAnswer()
-                                        }
-                                    )
-                            ) {
-                                val containerColor = when {
-                                    loading -> MaterialTheme.colorScheme.errorContainer
-                                    state.isEmpty() -> MaterialTheme.colorScheme.surfaceContainerHigh
-                                    else -> MaterialTheme.colorScheme.primary
-                                }
-                                val contentColor = when {
-                                    loading -> MaterialTheme.colorScheme.onErrorContainer
-                                    state.isEmpty() -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                    else -> MaterialTheme.colorScheme.onPrimary
-                                }
-                                Surface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    shape = CircleShape,
-                                    color = containerColor,
-                                    content = {})
-                                if (loading) {
-                                    KeepScreenOn()
-                                    Icon(
-                                        imageVector = HugeIcons.Cancel01,
-                                        contentDescription = stringResource(R.string.stop),
-                                        tint = contentColor,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = HugeIcons.ArrowUp02,
-                                        contentDescription = stringResource(R.string.send),
-                                        tint = contentColor,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                        } else {
+                            RhDshSendKey(
+                                loading = loading,
+                                enabled = loading || !state.isEmpty(),
+                                onSend = { sendMessage() },
+                                onLongSend = { sendMessageWithoutAnswer() },
+                            )
                         }
                     }
+                    if (rhDshUsageVisible) {
+                        RhDshUsageSheet(
+                            usage = rhDshUsage,
+                            provider = settings.providers.firstOrNull { rhProvider ->
+                                rhProvider.models.any { rhModel ->
+                                    rhModel.id == (conversationChatModelId ?: assistant.chatModelId ?: settings.chatModelId)
+                                }
+                            },
+                            onDismiss = { rhDshUsageVisible = false },
+                        )
+                    }
+
+
+
                 }
             }
 
@@ -632,8 +547,14 @@ private fun TextInputRow(
                     isFocused = it.isFocused
                 },
             shape = MaterialTheme.shapes.largeIncreased,
-            placeholder = {
-                Text(stringResource(R.string.chat_input_placeholder))
+            placeholder = { // rhDsh325
+                Text(
+                    text = if (assistant.name.isBlank()) {
+                        stringResource(R.string.chat_input_placeholder)
+                    } else {
+                        "给 " + assistant.name + " 发消息…"
+                    }
+                )
             },
             lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
             keyboardOptions = KeyboardOptions(

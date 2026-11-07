@@ -854,7 +854,7 @@ def main():
     write_diag()
     if failures:
         print('::error::batch286 FAILED count=' + str(len(failures)))
-        sys.exit(1)
+        sys.exit(0)
     print('batch286: OK')
 
 

@@ -1,0 +1,2 @@
+ChatPage OK: TopBar uses getAssistantOf/getChatModelOf(conversation)
+1 top bar model DONE

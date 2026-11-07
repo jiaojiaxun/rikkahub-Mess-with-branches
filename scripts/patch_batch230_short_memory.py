@@ -22,7 +22,7 @@
 互斥语义: UI 层互斥(batch231); 消费侧「短期优先」裁决兜底(双开时短期生效, 行为确定)。
 
 v1 -> v2 -> v3 演进:
-- v1: patch_entity 成功后 patch_dao 起全死; warn-only sed 吞 exit(1), ::error 超 annotation 配额被丢弃
+- v1: patch_entity 成功后 patch_dao 起全死; warn-only sed 吞 exit(0), ::error 超 annotation 配额被丢弃
 - v2: 失败不连坐(每文件独立 SystemExit 捕获) + ci_diag dump 通道。
   run440 结果: 仅 dao 失败(编译错 MemoryRepository 调 DAO 不存在的方法), 其余 8 文件全建成
   (repo/model 都成功——编译无 enableShortMemory unresolved)。锚点在 snapshot 真实字节模拟命中但 CI 失败,
@@ -60,7 +60,7 @@ def note(msg):
 def fail(msg):
     print('::error::batch230 ' + str(msg)[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def balance(text):

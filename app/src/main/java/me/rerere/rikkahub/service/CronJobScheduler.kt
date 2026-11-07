@@ -49,6 +49,8 @@ class CronJobScheduler(
     fun triggerNow(jobId: String) {
         val req = OneTimeWorkRequestBuilder<CronJobWorker>()
             .setInitialDelay(0L, TimeUnit.MILLISECONDS)
+            // rhCron341: 立即执行提高优先级；配额超了会自动降级为普通 work，不会失败
+            .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setInputData(
                 Data.Builder()
                     .putString(CronJobWorker.KEY_JOB_ID, jobId)

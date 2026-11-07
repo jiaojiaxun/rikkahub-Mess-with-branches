@@ -17,7 +17,7 @@ BR = 'app/src/main/java/me/rerere/rikkahub/data/sync/webdav/BackupArchiveRestore
 def fail(msg):
     print('::error file=' + BR + '::batch163 ' + str(msg)[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def balance(text):

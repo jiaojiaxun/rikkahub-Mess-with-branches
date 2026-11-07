@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.drawscope.DrawScope
 
-/** 已批准轮廓内的生成扁平色块；无运行时位图（移植自 Ayuilos/Miffan）。 */
+/** Generated flat regions inside the approved contours; no runtime bitmap. */
 internal object WhaleColorRegions {
     private fun part(d: String, x: Float, y: Float): Path = PathParser().parsePathString(d).toPath().apply { translate(Offset(x, y)) }
     val hair = listOf(

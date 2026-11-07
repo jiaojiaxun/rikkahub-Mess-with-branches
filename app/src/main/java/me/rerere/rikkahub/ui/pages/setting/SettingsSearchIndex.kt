@@ -105,6 +105,18 @@ fun settingsSearchIndex(developerMode: Boolean): List<SettingsSearchEntry> {
             groupRes = R.string.setting_page_data_settings,
             route = Screen.SettingFiles,
         ),
+        SettingsSearchEntry(
+            titleRes = R.string.setting_page_scheduled_jobs,
+            descriptionRes = R.string.setting_page_scheduled_jobs_desc,
+            groupRes = R.string.setting_page_data_settings,
+            route = Screen.SettingScheduledJobs,
+        ),
+        SettingsSearchEntry( /* rhCustomTools (batch213) */
+            titleRes = R.string.setting_page_custom_tools,
+            descriptionRes = R.string.setting_page_custom_tools_desc,
+            groupRes = R.string.setting_page_model_and_services,
+            route = Screen.SettingCustomTools,
+        ),
 
         // About
         SettingsSearchEntry(

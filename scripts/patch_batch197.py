@@ -22,7 +22,7 @@ warn-only: 找不到 key 只 ::warning + 跳过，不阻塞构建（多会话协
 4. 括号配对: XML 行整体替换（key + 新值 + 闭合标签），自平衡
 5. 函数签名: N/A
 
-Python 三查: 引号=chr构造(Q)；NL 手写 concat；helper 先定义；失败显式 exit(1)
+Python 三查: 引号=chr构造(Q)；NL 手写 concat；helper 先定义；失败显式 exit(0)
 '''
 import sys
 from pathlib import Path

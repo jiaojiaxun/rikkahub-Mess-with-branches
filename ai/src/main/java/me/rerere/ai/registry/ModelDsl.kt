@@ -11,7 +11,9 @@ class ModelDefinition(
     private val matcher: TokenMatcher,
     val inputModalities: Set<Modality>,
     val outputModalities: Set<Modality>,
-    val abilities: Set<ModelAbility>
+    val abilities: Set<ModelAbility>,
+    // rhCtxDsl (batch52): 上下文窗口（tokens），来自《全球主流模型上下文长度》官方口径
+    val contextLength: Int? = null
 ) : ModelSelector {
     override fun match(modelId: String): Boolean {
         val tokens = tokenize(modelId)
@@ -46,6 +48,7 @@ class ModelDefinitionBuilder {
     private val inputModalities = mutableSetOf(Modality.TEXT)
     private val outputModalities = mutableSetOf(Modality.TEXT)
     private val abilities = mutableSetOf<ModelAbility>()
+    private var contextLength: Int? = null // rhCtxDsl
 
     fun tokens(vararg specs: String) {
         matchers += TokenSequenceMatcher(specs.map(::parseTokenSpec))
@@ -81,6 +84,11 @@ class ModelDefinitionBuilder {
         this.abilities.addAll(abilities)
     }
 
+    // rhCtxDsl (batch52): 注册表内声明上下文长度（tokens）
+    fun contextLength(tokens: Int) {
+        contextLength = tokens
+    }
+
     fun build(): ModelDefinition {
         val matcher = when {
             matchers.isEmpty() -> MatchNone
@@ -91,7 +99,8 @@ class ModelDefinitionBuilder {
             matcher = matcher,
             inputModalities = inputModalities.toSet(),
             outputModalities = outputModalities.toSet(),
-            abilities = abilities.toSet()
+            abilities = abilities.toSet(),
+            contextLength = contextLength
         )
     }
 }

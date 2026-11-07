@@ -1,0 +1,7 @@
+drawer: visibility anchor count=1
+drawer: rememberRhWorkedSeconds -> internal
+header: balance (0, 0) -> (0, 0)
+header: worked-state label installed
+chrome: chip anchor count=1
+chrome: balance (0, 0) -> (0, 0)
+chrome: chip now hosts the native ModelSelector

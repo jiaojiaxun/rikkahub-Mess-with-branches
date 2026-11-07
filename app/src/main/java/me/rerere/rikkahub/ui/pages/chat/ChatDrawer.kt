@@ -3,6 +3,9 @@ package me.rerere.rikkahub.ui.pages.chat
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -43,9 +47,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -88,6 +95,7 @@ import com.dokar.sonner.ToastType
 import me.rerere.rikkahub.ui.hooks.EditStateContent
 import me.rerere.rikkahub.ui.hooks.readBooleanPreference
 import me.rerere.rikkahub.ui.hooks.rememberIsPlayStoreVersion
+import me.rerere.rikkahub.ui.hooks.rememberAssistantState
 import me.rerere.rikkahub.ui.hooks.useEditState
 import me.rerere.rikkahub.ui.modifier.onClick
 import me.rerere.rikkahub.utils.navigateToChatPage
@@ -95,6 +103,10 @@ import me.rerere.rikkahub.utils.toDp
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
+import androidx.compose.material3.IconButton // rhAssistantCard
+import me.rerere.rikkahub.data.datastore.getCurrentAssistant // rhAssistantCard
+import me.rerere.rikkahub.data.datastore.getCurrentChatModel // rhAssistantCard
+import me.rerere.rikkahub.data.model.Avatar // rhAssistantCard
 
 @Composable
 fun ChatDrawerContent(
@@ -160,8 +172,9 @@ fun ChatDrawerContent(
     var folderToDelete by remember { mutableStateOf<Folder?>(null) }
     var conversationToRename by remember { mutableStateOf<Conversation?>(null) }
 
-    // Menu popup 状态
-    var showMenuPopup by remember { mutableStateOf(false) }
+    // rhDrawer48: 顶部助手卡状态（切换助手放顶部；问候行点击改昵称）
+    val assistantState = rememberAssistantState(settings) { vm.updateSettings(it) }
+    var showAssistantSheet by remember { mutableStateOf(false) }
 
     val updateCheckDisabledUntil = settings.displaySetting.updateCheckDisabledUntilEpochMillis
     var updateChecksEnabled by remember(updateCheckDisabledUntil) {
@@ -180,7 +193,13 @@ fun ChatDrawerContent(
     }
 
     ModalDrawerSheet(
-        modifier = Modifier.width(300.dp)
+        modifier = Modifier
+            .width(300.dp)
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.2f), // rhDrawerPolish
+                shape = RoundedCornerShape(16.dp),
+            )
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -194,65 +213,131 @@ fun ChatDrawerContent(
                 settings = settings,
                 onClick = { navController.navigate(Screen.Backup) },
             )
-
-            // 用户头像和昵称自定义区域
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            
+            // rhAssistantCard: assistant card (Yuihub style)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 0.dp,
             ) {
-                UIAvatar(
-                    name = settings.displaySetting.userNickname.ifBlank { stringResource(R.string.user_default_name) },
-                    value = settings.displaySetting.userAvatar,
-                    onUpdate = { newAvatar ->
-                        vm.updateSettings(
-                            settings.copy(
-                                displaySetting = settings.displaySetting.copy(
-                                    userAvatar = newAvatar
-                                )
-                            )
-                        )
-                    },
-                    modifier = Modifier.size(50.dp),
-                )
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
+                    val cardAssistant = settings.getCurrentAssistant()
+                    val cardAssistantName = cardAssistant.name.ifBlank { stringResource(R.string.assistant_page_default_assistant) }
+                    UIAvatar(
+                        name = cardAssistantName,
+                        value = cardAssistant.avatar,
+                        onUpdate = null,
+                        modifier = Modifier.size(40.dp),
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = settings.displaySetting.userNickname.ifBlank { stringResource(R.string.user_default_name) },
-                            style = MaterialTheme.typography.titleMedium,
+                            text = cardAssistantName,
+                            style = MaterialTheme.typography.titleSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.clickable {
-                                nicknameEditState.open(settings.displaySetting.userNickname)
-                            }
                         )
-
-                        Icon(
-                            imageVector = HugeIcons.PencilEdit01,
-                            contentDescription = stringResource(R.string.accessibility_edit_nickname),
-                            modifier = Modifier
-                                .onClick {
-                                    nicknameEditState.open(settings.displaySetting.userNickname)
-                                }
-                                .size(LocalTextStyle.current.fontSize.toDp())
+                        Text(
+                            text = settings.getCurrentChatModel()?.displayName ?: "未选择模型",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    Greeting(
-                        style = MaterialTheme.typography.labelMedium,
-                    )
+                    IconButton(onClick = { showAssistantSheet = true }) {  // rhRemoveDupCard
+                        Icon(HugeIcons.LookTop, contentDescription = "切换助手", modifier = Modifier.size(20.dp))
+                    }
                 }
             }
 
-            DrawerActions(navController = navController)
+            // rhDrawer48: 会话/文件分段 tabs（白色胶囊选中态）+ 搜索/历史悬浮小圆钮
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.6f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Surface(
+                            onClick = { },
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.rh_drawer_tab_chats),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                            )
+                        }
+                        Surface(
+                            onClick = { navController.navigate(Screen.SettingFiles) },
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.4f),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.rh_drawer_tab_files),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+
+                Surface(
+                    onClick = { navController.navigate(Screen.MessageSearch) },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.Search01,
+                        contentDescription = stringResource(R.string.chat_page_search_chats),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .size(18.dp),
+                    )
+                }
+                Surface(
+                    onClick = { navController.navigate(Screen.History) },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.TransactionHistory,
+                        contentDescription = stringResource(R.string.chat_page_history),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .size(18.dp),
+                    )
+                }
+            }
 
             FolderBar(
                 folders = folders,
@@ -264,6 +349,7 @@ fun ChatDrawerContent(
             )
 
             ConversationList(
+                getChildren = { parentId -> drawerVm.getChildrenFlow(parentId) }, // rhFoldTree
                 current = current,
                 conversations = conversations,
                 conversationJobs = conversationJobs.keys,
@@ -299,110 +385,26 @@ fun ChatDrawerContent(
                 }
             )
 
-            // 助手选择器
-            AssistantPicker(
-                settings = settings,
-                onUpdateSettings = {
-                    val updateJob = vm.updateSettings(it)
-                    scope.launch {
-                        updateJob.join()
-                        val id = if (context.readBooleanPreference("create_new_conversation_on_start", true)) {
-                            Uuid.random()
-                        } else {
-                            repo.getConversationsOfAssistant(it.assistantId)
-                                .first()
-                                .firstOrNull()
-                                ?.id ?: Uuid.random()
-                        }
-                        navigateToChatPage(navigator = navController, chatId = id)
-                    }
-                },
+            // rhDrawer48: 底部白色大圆角卡——4 列图文快捷（液态玻璃 + 边缘高亮 + 悬浮提示）
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                onClickSetting = {
-                    val currentAssistantId = settings.assistantId
-                    navController.navigate(Screen.AssistantDetail(id = currentAssistantId.toString()))
-                }
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.82f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                tonalElevation = 2.dp,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
             ) {
-                DrawerAction(
-                    icon = {
-                        Icon(
-                            imageVector = HugeIcons.LookTop,
-                            contentDescription = stringResource(R.string.assistant_page_title)
-                        )
-                    },
-                    label = {
-                        Text(stringResource(R.string.assistant_page_title))
-                    },
-                    onClick = {
-                        navController.navigate(Screen.Assistant)
-                    },
-                )
-
-                Box {
-                    DrawerAction(
-                        icon = {
-                            Icon(HugeIcons.Sparkles, stringResource(R.string.menu))
-                        },
-                        label = {
-                            Text(stringResource(R.string.menu))
-                        },
-                        onClick = {
-                            showMenuPopup = true
-                        },
-                    )
-                    DropdownMenu(
-                        expanded = showMenuPopup,
-                        onDismissRequest = { showMenuPopup = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.stats_page_title)) },
-                            leadingIcon = { Icon(HugeIcons.ChartColumn, null) },
-                            onClick = {
-                                showMenuPopup = false
-                                navController.navigate(Screen.Stats)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_page_menu_image_generation)) },
-                            leadingIcon = { Icon(HugeIcons.Image02, null) },
-                            onClick = {
-                                showMenuPopup = false
-                                navController.navigate(Screen.ImageGen)
-                            }
-                        )
-                    }
-                }
-
-                DrawerAction(
-                    icon = {
-                        Icon(HugeIcons.InLove, stringResource(R.string.favorite_page_title))
-                    },
-                    label = {
-                        Text(stringResource(R.string.favorite_page_title))
-                    },
-                    onClick = {
-                        navController.navigate(Screen.Favorite)
-                    },
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                DrawerAction(
-                    icon = {
-                        Icon(HugeIcons.Settings03, null)
-                    },
-                    label = { Text(stringResource(R.string.settings)) },
-                    onClick = {
-                        navController.navigate(Screen.Setting)
-                    },
+                // rhDrawerGrid (batch85): 等分四宫格动作条（对齐 Yuihub v2.5.8）
+                DrawerActionBar(
+                    imageGenerationLabel = stringResource(R.string.chat_page_menu_image_generation),
+                    favoritesLabel = stringResource(R.string.favorite_page_title),
+                    statsLabel = stringResource(R.string.stats_page_title),
+                    settingsLabel = stringResource(R.string.settings),
+                    onImageGeneration = { navController.navigate(Screen.ImageGen) },
+                    onFavorites = { navController.navigate(Screen.Favorite) },
+                    onStats = { navController.navigate(Screen.Stats) },
+                    onSettings = { navController.navigate(Screen.Setting) },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -676,6 +678,41 @@ fun ChatDrawerContent(
         )
     }
 
+    // rhDrawer48: 顶部助手卡的选择 sheet（复用 AssistantItem 行样式）
+    if (showAssistantSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAssistantSheet = false },
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.assistant_page_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(settings.assistants, key = { it.id }) { assistant ->
+                        AssistantItem(
+                            assistant = assistant,
+                            isCurrentAssistant = assistant.id == assistantState.currentAssistant.id,
+                            onClick = {
+                                assistantState.setSelectAssistant(assistant)
+                                showAssistantSheet = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // 移动到助手 Bottom Sheet
     if (showMoveToAssistantSheet) {
         ModalBottomSheet(
@@ -789,6 +826,61 @@ private fun DrawerActions(navController: Navigator) {
 }
 
 @Composable
+private fun DrawerActionBar(
+    imageGenerationLabel: String,
+    favoritesLabel: String,
+    statsLabel: String,
+    settingsLabel: String,
+    onImageGeneration: () -> Unit,
+    onFavorites: () -> Unit,
+    onStats: () -> Unit,
+    onSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), MaterialTheme.shapes.large)
+            .padding(horizontal = 4.dp, vertical = 5.dp),
+    ) {
+        DrawerActionStack(HugeIcons.Image02, imageGenerationLabel, onImageGeneration, Modifier.weight(1f))
+        DrawerActionStack(HugeIcons.InLove, favoritesLabel, onFavorites, Modifier.weight(1f))
+        DrawerActionStack(HugeIcons.ChartColumn, statsLabel, onStats, Modifier.weight(1f))
+        DrawerActionStack(HugeIcons.Settings03, settingsLabel, onSettings, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun DrawerActionStack(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = modifier
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+    ) {
+        Icon(icon, label, Modifier.size(17.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
 private fun DrawerAction(
     modifier: Modifier = Modifier,
     icon: @Composable () -> Unit,
@@ -815,6 +907,40 @@ private fun DrawerAction(
                 icon()
             }
         }
+    }
+}
+
+@Composable
+private fun DrawerQuickEntry(
+    icon: @Composable () -> Unit,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    ) {
+        Tooltip(tooltip = { Text(label) }) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
+            ) {
+                Box(modifier = Modifier.padding(10.dp)) {
+                    icon()
+                }
+            }
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 

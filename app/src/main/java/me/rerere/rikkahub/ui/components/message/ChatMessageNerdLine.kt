@@ -9,6 +9,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,160 +52,16 @@ fun ChatMessageNerdLine(
     estimatedContextTokens: Int? = null,
     color: Color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
 ) {
-    val settings = LocalSettings.current.displaySetting
-    val contextResolver = koinInject<ModelContextLengthResolver>()
-    val resolvedContextLength by produceState(
-        initialValue = contextLength?.takeIf { it > 0 },
-        key1 = modelIdentifier,
-        key2 = contextLength,
-    ) {
-        value = contextResolver.resolve(modelIdentifier ?: message.modelId?.toString(), contextLength)
+    if (message.role == me.rerere.ai.core.MessageRole.ASSISTANT) { // rhDshFootnote323
+        val rhSteps = message.parts.count { it is UIMessagePart.Tool }
+        val rhRounds = rhSteps + 1
+        Text(
+            text = rhSteps.toString() + " 步 · " + rhRounds.toString() + " 轮",
+            style = MaterialTheme.typography.labelSmall.copy(color = color),
+            modifier = modifier.padding(horizontal = 4.dp),
+        )
     }
-    // Over an HTML skin the 50%-alpha secondary color is unreadable: use a solid color on
-    // a pill background instead.
-    val onSkin = ChatHtmlLayout.active.value
-    val textColor = if (onSkin) MaterialTheme.colorScheme.onSurfaceVariant else color
-    ProvideTextStyle(MaterialTheme.typography.labelSmall.copy(color = textColor)) {
-        CompositionLocalProvider(LocalContentColor provides textColor) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                itemVerticalAlignment = Alignment.CenterVertically,
-                modifier = modifier.padding(horizontal = 4.dp).rhReadableOnSkin(),
-            ) {
-                val usage = message.usage
-                val contextUsed = usage?.promptTokens?.takeIf { it > 0 } ?: estimatedContextTokens
-                if (contextUsed != null) {
-                    val contextLimit = resolvedContextLength
-                    val used = contextUsed.coerceAtLeast(0)
-                    StatsItem(
-                        icon = {
-                            Icon(
-                                imageVector = HugeIcons.Upload02,
-                                contentDescription = "上下文",
-                                tint = textColor,
-                                modifier = Modifier.size(12.dp),
-                            )
-                        },
-                        content = {
-                            if (contextLimit != null) {
-                                val percentage = (used.toDouble() / contextLimit.toDouble() * 100.0)
-                                    .coerceIn(0.0, 100.0)
-                                Text("上下文 ${used.formatNumber()}/${contextLimit.formatNumber()} · ${percentage.toFixed(1)}%")
-                            } else {
-                                Text("上下文 ${used.formatNumber()}/未知 · —")
-                            }
-                        },
-                    )
-                }
-                if (usage != null && settings.showTokenUsage) {
-                    // Input tokens
-                    StatsItem(
-                        icon = {
-                            Icon(
-                                imageVector = HugeIcons.Upload02,
-                                contentDescription = stringResource(R.string.accessibility_input_tokens),
-                                tint = textColor,
-                                modifier = Modifier.size(12.dp)
-                            )
-                        },
-                        content = {
-                            Text(text = "${usage.promptTokens.formatNumber()} tokens")
-                            // Cache split. promptTokens counts hits and misses together on
-                            // every provider that reports a cached figure, so the miss side and
-                            // the rate are derivable here without any extra request (issue #23).
-                            if (usage.cachedTokens > 0 && usage.promptTokens > 0) {
-                                val hit = usage.cachedTokens.coerceAtMost(usage.promptTokens)
-                                val miss = usage.promptTokens - hit
-                                val rate = hit * 100 / usage.promptTokens
-                                Text(
-                                    text = "(${hit.formatNumber()} hit / " +
-                                        "${miss.formatNumber()} miss / $rate%)"
-                                )
-                            }
-                        }
-                    )
 
-                    // Output tokens
-                    StatsItem(
-                        icon = {
-                            Icon(
-                                imageVector = HugeIcons.Download04,
-                                contentDescription = stringResource(R.string.accessibility_output_tokens),
-                                modifier = Modifier.size(12.dp)
-                            )
-                        },
-                        content = {
-                            Text(text = "${usage.completionTokens.formatNumber()} tokens")
-                        }
-                    )
-
-                    // Cost (USD) — shown when the provider reports it (e.g. OpenRouter usage.cost)
-                    val cost = usage.cost
-                    if (cost != null && cost > 0.0) {
-                        StatsItem(
-                            icon = {
-                                Icon(
-                                    imageVector = HugeIcons.CoinsDollar,
-                                    contentDescription = stringResource(R.string.accessibility_cost),
-                                    tint = textColor,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            },
-                            content = {
-                                Text(text = formatCost(cost))
-                            }
-                        )
-                    }
-
-                    // rh-batch2:tps - speed = output tokens of the last step / time that step
-                    // actually spent streaming output (first -> last chunk). The total
-                    // createdAt -> finishedAt span includes time-to-first-token, tool runs and
-                    // approval waits, while TokenUsage.merge keeps only the last step's
-                    // completion tokens, so dividing by it badly under-reports the speed.
-                    val totalMs = message.finishedAt?.let {
-                        Duration.between(
-                            message.createdAt.toJavaLocalDateTime(),
-                            it.toJavaLocalDateTime()
-                        ).toMillis()
-                    }
-                    val speedMs = tpsWindowMillis(
-                        generationMillis = message.generationMillis,
-                        totalMillis = totalMs,
-                        hasTools = message.parts.any { it is UIMessagePart.Tool },
-                    )
-                    if (speedMs != null && usage.completionTokens > 0) {
-                        val tps = usage.completionTokens.toFloat() / speedMs * 1000f
-                        StatsItem(
-                            icon = {
-                                Icon(
-                                    imageVector = HugeIcons.Zap,
-                                    contentDescription = stringResource(R.string.accessibility_speed),
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            },
-                            content = {
-                                Text(text = "${tps.toFixed(1)} tok/s")
-                            }
-                        )
-                    }
-                    if (totalMs != null && totalMs > 0) {
-                        StatsItem(
-                            icon = {
-                                Icon(
-                                    imageVector = HugeIcons.Clock02,
-                                    contentDescription = stringResource(R.string.accessibility_duration),
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            },
-                            content = {
-                                Text(text = "${(totalMs / 1000f).toFixed(1)}s")
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
 }
 
 /**

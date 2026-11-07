@@ -1,6 +1,8 @@
 package me.rerere.rikkahub.data.db.fts
 
 import android.content.Context
+import android.util.Log
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
 
 object SimpleDictManager {
@@ -10,6 +12,37 @@ object SimpleDictManager {
 
     // 与 assets 中的词典版本对齐，更新词典时递增此值
     private const val CURRENT_VERSION = 1
+
+    @Volatile
+    private var registered = false
+    private val registerLock = Any()
+
+    /**
+     * 幂等、best-effort jieba 词典注册。首次调用解压词典并执行 SELECT jieba_dict(?)
+     * (磁盘 IO + 整本词典加载)，因此从 Room onOpen 挪出：DataSourceModule 后台预热 +
+     * 搜索/索引路径懒注册兜底。失败只记日志，下次冷启动重试。
+     */
+    fun ensureRegistered(context: Context, db: SupportSQLiteDatabase) {
+        if (registered) return
+        synchronized(registerLock) {
+            if (registered) return
+            try {
+                val dictDir = extractDict(context)
+                val cursor = db.query("SELECT jieba_dict(?)", arrayOf(dictDir.absolutePath))
+                cursor.use {
+                    if (it.moveToFirst()) {
+                        val result = it.getString(0)
+                        if (result?.trimEnd('/') != dictDir.absolutePath.trimEnd('/')) {
+                            Log.e("SimpleDictManager", "jieba_dict failed: $result, path=${dictDir.absolutePath}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("SimpleDictManager", "ensureRegistered failed", e)
+            }
+            registered = true
+        }
+    }
 
     /**
      * 将 assets/simple_dict 解压到 files/simple_dict，返回词典目录。

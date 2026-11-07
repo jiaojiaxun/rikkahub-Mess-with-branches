@@ -16,8 +16,8 @@ android {
         applicationId = "excp.rikkahub"
         minSdk = 26
         targetSdk = 37
-        versionCode = 181
-        versionName = "2.4.14"
+        versionCode = 18100610  // rhAppVersion: 181x100k+run610
+        versionName = "2.4.14+run610"  // rhAppVersion
 
         val geminiOAuthClientId = providers.gradleProperty("geminiOAuthClientId")
             .orElse(providers.environmentVariable("GEMINI_OAUTH_CLIENT_ID"))
@@ -107,6 +107,8 @@ android {
     }
     androidResources {
         generateLocaleConfig = true
+        // rhLocaleZhEn301: keep only Chinese (zh) and English (en) resources in packaged builds.
+        localeFilters += listOf("zh", "en")
     }
     packaging {
         jniLibs {
@@ -190,6 +192,7 @@ dependencies {
     // Image metadata extractor
     // https://github.com/drewnoakes/metadata-extractor
     implementation(libs.metadata.extractor)
+    implementation(libs.androidx.exifinterface)
 
     // Haze (background blur)
     implementation(libs.haze)
@@ -238,10 +241,6 @@ dependencies {
     // zxing
     implementation(libs.zxing.core)
 
-    // quickie (qrcode scanner)
-    implementation(libs.quickie.bundled)
-    implementation(libs.barcode.scanning)
-    implementation(libs.androidx.camera.core)
 
     // Room
     implementation(libs.androidx.room.runtime)
@@ -302,6 +301,7 @@ dependencies {
     // AndroidX DocumentFile — Phase 25 SAF tree traversal for the ExternalStorage tools
     // (USB / SD / Downloads / cloud DocumentsProvider access via persisted tree grants).
     implementation(libs.androidx.documentfile)
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     // modules
     implementation(project(":ai"))
@@ -315,6 +315,10 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":material3"))
     implementation(project(":workspace"))
+    implementation(project(":terminal"))
+    implementation(libs.termux.terminal.view) {
+        exclude(group = "com.termux.termux-app", module = "terminal-emulator")
+    }
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
     implementation(kotlin("reflect"))
 

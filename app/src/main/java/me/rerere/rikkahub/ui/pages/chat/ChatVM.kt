@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
@@ -22,6 +23,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -37,6 +40,7 @@ import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.model.Conversation
+import me.rerere.rikkahub.data.model.getChatModelOf // rhSessionModel254
 import me.rerere.rikkahub.data.translation.TranslationMode
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.NodeFavoriteTarget
@@ -70,6 +74,43 @@ class ChatVM(
     // 聊天输入状态 - 保存在 ViewModel 中避免 TransactionTooLargeException
     val inputState = ChatInputState()
 
+    // 任务N4 v3：消息排队发送——触发生成的消息统一入队，单一 pump 串行放行，
+    // 避免生成期间并发 sendMessage。队列仅存内存（VM 生命周期）。
+    // rhQuoteQueue250: 队列元素必须带 quotedMessageId —— 否则 answer=true 的引用在入队瞬间丢失
+    private data class PendingSend(
+        val content: List<UIMessagePart>,
+        val quotedMessageId: Uuid?,
+    )
+    private val pendingMessages = java.util.concurrent.ConcurrentLinkedQueue<PendingSend>()
+    private val pendingMessageCountState = androidx.compose.runtime.mutableStateOf(0)
+    val pendingMessageCount: androidx.compose.runtime.State<Int> = pendingMessageCountState
+    private val pendingPumpMutex = Mutex()
+
+    init {
+        // 本会话生成完成 → 尝试放行下一条（generationDoneFlow 是全局流，
+        // 发出的是 conversationId，必须过滤，否则跨会话误触发）
+        viewModelScope.launch {
+            chatService.generationDoneFlow.collect { doneConversationId ->
+                if (doneConversationId == _conversationId) {
+                    drainOnePendingMessage()
+                }
+            }
+        }
+    }
+
+    /** 放行一条排队消息：等本会话空闲后发送（读服务端真相流，无 stateIn 竞态）。 */
+    private fun drainOnePendingMessage() {
+        viewModelScope.launch {
+            pendingPumpMutex.withLock {
+                if (pendingMessages.isEmpty()) return@withLock
+                chatService.getGenerationJobStateFlow(_conversationId).first { it == null }
+                val next = pendingMessages.poll() ?: return@withLock
+                pendingMessageCountState.value = pendingMessages.size
+                chatService.sendMessage(_conversationId, next.content, true, next.quotedMessageId) // rhQuoteQueue250
+            }
+        }
+    }
+
     // 异步任务 (从ChatService获取，响应式)
     val conversationJob: StateFlow<Job?> =
         chatService
@@ -87,6 +128,12 @@ class ChatVM(
     init {
         // 添加对话引用
         chatService.addConversationReference(_conversationId)
+        // rhTavernMode: 从独立 Store 读当前会话的酒馆状态,交给输入组件
+        inputState.tavernMode = me.rerere.rikkahub.data.datastore.TavernModeStore.isEnabled(context, _conversationId.toString())
+        inputState.onToggleTavernMode = { enabled -> setTavernMode(enabled) }
+        // rhSqueezeWire: 榨干 token 接线(会话级)
+        inputState.squeezeTokenEnabled = me.rerere.rikkahub.data.datastore.TavernModeStore.isSqueezeTokenEnabled(context, _conversationId.toString())
+        inputState.onToggleSqueezeToken = { enabled -> setSqueezeTokenMode(enabled) }
 
         // 初始化对话
         viewModelScope.launch {
@@ -113,9 +160,10 @@ class ChatVM(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // 当前模型
-    val currentChatModel = settings.map { settings ->
-        settings.getCurrentChatModel()
-    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+// rhSessionModel254: 显示源必须走会话级解析，否则 A3/A4 改了写入与发送、UI 却永远显示全局助手模型
+val currentChatModel = combine(settings, conversation) { s, c ->
+    s.getChatModelOf(c)
+}.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     // 错误状态
     val errors: StateFlow<List<ChatError>> = chatService.errors
@@ -153,13 +201,20 @@ class ChatVM(
     // 设置聊天模型
     fun setChatModel(assistant: Assistant, model: Model) {
         viewModelScope.launch {
+            if (settings.value.displaySetting.perConversationModel) {
+                // rhPerConversationModel299: 新版——只固定当前对话
+                chatService.setConversationModel(_conversationId, model.id)
+                return@launch
+            }
+            // rhPerConversationModel299: 旧版——写助手级，该助手的其他对话一起变
+            val rhTargetAssistantId = settings.value.assistants
+                .firstOrNull { it.id == conversation.value.assistantId }?.id
+                ?: assistant.id
             settingsStore.update { settings ->
                 settings.copy(
                     assistants = settings.assistants.map {
-                        if (it.id == assistant.id) {
-                            it.copy(
-                                chatModelId = model.id
-                            )
+                        if (it.id == rhTargetAssistantId) {
+                            it.copy(chatModelId = model.id)
                         } else {
                             it
                         }
@@ -190,9 +245,27 @@ class ChatVM(
      * @param content 消息内容
      * @param answer 是否触发消息生成，如果为false，则仅添加消息到消息列表中
      */
-        fun handleMessageSend(content: List<UIMessagePart>,answer: Boolean = true) {
+        fun handleMessageSend(content: List<UIMessagePart>,answer: Boolean = true, quotedMessageId: Uuid? = null) {
         if (content.isEmptyInputMessage()) return
-        chatService.sendMessage(_conversationId, content, answer)
+        // rhHeartRateShare: 心率隐藏段（首位）。开关/连接/读数在注入器里判定，开关关闭时零改动。
+        val rhContent = me.rerere.rikkahub.data.ble.HeartRateShareInjector
+            .maybePrepend(settingsStore, content)
+        // answer=false 的插入型消息不排队直接执行；触发生成的统一入队，
+        // 由 drainOnePendingMessage 串行放行（cap 20，超出丢弃防内存膨胀）
+        if (!answer) {
+            chatService.sendMessage(_conversationId, rhContent, false, quotedMessageId)
+            return
+        }
+        if (pendingMessages.size >= 20) return
+        pendingMessages.add(PendingSend(rhContent, quotedMessageId)) // rhQuoteQueue250
+        pendingMessageCountState.value = pendingMessages.size
+        drainOnePendingMessage()
+    }
+
+    /** 丢弃全部排队消息（用户在排队时点停止生成）。 */
+    fun clearPendingMessages() {
+        pendingMessages.clear()
+        pendingMessageCountState.value = 0
     }
 
     suspend fun importSharedConversation(text: String): Conversation {
@@ -222,12 +295,23 @@ class ChatVM(
         }
     }
 
-    fun handleCompressContext(additionalPrompt: String, targetTokens: Int, keepRecentMessages: Int): Job {
+        fun handleCompressContext(additionalPrompt: String, targetTokens: Int, keepRecentMessages: Int): Job {
         return chatService.compressConversationAsync(
             conversationId = _conversationId,
             conversation = conversation.value,
             additionalPrompt = additionalPrompt,
             targetTokens = targetTokens,
+            keepRecentMessages = keepRecentMessages,
+        )
+    }
+
+    /**
+     * rh-batch8:truncate-only - delete the older messages instead of summarising them.
+     * No compression model is contacted, so this cannot hang or produce repeated requests.
+     */
+    fun handleTruncateContext(keepRecentMessages: Int): Job {
+        return chatService.truncateConversationToRecentAsync(
+            conversationId = _conversationId,
             keepRecentMessages = keepRecentMessages,
         )
     }
@@ -291,6 +375,8 @@ class ChatVM(
         chatService.rerunTool(_conversationId, toolCallId)
 
     fun stopGeneration() {
+        // 任务N4：停止生成同时丢弃排队消息，避免停止后队列被 done 事件自动放行
+        clearPendingMessages()
         viewModelScope.launch {
             chatService.stopGeneration(_conversationId)
         }
@@ -373,6 +459,18 @@ class ChatVM(
         chatService.updateConversationState(_conversationId) {
             newConversation
         }
+    }
+
+    /** rhTavernMode: 会话级酒馆模式开关(只影响当前会话,不改助手)。 */
+    fun setTavernMode(enabled: Boolean) {
+        inputState.tavernMode = enabled
+        me.rerere.rikkahub.data.datastore.TavernModeStore.setEnabled(context, _conversationId.toString(), enabled)
+    }
+
+    /** rhSqueezeWire: 榨干 token 开关(会话级,自动续跑)。 */
+    fun setSqueezeTokenMode(enabled: Boolean) {
+        inputState.squeezeTokenEnabled = enabled
+        me.rerere.rikkahub.data.datastore.TavernModeStore.setSqueezeTokenEnabled(context, _conversationId.toString(), enabled)
     }
 
     fun toggleMessageFavorite(node: MessageNode) {

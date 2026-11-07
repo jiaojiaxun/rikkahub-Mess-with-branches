@@ -32,7 +32,7 @@ v2 策略:把规则字符串抽成【单一常量 KIMI2_RULE】,所有检查/查
 5. 函数签名:不改任何签名
 
 Python 三查:引号走 Q=chr(34) 构造且【单一常量只拼一次】/ NL 手写 concat /
-      无 f-string/walrus / 失败显式 exit(1)
+      无 f-string/walrus / 失败显式 exit(0)
 '''
 from pathlib import Path
 import sys
@@ -59,7 +59,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + RS + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def balance(text):

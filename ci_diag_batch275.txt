@@ -1,0 +1,9 @@
+FAIL prefs-key anchor count=0 [        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")]
+FAIL chatvm-inject anchor count=0 [        if (content.isEmptyInputMessage()) return]
+applied=9 failed=2
+chatmessage already patched
+filespicker already patched
+heartrate dialog already patched
+strings-en all keys present, skip
+strings-zh all keys present, skip
+applied=7 failed=0

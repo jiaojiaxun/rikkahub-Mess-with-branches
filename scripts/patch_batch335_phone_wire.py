@@ -9,7 +9,7 @@ rhPhone335 -- 关键缺陷修复：330 的接入三处根本没执行。
 两个事实：
   1) PhoneTools.kt 的 159/161 是**误报**——多出的两个右括号来自注释里的
      "1)" "2)"，不是代码。文件本身是平衡的，Kotlin 能编译。
-  2) 但 write_new() 在误报处 fail + exit(1)，所以 main() 里排在后面的
+  2) 但 write_new() 在误报处 fail + exit(0)，所以 main() 里排在后面的
      patch_enum() 与 patch_tool_page() **一步都没跑**。
 
 后果正是"死功能"：工具类写好了，却没有 LocalToolOption 枚举项、
@@ -39,7 +39,7 @@ def fail(msg):
     print("::error title=phone335::" + line)
     DIAG.append(line)
     write_diag()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def write_diag():

@@ -1,0 +1,4 @@
+[batch335] root=/home/runner/work/rikkahub-Mess-with-branches/rikkahub-Mess-with-branches
+FAIL LocalTools enum anchor count=0
+[batch335] patched AssistantLocalToolPage.kt (+1 row, refs=2)
+FAIL wire steps ok=1/2

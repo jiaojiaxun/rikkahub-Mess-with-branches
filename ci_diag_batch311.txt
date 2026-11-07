@@ -1,0 +1,2 @@
+busybox: rh-libs + workspace placeholder created in staging
+manager: bind mount targets ensured in ensureWorkspace

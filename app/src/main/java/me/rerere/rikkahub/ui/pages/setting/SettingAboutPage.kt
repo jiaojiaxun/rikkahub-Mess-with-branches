@@ -9,6 +9,7 @@ import me.rerere.hugeicons.stroke.SmartPhone01
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +47,8 @@ import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.easteregg.EmojiBurstHost
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.ui.components.ui.WhaleGirlMascot
+import me.rerere.rikkahub.ui.components.ui.MiffanMascotState
 import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.utils.openUrl
 import me.rerere.rikkahub.utils.plus
@@ -101,11 +104,10 @@ fun SettingAboutPage() {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        AsyncImage(
-                            model = R.mipmap.ic_launcher,
-                            contentDescription = stringResource(R.string.accessibility_app_logo),
+                        // rhWhaleAbout: 关于页用大肥鱼替代 launcher 图标（保留点击彩蛋）
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .clip(CircleShape)
                                 .size(150.dp)
                                 .onGloballyPositioned { coordinates ->
                                     val position = coordinates.positionInParent()
@@ -118,7 +120,13 @@ fun SettingAboutPage() {
                                 .clickable {
                                     onBurst(logoCenterPx)
                                 }
-                        )
+                        ) {
+                            WhaleGirlMascot(
+                                state = MiffanMascotState.Idle,
+                                interactive = false,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
 
                         Text(
                             text = "RikkaHub",

@@ -108,6 +108,7 @@ import me.rerere.rikkahub.ui.components.ui.Switch
 import me.rerere.rikkahub.ui.components.ui.SwitchSize
 import me.rerere.rikkahub.ui.components.ui.Tag
 import me.rerere.rikkahub.ui.components.ui.TagType
+import me.rerere.rikkahub.ui.components.ui.UIAvatar // rhMcpAvatar253
 import me.rerere.rikkahub.ui.hooks.EditState
 import me.rerere.rikkahub.ui.hooks.EditStateContent
 import me.rerere.rikkahub.ui.hooks.useEditState
@@ -207,6 +208,15 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
                         onEdit = {
                             editState.open(mcpConfig)
                         },
+                        onUpdate = { updated -> // rhMcpAvatar253: 头像改动直接写库，不走编辑弹窗
+                            vm.updateSettings(
+                                settings.copy(
+                                    mcpServers = mcpConfigs.map { c ->
+                                        if (c.id == updated.id) updated else c
+                                    }
+                                )
+                            )
+                        },
                         onDelete = {
                             vm.updateSettings(
                                 settings.copy(
@@ -256,6 +266,7 @@ private fun McpServerItem(
     modifier: Modifier = Modifier,
     onDelete: () -> Unit,
     onEdit: (McpServerConfig) -> Unit,
+    onUpdate: (McpServerConfig) -> Unit, // rhMcpAvatar253
 ) {
     val mcpManager = koinInject<McpManager>()
     val status by mcpManager.getStatus(item).collectAsStateWithLifecycle(McpStatus.Idle)
@@ -337,6 +348,36 @@ private fun McpServerItem(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // rhMcpAvatar264: 配了头像才显示（顶替默认图标）；没配则走原状态图标
+                if (item.commonOptions.avatar != me.rerere.rikkahub.data.model.Avatar.Dummy) {
+                // rhMcpAvatar253: 服务器头像（点击可换图片/表情/链接，复用 UIAvatar 自带面板）
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    UIAvatar(
+                        name = item.commonOptions.name.ifBlank { "MCP" },
+                        value = item.commonOptions.avatar,
+                        onUpdate = { newAvatar ->
+                            onUpdate(
+                                item.clone(
+                                    commonOptions = item.commonOptions.copy(avatar = newAvatar)
+                                )
+                            )
+                        },
+                    )
+                    val avatarStatusColor = when (status) {
+                        McpStatus.Connected -> MaterialTheme.extendColors.green6
+                        McpStatus.Authorizing -> MaterialTheme.colorScheme.tertiary // rhMcpDot269
+                        McpStatus.Connecting, is McpStatus.Reconnecting -> MaterialTheme.colorScheme.secondary // rhMcpDot269
+                        is McpStatus.Error, McpStatus.NeedsAuthorization -> MaterialTheme.colorScheme.error
+                        McpStatus.Idle -> MaterialTheme.colorScheme.outline // rhMcpDot269
+                        else -> MaterialTheme.colorScheme.outline // rhMcpDot269
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .drawWithContent { drawCircle(color = avatarStatusColor) }
+                    )
+                }
+                } else {
                 when (status) {
                     McpStatus.Idle -> Icon(HugeIcons.MessageBlocked, null)
                     McpStatus.Connecting -> CircularProgressIndicator(
@@ -354,6 +395,7 @@ private fun McpServerItem(
                     McpStatus.Authorizing -> CircularProgressIndicator(
                         modifier = Modifier.size(24.dp)
                     )
+                }
                 }
 
                 Column(

@@ -1,0 +1,2 @@
+replaced 3 occurrence(s) of trimStart("/") with trimStart('/')
+module-wide trim(String) clean

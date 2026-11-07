@@ -1,4 +1,5 @@
 package me.rerere.rikkahub.data.model
+// batch28 TODO: 清理冗余系统提示词（任务8）
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -29,6 +30,8 @@ data class Assistant(
     val streamOutput: Boolean = true,
     val enableMemory: Boolean = false,
     val useGlobalMemory: Boolean = false, // 使用全局共享记忆而非助手隔离记忆
+    // rhShortMem: 短期记忆(会话级私有), 与 enableMemory 互斥(UI 层互斥, 消费侧短期优先)
+    val enableShortMemory: Boolean = false,
     val enableRecentChatsReference: Boolean = false,
     val messageTemplate: String = "{{ message }}",
     val presetMessages: List<UIMessage> = emptyList(),
@@ -40,7 +43,7 @@ data class Assistant(
     val customBodies: List<CustomBody> = emptyList(),
     val mcpServers: Set<Uuid> = emptySet(),
     @Serializable(with = LenientLocalToolListSerializer::class)
-    val localTools: List<LocalToolOption> = listOf(LocalToolOption.TimeInfo),
+    val localTools: List<LocalToolOption> = listOf(LocalToolOption.TimeInfo, LocalToolOption.AppVersion), // rhAppVersionGate225
     val enableWebSearch: Boolean = false, // 网络搜索开关(每个助手独立)
     val workspaceId: Uuid? = null,
     val background: String? = null, // 聊天页背景图地址(本地文件 URI 或网络 URL), 为 null 时无背景
@@ -76,6 +79,8 @@ data class QuickMessage(
 data class AssistantMemory(
     val id: Int,
     val content: String = "",
+    // rhShortMem: 短期记忆归属会话 id; 空串 = 长期/全局
+    val conversationId: String = "",
 )
 
 @Serializable

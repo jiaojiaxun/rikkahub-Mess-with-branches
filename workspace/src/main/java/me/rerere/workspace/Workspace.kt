@@ -10,6 +10,45 @@ data class Workspace(
     val lastAccessAt: Long? = null,
 )
 
+/** 工作区类型; 能力表由类型声明, 调用方按能力判断而不是直接比较类型 */
+enum class WorkspaceType(val capabilities: WorkspaceCapabilities) {
+    /** 本机 PRoot Rootfs */
+    LOCAL(
+        WorkspaceCapabilities(
+            rootfs = true,
+            terminal = false,
+            localFiles = true,
+            fileWriteTools = true,
+            backgroundShell = true,
+        )
+    ),
+
+    /** 通过 SSH 连接的远程机器 */
+    SSH(
+        WorkspaceCapabilities(
+            rootfs = false,
+            terminal = true,
+            localFiles = false,
+            fileWriteTools = false,
+            backgroundShell = false,
+        )
+    ),
+}
+
+/** 一种工作区能用哪些功能 */
+data class WorkspaceCapabilities(
+    /** 需要安装 Rootfs, 挂载了 /skills、/upload、/tool_outputs 等应用目录 */
+    val rootfs: Boolean,
+    /** 支持交互式终端 (接到终端模块后才会打开) */
+    val terminal: Boolean,
+    /** 文件在本机; 否则每次访问都要走网络, 也没法交给系统文件选择器 */
+    val localFiles: Boolean,
+    /** AI 可以用写文件、编辑文件工具直接写入; 否则只能经 shell 修改文件 */
+    val fileWriteTools: Boolean,
+    /** shell 命令可以在后台运行 */
+    val backgroundShell: Boolean,
+)
+
 enum class WorkspaceShellStatus {
     DISABLED,
     INSTALLING,
@@ -25,6 +64,7 @@ enum class WorkspaceStorageArea {
 enum class RootfsInstallStage {
     DOWNLOADING,
     EXTRACTING,
+    FINALIZING,
     INSTALLED,
 }
 

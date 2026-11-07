@@ -29,6 +29,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
@@ -54,6 +55,8 @@ import kotlinx.coroutines.Job
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Camera01
+import me.rerere.hugeicons.stroke.Brain02
+import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.Codesandbox
 import me.rerere.hugeicons.stroke.ComputerTerminal01
 import me.rerere.hugeicons.stroke.Files02
@@ -62,12 +65,14 @@ import me.rerere.hugeicons.stroke.Image02
 import me.rerere.hugeicons.stroke.MusicNote03
 import me.rerere.hugeicons.stroke.Package
 import me.rerere.hugeicons.stroke.Package01
+import me.rerere.hugeicons.stroke.Pulse01
 import me.rerere.hugeicons.stroke.Settings02
 import me.rerere.hugeicons.stroke.Video01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.ble.HeartRateMonitor // rhHeartRateShare
 import me.rerere.rikkahub.data.datastore.getCompactionContextLength
 import me.rerere.rikkahub.data.datastore.getContextCompactionTargetTokens
 import me.rerere.rikkahub.data.datastore.getCurrentChatModel
@@ -76,6 +81,7 @@ import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.ui.components.ui.ExtensionSelector
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionCamera
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionManager
@@ -110,6 +116,9 @@ internal fun FilesPicker(
     val provider = settings.getCurrentChatModel()?.findProvider(providers = settings.providers)
     val navController = LocalNavController.current
     val workspaceRepository: WorkspaceRepository = koinInject()
+    // rh-batch8:truncate-only - FilesPicker has no view model, so the "delete instead of
+    // summarise" action is resolved straight from Koin (same container ChatVM uses).
+    val chatService: ChatService = koinInject()
     val workspaces by workspaceRepository.listFlow().collectAsState(initial = emptyList())
 
     Column(
@@ -117,23 +126,66 @@ internal fun FilesPicker(
             .fillMaxWidth()
             .padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally),
-            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.Start),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            TakePicButton(onLaunchCamera = onTakePic)
+        // rhDsh326: attachments live in the composer's + menu; this sheet hosts
+        // the two capability controls instead of repeating them.
+        ListItem(
+            leadingContent = {
+                Icon(
+                    imageVector = HugeIcons.Search01,
+                    contentDescription = null,
+                )
+            },
+            headlineContent = { Text("联网搜索") },
+            supportingContent = { Text("开启后本轮使用搜索工具") },
+            trailingContent = {
+                Switch(
+                    checked = assistant.enableWebSearch,
+                    onCheckedChange = { enabled ->
+                        onUpdateAssistant(assistant.copy(enableWebSearch = enabled))
+                    },
+                )
+            },
+            colors = ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            ),
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.large)
+                .clickable {
+                    onUpdateAssistant(assistant.copy(enableWebSearch = !assistant.enableWebSearch))
+                },
+        )
 
-            ImagePickButton(onClick = onPickImage)
-
-            if (provider != null && provider is ProviderSetting.Google) {
-                VideoPickButton(onClick = onPickVideo)
-
-                AudioPickButton(onClick = onPickAudio)
-            }
-
-            FilePickButton(onClick = onPickFile)
-        }
+        ListItem(
+            leadingContent = {
+                Icon(
+                    imageVector = HugeIcons.Brain02,
+                    contentDescription = null,
+                )
+            },
+            headlineContent = { Text("思考深度") },
+            supportingContent = { Text("思考强度 · 流式输出 · 酒馆模式") },
+            trailingContent = {
+                ReasoningButton(
+                    tavernMode = state.tavernMode,
+                    onUpdateTavernMode = state.onToggleTavernMode,
+                    squeezeTokenEnabled = state.squeezeTokenEnabled,
+                    onUpdateSqueezeToken = state.onToggleSqueezeToken,
+                    reasoningLevel = assistant.reasoningLevel,
+                    onUpdateReasoningLevel = {
+                        onUpdateAssistant(assistant.copy(reasoningLevel = it))
+                    },
+                    streamOutput = assistant.streamOutput,
+                    onUpdateStreamOutput = { enabled ->
+                        onUpdateAssistant(assistant.copy(streamOutput = enabled))
+                    },
+                    onlyIcon = true,
+                )
+            },
+            colors = ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            ),
+            modifier = Modifier.clip(MaterialTheme.shapes.large),
+        )
 
         HorizontalDivider(
             modifier = Modifier.fillMaxWidth()
@@ -206,6 +258,43 @@ internal fun FilesPicker(
                 },
         )
 
+        // rhHeartRate: live heart-rate broadcast entry
+        var showHeartRateDialog by remember { mutableStateOf(false) }
+        ListItem(
+            leadingContent = {
+                Icon(
+                    imageVector = HugeIcons.Pulse01,
+                    contentDescription = stringResource(R.string.heart_rate_title),
+                )
+            },
+            headlineContent = {
+                Text(stringResource(R.string.heart_rate_title))
+            },
+            trailingContent = {
+                // rhHeartRateShare: 连接状态角标（实时）
+                val rhHeartRate by HeartRateMonitor.state.collectAsState()
+                Text(
+                    text = if (rhHeartRate.connected && rhHeartRate.bpm != null) {
+                        stringResource(R.string.heart_rate_connected_badge, rhHeartRate.bpm ?: 0)
+                    } else {
+                        stringResource(R.string.heart_rate_disconnected_badge)
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            colors = ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            ),
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.large)
+                .clickable {
+                    showHeartRateDialog = true
+                },
+        )
+        if (showHeartRateDialog) {
+            HeartRateDialog(onDismiss = { showHeartRateDialog = false })
+        }
         // Compress History Button
         ListItem(
             leadingContent = {
@@ -288,6 +377,15 @@ internal fun FilesPicker(
     // Compress Context Dialog
     if (showCompressDialog) {
         CompressContextDialog(
+            // rh-batch8:truncate-only - no model request, just drop the older messages.
+            onTruncate = { keepRecentMessages ->
+                chatService.truncateConversationToRecentAsync(
+                    conversationId = conversation.id,
+                    keepRecentMessages = keepRecentMessages,
+                )
+            },
+
+            conversationId = conversation.id,
             defaultTargetTokens = settings.getContextCompactionTargetTokens(
                 settings.getCompactionContextLength(settings.getCurrentChatModel()),
             ),

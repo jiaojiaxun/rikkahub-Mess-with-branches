@@ -18,7 +18,7 @@ import java.util.Locale
  * 幂等：若传入 parts 已含隐藏段（编辑重发带回原始 parts 的情形）则不再插入，避免重复。
  */
 object HeartRateShareInjector {
-    const val HIDDEN_META_KEY = "rikkahub.hidden"
+    const val HIDDEN_META_KEY = me.rerere.ai.ui.HIDDEN_PART_META_KEY // rhHiddenPart283: 键与 ai 模块同源
 
     fun maybePrepend(
         settingsStore: SettingsStore,

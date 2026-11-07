@@ -31,8 +31,12 @@ data class Conversation(
     val lorebookIds: Set<Uuid> = emptySet(),
     // Optional current directory inside the file workspace.
     val workspaceCwd: String? = null,
+    val config: ConversationConfig? = null, // rhConversationConfig A1地基: 会话级固定配置(A2才落库)
     // 所属文件夹（助手内分组），null 表示未归入任何文件夹
     val folderId: Uuid? = null,
+    // rhParentChat (batch55): 子代理对话的父对话 id；null 表示普通对话。
+    // 子代理由 SubAgentEngine 创建，折叠树/审批继承都靠它关联父对话。
+    val parentChatId: Uuid? = null,
     @Transient
     val newConversation: Boolean = false
 ) {
@@ -105,6 +109,39 @@ data class Conversation(
             newConversation = newConversation,
         )
     }
+}
+
+/** rh-batch14: a trailing fork-sequence suffix, e.g. "标题 (2)". */
+private val FORK_TITLE_SUFFIX_REGEX = Regex("""\s*\((\d+)\)\s*$""")
+
+/**
+ * rh-batch14: title for a conversation forked from [parentTitle].
+ *
+ * Every trailing "(n)" is stripped before a new number is appended, so forking a fork can never
+ * accumulate suffixes ("标题 (1) (1) (1)"). The number is taken from the parent's own suffix and
+ * incremented, so sibling forks of the same parent get distinct names.
+ *
+ * Returns "" for a blank parent title: a conversation that has no title yet should let
+ * generateTitle name the fork normally rather than inheriting an empty numbered name.
+ */
+fun nextForkTitle(parentTitle: String): String {
+    val parent = parentTitle.trim()
+    if (parent.isEmpty()) return ""
+
+    var base = parent
+    var parentNumber: Int? = null
+    while (true) {
+        // $ -anchored, so each pass removes exactly one trailing suffix.
+        val match = FORK_TITLE_SUFFIX_REGEX.find(base) ?: break
+        if (parentNumber == null) {
+            parentNumber = match.groupValues[1].toIntOrNull()
+        }
+        base = base.substring(0, match.range.first).trimEnd()
+    }
+    // The title was nothing but a suffix ("(1)"); leave it alone instead of inventing "(2)".
+    if (base.isEmpty()) return parent
+
+    return "$base (${(parentNumber ?: 1) + 1})"
 }
 
 @Serializable

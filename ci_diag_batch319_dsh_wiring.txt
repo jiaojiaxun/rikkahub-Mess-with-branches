@@ -1,0 +1,13 @@
+chatinput: caps balance=(0, 0) len=2837
+chatinput: asr balance=(0, 0) len=1468
+chatinput: deleted row balance=(0, 0) len=9422
+chatinput: row balance=(0, 0)
+chatinput: final balance (0, 0) -> (0, 0)
+chatinput: OK bytes=37466
+chatpage: local top-bar scope added
+chatpage: top bar replaced 949 chars
+chatpage: composer usage wired
+chatpage: balance (0, 0) -> (0, 0)
+chatpage: OK bytes=47596
+nerd: balance (0, 0) -> (0, 0)
+nerd: footnote replaced bytes=4046

@@ -1,0 +1,41 @@
+chatService OK: sendMessage pipeline -> Dispatchers.IO
+1 chat pipeline to IO DONE
+migration file not found in the two known paths
+probe AssistantMemoryPage data-source hits=26
+page L53:import androidx.lifecycle.compose.collectAsStateWithLifecycle
+page L82:val assistant by vm.assistant.collectAsStateWithLifecycle()
+page L83:val memories by vm.memories.collectAsStateWithLifecycle()
+page L84:val conversationTitles by vm.conversationTitles.collectAsStateWithLifecycle() // rhShortMemUI
+page L106:memories = memories,
+page L120:memories: List<AssistantMemory>,
+page L146:if (assistant.enableShortMemory) "添加短期记忆" else "添加长期记忆"
+page L154:if (assistant.enableShortMemory && memory.id == 0 && conversationTitles.isNotEmpty()) {
+page L180:} else if (assistant.enableShortMemory && memory.conversationId.isNotBlank()) {
+page L227:(!assistant.enableShortMemory || memory.conversationId.isNotBlank()),
+page L269:enableShortMemory = if (it) false else assistant.enableShortMemory
+page L286:checked = assistant.enableShortMemory,
+page L290:enableShortMemory = it,
+page L292:useGlobalMemory = if (it) false else assistant.useGlobalMemory
+page L308:checked = assistant.useGlobalMemory,
+page L312:useGlobalMemory = it
+page L363:if (assistant.enableShortMemory || assistant.enableMemory) {
+page L364:val isShort = assistant.enableShortMemory
+page L367:useGlobal = assistant.useGlobalMemory && !isShort,
+page L391:text = "${memories.size} 条",
+page L400:val canAdd = !assistant.enableShortMemory || defaultConvId.isNotBlank()
+page L408:conversationId = if (assistant.enableShortMemory) defaultConvId else "",
+page L421:if (assistant.enableShortMemory) {
+page L423:val groupedShortMemories = memories.groupBy { it.conversationId }
+page L539:if (memories.isEmpty()) {
+page L558:memories.fastForEach { memory ->
+probe WebDavSync restore hits=9
+webdav L165:suspend fun restoreFromLocalFile(
+webdav L225:if (full || format == BackupExportFormat.LITE) agentDb = createFullDatabaseSnapshot(dbRoot)
+webdav L390:private fun createFullDatabaseSnapshot(source: File): File {
+webdav L402:source.copyTo(snapshot, overwrite = true)
+webdav L465:source.copyTo(snapshot, overwrite = true)
+webdav L478:val memoryCount = countRows(liveDb, "MemoryEntity")
+webdav L489:).use { countRows(it, "MemoryEntity") }
+webdav L588:require(countRows(db, "MemoryEntity") == memoryCount) {
+webdav L607:if (sidecar.isFile) sidecar.copyTo(File(snapshot.parentFile, snapshot.name + suffix), overwrite = true)
+2 memory root-cause probe DONE

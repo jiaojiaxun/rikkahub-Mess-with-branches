@@ -295,13 +295,14 @@ fun S3Tab(
                     scope.launch {
                         isBackingUp = true
                         runCatching {
-                            vm.backupToS3()
+                            vm.backupToS3().await()
                             vm.loadS3BackupFileItems()
                             toaster.show(
                                 context.getString(R.string.backup_page_backup_success),
                                 type = ToastType.Success
                             )
                         }.onFailure {
+                            if (it is kotlinx.coroutines.CancellationException) throw it  // rhBackupAwait317
                             it.printStackTrace()
                             toaster.show(
                                 it.message ?: context.getString(R.string.backup_page_unknown_error),
@@ -430,18 +431,8 @@ fun S3Tab(
                         val item = pendingRestoreItem
                         pendingRestoreItem = null
                         showRestoreMode = false
-                        if (item != null) scope.launch {
-                            restoringItemId = item.displayName
-                            runCatching {
-                                vm.restoreFromS3(item, BackupRestoreMode.MERGE)
-                                toaster.show(context.getString(R.string.backup_page_restore_success), type = ToastType.Success)
-                                showBackupFiles = false
-                                onShowRestartDialog()
-                            }.onFailure { err ->
-                                toaster.show(context.getString(R.string.backup_page_restore_failed, err.message ?: ""), type = ToastType.Error)
-                            }
-                            restoringItemId = null
-                        }
+                        // [batch159] 合并走两阶段状态机：下载 → 扫描 → 差异确认 → 应用
+                        if (item != null) vm.beginS3Merge(item)
                     }) { Text(BackupRestoreMode.MERGE.displayName()) }
                     Button(onClick = {
                         val item = pendingRestoreItem
@@ -450,11 +441,12 @@ fun S3Tab(
                         if (item != null) scope.launch {
                             restoringItemId = item.displayName
                             runCatching {
-                                vm.restoreFromS3(item, BackupRestoreMode.OVERWRITE)
+                                vm.restoreFromS3(item, BackupRestoreMode.OVERWRITE).await()
                                 toaster.show(context.getString(R.string.backup_page_restore_success), type = ToastType.Success)
                                 showBackupFiles = false
                                 onShowRestartDialog()
                             }.onFailure { err ->
+                                if (err is kotlinx.coroutines.CancellationException) throw err  // rhBackupAwait317
                                 toaster.show(context.getString(R.string.backup_page_restore_failed, err.message ?: ""), type = ToastType.Error)
                             }
                             restoringItemId = null

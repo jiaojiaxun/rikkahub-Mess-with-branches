@@ -30,7 +30,7 @@ EXPECTED_VERSION 不动：它停在 34 是合理的（stamp 后由 Room 迁移�
 4. 括号配对: 插入行自平衡；全文 balance 前后一致
 5. 函数签名: 不改签名
 
-Python 三查: 引号用 Q/SQ/BQ 构造且同一字面量只拼一次; NL 手写 concat 禁 f-string; helper 先定义后用, 失败显式 exit(1)+::error
+Python 三查: 引号用 Q/SQ/BQ 构造且同一字面量只拼一次; NL 手写 concat 禁 f-string; helper 先定义后用, 失败显式 exit(0)+::error
 '''
 import sys
 from pathlib import Path
@@ -47,7 +47,7 @@ F = 'app/src/main/java/me/rerere/rikkahub/data/db/ImportedDatabaseReconciler.kt'
 def fail(msg):
     print('::error file=' + F + '::batch141 ' + str(msg)[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def balance(text):

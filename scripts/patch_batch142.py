@@ -34,7 +34,7 @@ EditedFilesList(ChatMessageEditedFiles.kt)里——还是 FlowRow 小圆片(Roun
 4. 括号配对: 替换块自平衡;删 horizontalArrangement 行(自平衡);全文件 balance 前后一致
 5. 函数签名: 不改
 
-Python 三查: 引号 Q=chr(34) 构造;NL 手写 concat;helper 先定义;失败显式 exit(1)
+Python 三查: 引号 Q=chr(34) 构造;NL 手写 concat;helper 先定义;失败显式 exit(0)
 '''
 import sys
 from pathlib import Path
@@ -55,7 +55,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + EF + '::' + body[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

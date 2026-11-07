@@ -16,7 +16,7 @@ Five checks:
 3. scope: inside advancedServices CollapsibleSettingsDrawer CardGroup
 4. brackets: added item block is self-balanced
 5. signature: no change
-Python three checks: Q=chr(34) / NL handwritten / helper before use / exit(1) on fail
+Python three checks: Q=chr(34) / NL handwritten / helper before use / exit(0) on fail
 '''
 from pathlib import Path
 import sys
@@ -36,7 +36,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + SP + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

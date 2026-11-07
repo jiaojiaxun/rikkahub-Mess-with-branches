@@ -105,12 +105,20 @@ object MemoryToolUI : ToolUIRenderer {
         else -> HugeIcons.QuillWrite01
     }
 
+    // rhMemPolish240: 聊天工具调用卡片标题区分「短期记忆」与「长期记忆」
+    private fun isShortTerm(context: ToolUIContext): Boolean =
+        !context.content.getStringContent("conversationId").isNullOrBlank() ||
+            context.content.getStringContent("scope") == "short"
+
     @Composable
-    override fun title(context: ToolUIContext): String = when (action(context)) {
-        ACTION_CREATE -> stringResource(R.string.chat_message_tool_create_memory)
-        ACTION_EDIT -> stringResource(R.string.chat_message_tool_edit_memory)
-        ACTION_DELETE -> stringResource(R.string.chat_message_tool_delete_memory)
-        else -> stringResource(R.string.chat_message_tool_call_generic, toolName)
+    override fun title(context: ToolUIContext): String {
+        val short = isShortTerm(context)
+        return when (action(context)) {
+            ACTION_CREATE -> if (short) "写入短期记忆" else "写入长期记忆"
+            ACTION_EDIT -> if (short) "更新短期记忆" else "更新长期记忆"
+            ACTION_DELETE -> if (short) "删除短期记忆" else "删除长期记忆"
+            else -> stringResource(R.string.chat_message_tool_call_generic, toolName)
+        }
     }
 
     override fun hasSummary(context: ToolUIContext): Boolean =

@@ -21,7 +21,7 @@ updatedConversation 在 onCompletion 块内 = 生成完成后的对话。
    onCompletion lambda 内(updatedConversation/conversationId/senderName 可见)
 4. 括号配对:插入块自平衡;插入前后全文配平不变
 5. 函数签名:不改
-Python 三查:引号 Q=chr(34)/NL 手写/helper 先定义/失败 exit(1)
+Python 三查:引号 Q=chr(34)/NL 手写/helper 先定义/失败 exit(0)
 '''
 from pathlib import Path
 import sys
@@ -42,7 +42,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + CS + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

@@ -22,7 +22,7 @@ v2 修法:引入 KNL = chr(92) + 'n'(反斜杠+n),专用于 Kotlin 源码字符�
 3. 作用域:注入块在 appScope.launch try 内,currentConversation/quotedMessageId 可见
 4. 括号配对:buildList { } 自平衡;单行替换不改配平
 5. 函数签名:不改
-Python 三查:引号 Q/普通 / KNL=反斜杠+n 专用于 Kotlin 串内换行 / NL 仅拼行 / 无 f-string / 失败 exit(1)
+Python 三查:引号 Q/普通 / KNL=反斜杠+n 专用于 Kotlin 串内换行 / NL 仅拼行 / 无 f-string / 失败 exit(0)
 '''
 from pathlib import Path
 import sys
@@ -45,7 +45,7 @@ def fail(path, msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + path + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

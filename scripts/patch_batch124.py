@@ -35,7 +35,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + ML + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def balance(text):

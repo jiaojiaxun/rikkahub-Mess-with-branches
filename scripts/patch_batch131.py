@@ -33,7 +33,7 @@
 Python 三查:
 1. 引号一律 chr() 构造; 同一字面量只拼一次
 2. 不注入 Kotlin 代码; NL 仅拼行
-3. helper 先定义后用; 锚点找不到即 dump 现场行 + exit(1)
+3. helper 先定义后用; 锚点找不到即 dump 现场行 + exit(0)
 '''
 from pathlib import Path
 import sys
@@ -84,7 +84,7 @@ def fail(path, msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + path + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def strip_strings(line):

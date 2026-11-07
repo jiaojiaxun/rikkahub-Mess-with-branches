@@ -75,6 +75,8 @@ fun <T> ChainOfThought(
     collapsedVisibleCount: Int = 2,
     collapsedAdaptiveWidth: Boolean = false,
     forceExpanded: Boolean = false,
+    collapsedLabel: String? = null, // rhSemanticSummary
+    onShowSummary: (() -> Unit)? = null, // rhSummaryPanel
     content: @Composable ChainOfThoughtScope.(T) -> Unit
 ) {
     var userExpanded by remember { mutableStateOf(false) }
@@ -119,7 +121,7 @@ fun <T> ChainOfThought(
                                 }
                             )
                             .clip(MaterialTheme.shapes.small)
-                            .clickable { userExpanded = !expanded }
+                            .clickable { userExpanded = !expanded } // rhBatch136: 恢复原地展开
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -142,7 +144,7 @@ fun <T> ChainOfThought(
                             text = if (expanded) {
                                 stringResource(R.string.chain_of_thought_collapse)
                             } else {
-                                stringResource(
+                                collapsedLabel ?: stringResource(  // rhSemanticSummary
                                     R.string.chain_of_thought_show_more_steps,
                                     steps.size - collapsedVisibleCount
                                 )
@@ -150,6 +152,7 @@ fun <T> ChainOfThought(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
+// rhNoStepCounter249: 去掉头部 m/n 计数（用户要求）
                     }
                 }
 
@@ -391,7 +394,7 @@ private class ChainOfThoughtScopeImpl : ChainOfThoughtScope {
                     )
                 } else if (hasContent) {
                     Icon(
-                        imageVector = if (expanded) HugeIcons.ArrowUp01 else HugeIcons.ArrowDown01,
+                        imageVector = if (expanded) HugeIcons.ArrowUp01 else HugeIcons.ArrowRight01,
                         contentDescription = stringResource(if (expanded) R.string.code_block_collapse else R.string.code_block_expand),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,

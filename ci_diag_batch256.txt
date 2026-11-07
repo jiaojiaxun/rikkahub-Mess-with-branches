@@ -1,0 +1,6 @@
+dao balance changed 0 -> -2
+1 MemoryDAO global query DONE
+repo L11:const val GLOBAL_MEMORY_ID = "__global__"
+repo L26:memoryDAO.getMemoriesOfAssistantFlow(GLOBAL_MEMORY_ID)
+repo L32:return memoryDAO.getMemoriesOfAssistant(GLOBAL_MEMORY_ID)
+2 GLOBAL_MEMORY_ID probe DONE

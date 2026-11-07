@@ -69,6 +69,8 @@ sealed class ProviderSetting {
         // it is applied to every model on the OpenRouter host. See ChatCompletionsAPI.
         var promptCaching: Boolean = true,
         var includeHistoryReasoning: Boolean = true,
+        // rh-batch1:responses-path (upstream 2.5.0 a61d116d)
+        var responsesPath: String = "/responses",
         // OpenRouter only: provider-routing preferences emitted as the `provider` object.
         var routing: OpenRouterRouting = OpenRouterRouting(),
     ) : ProviderSetting() {

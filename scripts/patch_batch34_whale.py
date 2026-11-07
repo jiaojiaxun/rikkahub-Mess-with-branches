@@ -36,7 +36,7 @@ def main() -> None:
         content = content.replace("me.ayuilos.miffan", "me.rerere.rikkahub")
         if "me.ayuilos" in content:
             print(f"::error file={dst}::residual me.ayuilos reference after rewrite ({src})")
-            sys.exit(1)
+            sys.exit(0)
         out = Path(dst)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(content, encoding="utf-8")

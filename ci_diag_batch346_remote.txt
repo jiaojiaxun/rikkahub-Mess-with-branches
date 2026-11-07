@@ -1,0 +1,5 @@
+WorkspaceBackend: wrote 2816
+LocalWorkspaceBackend: wrote 5730
+Workspace.kt: type+capabilities
+Manager: layout:ok,backend:ok,shell:ok,resolve:ok
+RESULT:OK

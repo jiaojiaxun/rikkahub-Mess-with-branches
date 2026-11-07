@@ -1,0 +1,2 @@
+MergeDecisionApplier OK: ownerId right after forEach, before target.query
+1 merge memory ownership DONE

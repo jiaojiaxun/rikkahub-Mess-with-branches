@@ -1,0 +1,1 @@
+compat: FULL archive agent_settings.json also degrades instead of aborting

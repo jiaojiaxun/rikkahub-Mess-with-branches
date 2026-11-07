@@ -1,0 +1,7 @@
+header written chars=6344
+header DONE
+drawer header call replaced
+drawer DONE
+string added app/src/main/res/values/strings.xml
+string added app/src/main/res/values-zh/strings.xml
+strings DONE

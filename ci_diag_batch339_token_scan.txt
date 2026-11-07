@@ -1,0 +1,35 @@
+app/src/main/java/me/rerere/rikkahub/utils/TokenUnitStore.kt:37: fun Int.formatTokens(): String {
+app/src/main/java/me/rerere/rikkahub/utils/TokenUnitStore.kt:38: if (!TokenUnitStore.millions) return this.formatNumber()
+app/src/main/java/me/rerere/rikkahub/utils/StringUtils.kt:64: fun Int.formatNumber(): String {
+app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingPreferencesUIPage.kt:293: checked = displaySetting.showTokenUsage,
+app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingPreferencesUIPage.kt:295: updateDisplaySetting(displaySetting.copy(showTokenUsage = it))
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:344: formatTokens(model.totalTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:361: formatTokens(provider.totalTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:378: formatTokens(conversation.totalTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:395: formatTokens(day.totalTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:412: formatTokens(month.totalTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:429: formatTokens(year.totalTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:529: value = formatTokens(stats.totalPromptTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:535: value = formatTokens(stats.totalCompletionTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:543: value = formatTokens(stats.totalCachedTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:566: value = formatTokens(stats.totalTokens),
+app/src/main/java/me/rerere/rikkahub/ui/pages/stats/StatsPage.kt:615: private fun formatTokens(count: Long): String = when {
+app/src/main/java/me/rerere/rikkahub/costguards/TokenBudgetTracker.kt:3: import me.rerere.ai.core.TokenUsage
+app/src/main/java/me/rerere/rikkahub/costguards/TokenBudgetTracker.kt:9: * non-null [TokenUsage], and reports the running totals.
+app/src/main/java/me/rerere/rikkahub/costguards/CostGuardTools.kt:20: * One LLM tool: [checkTokenUsageTool]. Returns the running token totals for a given
+app/src/main/java/me/rerere/rikkahub/costguards/CostGuardTools.kt:42: fun checkTokenUsageTool(
+app/src/main/java/me/rerere/rikkahub/web/dto/WebDto.kt:5: import me.rerere.ai.core.TokenUsage
+app/src/main/java/me/rerere/rikkahub/web/dto/WebDto.kt:227: val usage: TokenUsage? = null,
+app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt:996: val showTokenUsage: Boolean = true,
+app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt:12: import me.rerere.ai.core.TokenUsage
+app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt:96: @TypeConverters(TokenUsageConverter::class)
+app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt:202: object TokenUsageConverter {
+app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt:204: fun fromTokenUsage(usage: TokenUsage?): String {
+app/src/main/java/me/rerere/rikkahub/data/db/AppDatabase.kt:209: fun toTokenUsage(usage: String): TokenUsage? {
+app/src/main/java/me/rerere/rikkahub/data/sync/importer/ChatboxImporter.kt:17: import me.rerere.ai.core.TokenUsage
+app/src/main/java/me/rerere/rikkahub/data/sync/importer/ChatboxImporter.kt:978: private fun parseUsage(usage: JsonObject?): TokenUsage? {
+app/src/main/java/me/rerere/rikkahub/data/sync/importer/ChatboxImporter.kt:990: return TokenUsage(
+app/src/main/java/me/rerere/rikkahub/data/sync/webdav/OfficialPurifier.kt:337: "showTokenUsage", "showThinkingContent", "autoCloseThinking", "updateCheckDisabledUntilEpochMillis",
+app/src/main/java/me/rerere/rikkahub/data/ai/tools/LocalTools.kt:800: tools.add(me.rerere.rikkahub.costguards.checkTokenUsageTool(settingsStore, conversationRepo))
+app/src/main/java/me/rerere/rikkahub/data/ai/tools/appcontrol/AppControlService.kt:450: "show_token_usage" -> raw.toBooleanStrictOrNull()?.let { v -> display.copy(showTokenUsage = v) }
+scan done files=653 hits=34

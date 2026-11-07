@@ -1,0 +1,4 @@
+downloaded https://github.com/meefik/busybox/releases/download/1.34.1/busybox-v1_34_1.zip bytes=5017993
+zip entries=16 sample=arm/|arm/bin/|arm/bin/busybox|arm/bin/ssl_helper|arm64/|arm64/bin/
+wrote workspace/src/main/jniLibs/arm64-v8a/libbusybox.so size=1589328 sha256=6b23c93ba7ac1c2db0d3a4e5a691a86c50113d4f6bae21b40ed6e0c9d0edccfa from arm64/bin/busybox
+WorkspaceBusybox.kt written chars=6510

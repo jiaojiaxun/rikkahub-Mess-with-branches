@@ -1,0 +1,10 @@
+FAIL tool-approvalKey anchor count=0 [    val needsApproval: (JsonElement) -> Boolean = { false },]
+FAIL allowlist-server-grants anchor count=0 [    private fun key(conversationId: Uuid, toolName: String) = "${conversationId}::${toolName}"]
+FAIL prefs-key anchor count=0 [    private val K_GLOBAL_YOLO = booleanPreferencesKey("global_auto_approve_yolo")]
+applied=7 failed=3
+chatservice already patched
+generationhandler already patched
+approval card already patched
+strings-en marker present, skip
+strings-zh marker present, skip
+applied=4 failed=0

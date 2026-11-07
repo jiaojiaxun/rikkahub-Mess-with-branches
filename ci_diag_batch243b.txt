@@ -1,0 +1,16 @@
+A1 wrote ChatMessageReasoning.kt
+A1 reasoning regex cache: OK
+A2 wrote TranslationHandler.kt + AppModule.kt
+A2 translation usage + DI: OK
+B1 app/src/main/res/values-zh/strings.xml hits=3
+B1 L720 :: <string name="setting_display_page_paste_long_text_as_file_desc">当粘贴的文本超过阈值时，自动将其保存为文件附件</string>
+B1 L1215 :: <string name="assistant_page_local_tools_download_desc">从网址下载文件到公共下载文件夹，并将文本内容（笔记、转录、笑话、脚本）保存为文件。</string>
+B1 L1334 :: <string name="local_llm_litert_name">本地 · LiteRT</string>
+B1 app/src/main/res/values/strings.xml hits=3
+B1 L14 :: <string name="rh_lite_stream_render_title">Lite streaming render</string>
+B1 L1449 :: <string name="local_llm_litert_name">Local · LiteRT</string>
+B1 L1874 :: <string name="backup_page_local_backup_export_pure">Lite backup (no attachments)</string>
+B1 strings probe: OK
+B2 SettingScheduledJobs refs total=7 files=4
+B2 RouteActivity.kt=4, SettingPage.kt=1, SettingScheduledJobsPage.kt=1, SettingsSearchIndex.kt=1
+B2 cron refs probe: OK

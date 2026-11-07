@@ -1,0 +1,33 @@
+FAILURES=0
+---- detail ----
+module files=9 -> ProotShellRunner.kt,RootfsInstaller.kt,RootfsPatcher.kt,Workspace.kt,WorkspaceBackgroundProcesses.kt,WorkspaceBusybox.kt,WorkspaceFileSystem.kt,WorkspaceManager.kt,WorkspaceShellRunner.kt
+brackets checked files=9
+check brackets DONE
+symbol BackgroundStatus in WorkspaceBackgroundProcesses.kt
+symbol ProotShellRunner in ProotShellRunner.kt
+symbol RootfsInstallProgress in Workspace.kt
+symbol RootfsInstallStage in Workspace.kt
+symbol RootfsInstaller in RootfsInstaller.kt
+symbol Workspace in ProotShellRunner.kt,Workspace.kt,WorkspaceBackgroundProcesses.kt,WorkspaceBusybox.kt,WorkspaceFileSystem.kt,WorkspaceManager.kt,WorkspaceShellRunner.kt
+symbol WorkspaceBindMount in ProotShellRunner.kt
+symbol WorkspaceCommandResult in Workspace.kt
+symbol WorkspaceFileEntry in Workspace.kt
+symbol WorkspaceManager in WorkspaceManager.kt
+symbol WorkspaceShellStatus in Workspace.kt
+symbol WorkspaceStorageArea in Workspace.kt
+symbol WorkspaceTreeResult in Workspace.kt
+app imports (13): BackgroundStatus,ProotShellRunner,RootfsInstallProgress,RootfsInstallStage,RootfsInstaller,Workspace,WorkspaceBindMount,WorkspaceCommandResult,WorkspaceFileEntry,WorkspaceManager,WorkspaceShellStatus,WorkspaceStorageArea,WorkspaceTreeResult
+check symbols DONE
+methods checked=23
+check methods DONE
+fields checked=25
+check fields DONE
+proot runner checked
+check proot DONE
+libbusybox.so size=1589328 sha256=6b23c93ba7ac1c2db0d3a4e5a691a86c50113d4f6bae21b40ed6e0c9d0edccfa
+libbusybox.so ELF ok
+check busybox DONE
+DI checked
+check di DONE
+---- summary ----
+failures=0

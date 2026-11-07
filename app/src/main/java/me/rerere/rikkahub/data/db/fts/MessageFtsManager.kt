@@ -45,7 +45,10 @@ const val MESSAGE_FTS_CREATE_SQL = """
     )
 """
 
-class MessageFtsManager(private val database: AppDatabase) {
+class MessageFtsManager(
+    private val database: AppDatabase,
+    private val appContext: android.content.Context? = null,
+) {
 
     private val db get() = database.openHelper.writableDatabase
 
@@ -57,11 +60,13 @@ class MessageFtsManager(private val database: AppDatabase) {
      * reinserted by the caller (see [me.rerere.rikkahub.data.repository.ConversationRepository.rebuildAllIndexes]).
      */
     suspend fun dropAndRecreate() = withContext(Dispatchers.IO) {
+        appContext?.let { SimpleDictManager.ensureRegistered(it, db) }
         db.execSQL("DROP TABLE IF EXISTS message_fts")
         db.execSQL(MESSAGE_FTS_CREATE_SQL.trimIndent())
     }
 
     suspend fun indexConversation(conversation: Conversation) = withContext(Dispatchers.IO) {
+        appContext?.let { SimpleDictManager.ensureRegistered(it, db) }
         val conversationId = conversation.id.toString()
         db.execSQL("DELETE FROM message_fts WHERE conversation_id = ?", arrayOf(conversationId))
         conversation.messageNodes.forEach { node ->
@@ -108,6 +113,7 @@ class MessageFtsManager(private val database: AppDatabase) {
         keyword: String,
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
     ): List<MessageSearchResult> = withContext(Dispatchers.IO) {
+        appContext?.let { SimpleDictManager.ensureRegistered(it, db) }
         val results = mutableListOf<MessageSearchResult>()
         val cursor = db.query(
             """

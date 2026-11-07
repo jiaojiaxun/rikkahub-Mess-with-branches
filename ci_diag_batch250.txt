@@ -1,0 +1,73 @@
+chatvm OK: PendingSend(content, quotedMessageId) wired in enqueue+dequeue
+1 quote queue fix DONE
+probe MemoryDAO.kt lines=51
+dao L1:package me.rerere.rikkahub.data.db.dao
+dao L3:import androidx.room.Dao
+dao L4:import androidx.room.Insert
+dao L5:import androidx.room.Query
+dao L6:import androidx.room.Update
+dao L7:import kotlinx.coroutines.flow.Flow
+dao L8:import me.rerere.rikkahub.data.db.entity.MemoryEntity
+dao L10:@Dao
+dao L11:interface MemoryDAO {
+dao L12:// rhShortMem: 长期/全局查询只看 conversation_id 为空的记录, 会话私有记忆不走这里
+dao L13:@Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = ''")
+dao L14:fun getMemoriesOfAssistantFlow(assistantId: String): Flow<List<MemoryEntity>>
+dao L16:@Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = ''")
+dao L17:suspend fun getMemoriesOfAssistant(assistantId: String): List<MemoryEntity>
+dao L19:// rhShortMem: 单个会话的短期记忆(生成时注入用)
+dao L20:@Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = :conversationId")
+dao L21:fun getMemoriesOfConversationFlow(assistantId: String, conversationId: String): Flow<List<MemoryEntity>>
+dao L23:@Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id = :conversationId")
+dao L24:suspend fun getMemoriesOfConversation(assistantId: String, conversationId: String): List<MemoryEntity>
+dao L26:// rhShortMem: 该助手名下全部短期记忆(管理页按会话分组用)
+dao L27:@Query("SELECT * FROM memoryentity WHERE assistant_id = :assistantId AND conversation_id != ''")
+dao L28:fun getSessionMemoriesOfAssistantFlow(assistantId: String): Flow<List<MemoryEntity>>
+dao L30:@Query("SELECT * FROM memoryentity")
+dao L31:fun getAllMemoriesFlow(): Flow<List<MemoryEntity>>
+dao L33:@Query("SELECT * FROM memoryentity")
+dao L34:suspend fun getAllMemories(): List<MemoryEntity>
+dao L36:@Query("SELECT * FROM memoryentity WHERE id = :id")
+dao L37:suspend fun getMemoryById(id: Int): MemoryEntity?
+dao L39:@Insert
+dao L40:suspend fun insertMemory(memory: MemoryEntity): Long
+dao L42:@Update
+dao L43:suspend fun updateMemory(memory: MemoryEntity)
+dao L45:@Query("DELETE FROM memoryentity WHERE id = :id")
+dao L46:suspend fun deleteMemory(id: Int)
+dao L48:@Query("DELETE FROM memoryentity WHERE assistant_id = :assistantId")
+dao L49:suspend fun deleteMemoriesOfAssistant(assistantId: String)
+dao L50:}
+probe MemoryRepository entries=23
+repo L14:fun getMemoriesOfAssistantFlow(assistantId: String): Flow<List<AssistantMemory>> =
+repo L15:memoryDAO.getMemoriesOfAssistantFlow(assistantId)
+repo L20:suspend fun getMemoriesOfAssistant(assistantId: String): List<AssistantMemory> {
+repo L21:return memoryDAO.getMemoriesOfAssistant(assistantId)
+repo L25:fun getGlobalMemoriesFlow(): Flow<List<AssistantMemory>> =
+repo L26:memoryDAO.getMemoriesOfAssistantFlow(GLOBAL_MEMORY_ID)
+repo L31:suspend fun getGlobalMemories(): List<AssistantMemory> {
+repo L32:return memoryDAO.getMemoriesOfAssistant(GLOBAL_MEMORY_ID)
+repo L36:suspend fun deleteMemoriesOfAssistant(assistantId: String) {
+repo L37:memoryDAO.deleteMemoriesOfAssistant(assistantId)
+repo L40:suspend fun updateContent(id: Int, content: String): AssistantMemory {
+repo L41:val old = memoryDAO.getMemoryById(id) ?: error("Memory record #$id not found")
+repo L45:memoryDAO.updateMemory(newMemory)
+repo L53:suspend fun addMemory(assistantId: String, content: String, conversationId: String = ""): AssistantMemory {
+repo L60:id = memoryDAO.insertMemory(
+repo L72:fun getMemoriesOfConversationFlow(assistantId: String, conversationId: String): Flow<List<AssistantMemory>> =
+repo L73:memoryDAO.getMemoriesOfConversationFlow(assistantId, conversationId)
+repo L78:suspend fun getMemoriesOfConversation(assistantId: String, conversationId: String): List<AssistantMemory> {
+repo L79:return memoryDAO.getMemoriesOfConversation(assistantId, conversationId)
+repo L84:fun getSessionMemoriesOfAssistantFlow(assistantId: String): Flow<List<AssistantMemory>> =
+repo L85:memoryDAO.getSessionMemoriesOfAssistantFlow(assistantId)
+repo L90:suspend fun deleteMemory(id: Int) {
+repo L91:memoryDAO.deleteMemory(id)
+probe AssistantMemoryPage hits=7
+page L168:selected = memory.conversationId == cid,
+page L169:onClick = { update(memory.copy(conversationId = cid)) },
+page L180:} else if (assistant.enableShortMemory && memory.conversationId.isNotBlank()) {
+page L197:text = conversationTitles[memory.conversationId]?.ifBlank { null }
+page L227:(!assistant.enableShortMemory || memory.conversationId.isNotBlank()),
+page L408:conversationId = if (assistant.enableShortMemory) defaultConvId else "",
+page L423:val groupedShortMemories = memories.groupBy { it.conversationId }
+2 memory probe DONE

@@ -1,0 +1,2 @@
+chatlist OK: preview search restored
+chatpage OK: top bar row 58 -> 50, total aligns to 64dp

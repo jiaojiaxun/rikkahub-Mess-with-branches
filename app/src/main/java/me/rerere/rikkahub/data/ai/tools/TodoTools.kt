@@ -25,12 +25,16 @@ private val TODO_STATUSES = listOf("pending", "in_progress", "completed")
 fun createTodoTool(): Tool = Tool(
     name = TODO_TOOL_NAME,
     description = """
-        Create or update the task plan for the current work. Use it to break a multi-step
-        task into an explicit checklist and keep it current as you make progress.
+        Create or update the task plan for the current work.
+
+        MANDATORY FIRST STEP ( rhPlanBar237 ): For ANY task that involves 2 or more distinct steps,
+        your FIRST tool call MUST be todo_write with the complete plan - before any other
+        tool call, file write, or user-visible work. The user sees this plan as a live
+        progress bar and expects it from the very start, not mid-task. This is required
+        behavior, not optional.
 
         Rules:
-        - Call it BEFORE starting a multi-step task (3+ distinct steps), and again every
-          time a step's status changes. Skip it for simple single-step requests.
+        - Update the plan every time a step's status changes.
         - Always pass the FULL list (not just the changed items); previously sent items
           must be repeated.
         - Exactly one item may be "in_progress" at a time; mark an item "completed" only

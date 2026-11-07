@@ -43,6 +43,16 @@ fun ToolApprovalState.canResumeToolExecution(): Boolean {
 }
 
 /**
+ * rhHiddenPart283: 隐藏段单源定义。metadata 里带 rikkahub.hidden=true 的 Text part
+ * 是只给模型看的注入内容（如心率），一切面向用户的文本出口（toText/summaryAsText/引用预览）
+ * 都应当把它过滤掉。app 模块的心率注入器写 metadata 时也用这个键。
+ */
+const val HIDDEN_PART_META_KEY = "rikkahub.hidden"
+
+val UIMessagePart.isHidden: Boolean
+    get() = (metadata?.get(HIDDEN_PART_META_KEY) as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
+
+/**
  * 服务端工具调用的通用生命周期状态。
  *
  * Provider 返回的更细粒度状态应保存在 [UIMessagePart.ServerTool.metadata] 中，避免在通用层绑定具体协议。

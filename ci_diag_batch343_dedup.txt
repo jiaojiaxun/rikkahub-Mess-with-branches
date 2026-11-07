@@ -1,0 +1,7 @@
+chrome: balance (0, 0) -> (0, 0)
+chrome: capability row now optional
+chatinput: trailing lambda size=3293
+chatinput: balance (0, 0) -> (0, 0)
+chatinput: ＋ menu carries attachments + 文件与工具 only
+drawer: balance (0, 0) -> (0, 0)
+drawer: end time also considers tool start

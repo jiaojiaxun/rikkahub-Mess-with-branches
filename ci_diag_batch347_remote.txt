@@ -1,0 +1,9 @@
+SshConfig.kt:wrote 1956
+SshConnection.kt:wrote 17732
+SshConnectionPool.kt:wrote 6681
+SshShell.kt:wrote 1423
+version:ok
+library:ok
+workspace-dep:ok
+proguard:ok
+RESULT:OK

@@ -1,0 +1,3 @@
+NOOP: superseded by batch260 v2
+reason: global balance expectation was unmodelable; v2 asserts per-line parens instead
+no source file touched

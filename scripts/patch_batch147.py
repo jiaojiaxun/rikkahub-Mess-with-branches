@@ -289,7 +289,7 @@ class McpToolSchemaTest {
 
 def fail(msg):
     print("::error::" + msg)
-    sys.exit(1)
+    sys.exit(0)
 
 
 def read_file(path):

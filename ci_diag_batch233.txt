@@ -1,0 +1,4 @@
+=== batch233 BEFORE rhA3Wiring lines (3) ===
+L103: import me.rerere.rikkahub.data.model.getAssistantOf // rhA3Wiring
+L104: import me.rerere.rikkahub.data.model.getChatModelOf // rhA3Wiring
+L1180: val assistant = settings.getAssistantOf(conversation) // rhA3Wiring

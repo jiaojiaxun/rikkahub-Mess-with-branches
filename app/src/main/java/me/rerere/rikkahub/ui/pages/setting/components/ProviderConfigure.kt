@@ -82,6 +82,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 import kotlin.reflect.KClass
+import androidx.compose.foundation.layout.size // rhMultiKey
+import androidx.compose.foundation.layout.width // rhMultiKey
+import androidx.compose.runtime.LaunchedEffect // rhMultiKey
+import me.rerere.hugeicons.stroke.Add01 // rhMultiKey
 
 @Composable
 fun ProviderConfigure(
@@ -325,19 +329,10 @@ private fun ProviderConfigureOpenAI(
         modifier = Modifier.fillMaxWidth(),
     )
 
-    var keyVisible by remember { mutableStateOf(false) }
-    OutlinedTextField(
-        value = provider.apiKey,
-        onValueChange = { onEdit(provider.copy(apiKey = it.trim())) },
-        label = { Text(stringResource(R.string.setting_provider_page_api_key)) },
-        modifier = Modifier.fillMaxWidth(),
-        maxLines = 3,
-        visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-        trailingIcon = {
-            IconButton(onClick = { keyVisible = !keyVisible }) {
-                Icon(if (keyVisible) HugeIcons.ViewOff else HugeIcons.View, contentDescription = stringResource(if (keyVisible) R.string.accessibility_hide_password else R.string.accessibility_show_password))
-            }
-        },
+    // rhMultiKey: one field per key; the add button appends another
+    RhMultiApiKeyBlock(
+        apiKey = provider.apiKey,
+        onApiKeyChange = { onEdit(provider.copy(apiKey = it)) },
     )
 
     OutlinedTextField(
@@ -348,15 +343,21 @@ private fun ProviderConfigureOpenAI(
         isError = provider.baseUrl.isNotBlank() && !provider.baseUrl.isValidBaseUrl(),
     )
 
-    if (!provider.useResponseApi) {
-        OutlinedTextField(
-            value = provider.chatCompletionsPath,
-            onValueChange = { onEdit(provider.copy(chatCompletionsPath = it.trim())) },
-            label = { Text(stringResource(R.string.setting_provider_page_api_path)) },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !provider.builtIn,
-        )
-    }
+    // rh-batch1:responses-path - one path field that edits whichever API is active
+    OutlinedTextField(
+        value = if (provider.useResponseApi) provider.responsesPath else provider.chatCompletionsPath,
+        onValueChange = {
+            val path = it.trim()
+            onEdit(
+                if (provider.useResponseApi) provider.copy(responsesPath = path)
+                else provider.copy(chatCompletionsPath = path)
+            )
+        },
+        label = { Text(stringResource(R.string.setting_provider_page_api_path)) },
+        placeholder = { Text(if (provider.useResponseApi) "/responses" else "/chat/completions") },
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !provider.builtIn,
+    )
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -591,19 +592,10 @@ private fun ProviderConfigureClaude(
         maxLines = 3,
     )
 
-    var keyVisible by remember { mutableStateOf(false) }
-    OutlinedTextField(
-        value = provider.apiKey,
-        onValueChange = { onEdit(provider.copy(apiKey = it.trim())) },
-        label = { Text(stringResource(R.string.setting_provider_page_api_key)) },
-        modifier = Modifier.fillMaxWidth(),
-        maxLines = 3,
-        visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-        trailingIcon = {
-            IconButton(onClick = { keyVisible = !keyVisible }) {
-                Icon(if (keyVisible) HugeIcons.ViewOff else HugeIcons.View, contentDescription = stringResource(if (keyVisible) R.string.accessibility_hide_password else R.string.accessibility_show_password))
-            }
-        },
+    // rhMultiKey: one field per key; the add button appends another
+    RhMultiApiKeyBlock(
+        apiKey = provider.apiKey,
+        onApiKeyChange = { onEdit(provider.copy(apiKey = it)) },
     )
 
     OutlinedTextField(
@@ -703,19 +695,10 @@ private fun ProviderConfigureGoogle(
     )
 
     if (!(provider.vertexAI && provider.useServiceAccount)) {
-        var keyVisible by remember { mutableStateOf(false) }
-        OutlinedTextField(
-            value = provider.apiKey,
-            onValueChange = { onEdit(provider.copy(apiKey = it.trim())) },
-            label = { Text(stringResource(R.string.setting_provider_page_api_key)) },
-            modifier = Modifier.fillMaxWidth(),
-            maxLines = 3,
-            visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = { keyVisible = !keyVisible }) {
-                    Icon(if (keyVisible) HugeIcons.ViewOff else HugeIcons.View, contentDescription = stringResource(if (keyVisible) R.string.accessibility_hide_password else R.string.accessibility_show_password))
-                }
-            },
+        // rhMultiKey: one field per key; the add button appends another
+        RhMultiApiKeyBlock(
+            apiKey = provider.apiKey,
+            onApiKeyChange = { onEdit(provider.copy(apiKey = it)) },
         )
     }
 
@@ -1748,5 +1731,71 @@ private fun InstalledModelRow(
                 }
             },
         )
+    }
+}
+
+// rhMultiKey: shared multi-key input block for provider settings.
+// provider.apiKey stays a single String; one field is shown per key and all
+// values are re-joined with newline separators; KeyRoulette splits on
+// whitespace and commas, and rotates between the keys.
+private val RH_KEY_SPLIT_REGEX = Regex("[\\s,]+")
+
+private fun rhParseApiKeys(raw: String): List<String> =
+    raw.split(RH_KEY_SPLIT_REGEX).map { it.trim() }.filter { it.isNotEmpty() }
+
+@Composable
+private fun RhMultiApiKeyBlock(
+    apiKey: String,
+    onApiKeyChange: (String) -> Unit,
+) {
+    var rhFields by remember { mutableStateOf(rhParseApiKeys(apiKey).ifEmpty { listOf("") }) }
+    var rhVisibleIndex by remember { mutableStateOf(-1) }
+    LaunchedEffect(apiKey) {
+        val rhCanonical = rhFields.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+        if (apiKey != rhCanonical) {
+            rhFields = rhParseApiKeys(apiKey).ifEmpty { listOf("") }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        rhFields.forEachIndexed { index, value ->
+            val rhLabel = stringResource(R.string.setting_provider_page_api_key) +
+                (if (rhFields.size > 1) " #" + (index + 1) else "")
+            OutlinedTextField(
+                value = value,
+                onValueChange = { newValue ->
+                    rhFields = rhFields.toMutableList().also { it[index] = newValue }
+                    onApiKeyChange(
+                        rhFields.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+                    )
+                },
+                label = { Text(rhLabel) },
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 3,
+                visualTransformation = if (rhVisibleIndex == index) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = {
+                        rhVisibleIndex = if (rhVisibleIndex == index) -1 else index
+                    }) {
+                        Icon(
+                            if (rhVisibleIndex == index) HugeIcons.ViewOff else HugeIcons.View,
+                            contentDescription = stringResource(
+                                if (rhVisibleIndex == index) R.string.accessibility_hide_password
+                                else R.string.accessibility_show_password
+                            )
+                        )
+                    }
+                },
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            TextButton(onClick = { rhFields = rhFields + "" }) {
+                Icon(HugeIcons.Add01, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("增加 API Key")
+            }
+        }
     }
 }

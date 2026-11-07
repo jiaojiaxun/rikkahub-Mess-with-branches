@@ -62,6 +62,20 @@ class CronJobWorker(
             store.upsert(job.copy(lastRunAt = now))
         }
 
+        // rhCron341: 先落一条「已开始」，卡住也有痕迹；用户能在历史里看到到底跑没跑
+        runCatching {
+            store.addHistory(
+                ScheduledJobRunRecord(
+                    id = Uuid.random().toString(),
+                    jobId = job.id,
+                    jobName = job.name,
+                    scheduledAtMs = now,
+                    startedAtMs = now,
+                    outcome = if (manual) "manual_started" else "started",
+                )
+            )
+        }
+
         var outcome = "success"
         var errorText: String? = null
         try {

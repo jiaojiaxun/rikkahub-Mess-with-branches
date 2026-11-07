@@ -1,0 +1,8 @@
+TerminalTransport:wrote
+TerminalSessionClient:wrote
+TerminalOutput:wrote
+ByteQueue:wrote
+gradle:wrote
+manifest:wrote
+settings:ok
+RESULT:OK

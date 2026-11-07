@@ -1,0 +1,4 @@
+ABORT setting: status-when count changed
+1 SettingMcpPage ABORTED (no file written): setting when count
+ABORT picker: when-block end (blank line before Column) not found
+2 McpPicker ABORTED (no file written): picker end

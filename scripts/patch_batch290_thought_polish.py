@@ -5,7 +5,7 @@
 #522/#523 both failed before Kotlin with Python SyntaxError at a multi-line
 parenthesized expression after the CI sed rewrite. v9 removes that whole
 class of failure: no multi-line parenthesized expressions, no raw-string
-ambiguity, no exit(1) literal, and no full-file Kotlin duplication.
+ambiguity, no exit(0) literal, and no full-file Kotlin duplication.
 '''
 import sys
 from pathlib import Path

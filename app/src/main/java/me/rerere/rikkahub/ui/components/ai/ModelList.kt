@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -87,6 +88,8 @@ import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
 import me.rerere.rikkahub.ui.components.ui.Tag
 import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.components.ui.icons.HeartIcon
+import me.rerere.rikkahub.ui.hooks.readStringPreference
+import me.rerere.rikkahub.ui.hooks.writeStringPreference
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.theme.extendColors
 import me.rerere.rikkahub.utils.toDp
@@ -101,6 +104,16 @@ import kotlin.uuid.Uuid
 internal fun Model.matchesPickerType(pickerType: ModelType): Boolean =
     type == pickerType ||
         (pickerType == ModelType.IMAGE && Modality.IMAGE in outputModalities)
+
+/**
+ * rh-batch12: collapse-by-provider - SharedPreferences key holding the comma-separated ids of
+ * the providers the user folded away in the model picker.
+ */
+private const val COLLAPSED_PROVIDERS_PREF_KEY = "collapsedModelListProviders"
+
+/** rh-batch12: tolerant decode - unknown/blank entries are dropped, never parsed as Uuid. */
+private fun decodeCollapsedProviderIds(raw: String?): Set<String> =
+    raw.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 
 class ModelListState internal constructor(
     modelId: Uuid?,
@@ -262,6 +275,19 @@ fun ModelSelector(
     )
 }
 
+// rhModelSearch: 搜索时把 供应商名 / API Key / BaseUrl 一起纳入匹配。
+// ProviderSetting 是 sealed class，apiKey/baseUrl 只挂在部分子类上，按实际子类提取。
+private fun rhProviderSearchExtras(provider: ProviderSetting): String {
+    val extras = when (provider) {
+        is ProviderSetting.OpenAI -> provider.apiKey + " " + provider.baseUrl
+        is ProviderSetting.Google -> provider.apiKey + " " + provider.baseUrl
+        is ProviderSetting.Claude -> provider.apiKey + " " + provider.baseUrl
+        else -> ""
+    }
+    return provider.name + " " + extras
+}
+
+
 private fun formatModelContext(tokens: Int): String = when {
     tokens >= 1_000_000 -> "${tokens / 1_000_000}M 上下文"
     tokens >= 1_000 -> "${tokens / 1_000}K 上下文"
@@ -337,21 +363,44 @@ private fun ColumnScope.ModelList(
         model to provider
     }
 
-    var searchKeywords by remember { mutableStateOf("") }
+        var searchKeywords by remember { mutableStateOf("") }
 
-    val typeFilteredModelsByProvider = remember(providers, modelType) {
+    // rh-batch12: collapse-by-provider, remembered across sessions. Stored in SharedPreferences
+    // rather than Settings so a pure view preference needs no serialized-schema change.
+    val localContext = LocalContext.current
+    var collapsedProviderIds by remember {
+        mutableStateOf(
+            decodeCollapsedProviderIds(
+                localContext.readStringPreference(COLLAPSED_PROVIDERS_PREF_KEY)
+            )
+        )
+    }
+    fun setProviderCollapsed(providerId: Uuid, collapsed: Boolean) {
+        val id = providerId.toString()
+        val next = if (collapsed) collapsedProviderIds + id else collapsedProviderIds - id
+        collapsedProviderIds = next
+        localContext.writeStringPreference(COLLAPSED_PROVIDERS_PREF_KEY, next.joinToString(","))
+    }
+
+        val typeFilteredModelsByProvider = remember(providers, modelType, collapsedProviderIds) {
         providers.associate { provider ->
+            // rh-batch12: a folded provider contributes no models, so the initial-scroll maths
+            // below and the emitted list stay in agreement.
             provider.id to provider.models.fastFilter { it.matchesPickerType(modelType) }
+                .let { if (provider.id.toString() in collapsedProviderIds) emptyList() else it }
         }
     }
 
-    val searchFilteredModelsByProvider = remember(providers, modelType, searchKeywords) {
-        providers.associate { provider ->
-            provider.id to provider.models.fastFilter {
-                it.matchesPickerType(modelType) && it.displayName.contains(searchKeywords, true)
+        // rhModelSearch: 搜索同时匹配 模型名 / 供应商名 / API Key / BaseUrl（原为只匹配模型名）
+        val searchFilteredModelsByProvider = remember(providers, modelType, searchKeywords, collapsedProviderIds) {
+            val rhQuery = searchKeywords.trim()
+            providers.associate { provider ->
+                val rhProviderHit = rhQuery.isNotEmpty() && rhProviderSearchExtras(provider).contains(rhQuery, true)
+                provider.id to provider.models.fastFilter {
+                    it.matchesPickerType(modelType) && (rhProviderHit || it.displayName.contains(rhQuery, true))
+                }.let { if (provider.id.toString() in collapsedProviderIds) emptyList() else it }
             }
-        }
-    }
+        } // rhModelFoldFix: 折叠状态重新参与 items 过滤（batch124 重写时丢失）
 
     // 计算当前选中模型的位置
     val selectedModelPosition = remember(currentModel, favoriteModels, providers, typeFilteredModelsByProvider) {
@@ -576,13 +625,31 @@ private fun ColumnScope.ModelList(
                         color = MaterialTheme.colorScheme.primary,
                     )
 
-                    Spacer(modifier = Modifier.weight(1f))
+                                        Spacer(modifier = Modifier.weight(1f))
 
                     ProviderBalanceText(
                         providerSetting = providerSetting,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
+
+                    // rh-batch12: per-provider fold toggle. Text glyphs instead of an icon, so no
+                    // new HugeIcons import and no rotation modifier are required.
+                    IconButton(
+                        onClick = {
+                            setProviderCollapsed(
+                                providerSetting.id,
+                                providerSetting.id.toString() !in collapsedProviderIds,
+                            )
+                        },
+                        modifier = Modifier.size(24.dp),
+                    ) {
+                        Text(
+                            text = if (providerSetting.id.toString() in collapsedProviderIds) "\u25b8" else "\u25be",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
 

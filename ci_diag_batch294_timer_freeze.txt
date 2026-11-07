@@ -1,0 +1,1 @@
+drawer 294 OK: block-active timer freezes after steps finish

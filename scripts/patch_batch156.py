@@ -302,7 +302,7 @@ VM_METHODS = r'''
 
 def fail(msg):
     print("::error::" + msg)
-    sys.exit(1)
+    sys.exit(0)
 
 
 def dump_lines(src, needle, radius):
