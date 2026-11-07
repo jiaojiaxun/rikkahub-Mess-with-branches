@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # rhRemote356a: 跳板机数据层 (Config + Settings + Repository 解密)
+# v2 修复: v1 的 os.getcwd__ 双下划线笔误导致 import 即崩, patch 链在此中断。
 # SshConnectionConfig.jumpHost 字段暂无人消费(356b 接线), 本批可独立编译。
 import os
 
 MARK = "rhRemote356a"
 DIAG = "ci_diag_batch356a_remote.txt"
-ROOT = os.environ.get("GITHUB_WORKSPACE", os.getcwd__)
+ROOT = os.environ.get("GITHUB_WORKSPACE", os.getcwd())
 
 
 def log(msg):
