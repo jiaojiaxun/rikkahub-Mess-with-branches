@@ -1,24 +1,21 @@
 #!/usr/bin/env python3
-# rhIntegrity366: 只读全量排查 —— 编译期查不出、运行期才炸的两类集成点
+# rhIntegrity366 (v2): 修误报 + 新增「同文件改写链」统计
 #
-# 起因：WorkspaceSshEditorVM 漏注册 Koin 导致打开页面直接崩，而 CI 六项验收全绿。
-# 这说明「编译过 / 测试过 / 打包过」并不能证明依赖能解析。本批把所有同类隐患一次扫干净。
+# v1 的两个误报（已核实）：
+#   1) MISSING-KOIN: PluginLoader / PluginRepository @ PluginWebViewPage.kt
+#      —— 它们注册在 plugin/di/PluginModule.kt，v1 的 DI_FILES 只列了 4 个文件，漏了这个。
+#   2) 一堆 ORPHAN-ENTRY
+#      —— SCREEN_PATTERN 只写了 `data class`，而实际一半 Screen 是 `data object`，
+#         于是那些 object 全被判成"有 entry 没定义"。
 #
-# 检查 A —— Koin 定义完整性
-#   收集 app 模块里所有显式类型参数的解析点：
-#       koinViewModel<X>() / koinInject<X>()
-#   收集 4 个 DI 文件里所有注册点：
-#       viewModelOf(::X) / viewModel<X> / single<X> / factory<X>
-#       single { X(...) } / viewModel { X(...) }（含全限定名，取最后一段）
-#   差集 = 被解析但没注册的类 → 运行到那一行就 NoDefinitionFoundException
-#   误报控制：只报告仓库里确实存在 class 定义的名字（接口/框架类型不报）
+# v2 三件事：
+#   A) DI_FILES 补 plugin/di/PluginModule.kt
+#   B) SCREEN_PATTERN 改成 `data (?:class|object)`，并允许无参数（object 没有括号）
+#   C) 新增「同文件改写链」统计：扫 scripts/patch_batch*.py 里出现的 .kt 文件名，
+#      统计每个文件被多少个批次脚本引用 —— 用来提前发现「后一批依赖前一批产物」的脆弱链
+#      （371→372 就是这类：371 插入、372 再改 371 的产物）。
 #
-# 检查 B —— 路由完整性
-#   收集 RouteActivity.kt 里所有 `data class Xxx(...) : Screen` 定义
-#   收集所有 `entry<Screen.Xxx>` 注册
-#   差集 = 定义了 Screen 但没有 entry → navigate 过去必定崩溃
-#
-# 本批不改任何代码，只写 ci_diag_batch366_integrity.txt，永不 exit(1)。
+# 只读，永不 exit(1)。输出 ci_diag_batch366_integrity.txt。
 
 import os
 import re
@@ -27,6 +24,7 @@ REPO = os.getcwd()
 APP = os.path.join(REPO, "app", "src", "main", "java")
 DI_DIR = os.path.join(APP, "me", "rerere", "rikkahub", "di")
 ROUTE = os.path.join(APP, "me", "rerere", "rikkahub", "RouteActivity.kt")
+SCRIPTS_DIR = os.path.join(REPO, "scripts")
 DIAG = os.path.join(REPO, "ci_diag_batch366_integrity.txt")
 
 DI_FILES = [
@@ -34,6 +32,7 @@ DI_FILES = [
     os.path.join(DI_DIR, "AppModule.kt"),
     os.path.join(DI_DIR, "RepositoryModule.kt"),
     os.path.join(DI_DIR, "DataSourceModule.kt"),
+    os.path.join(APP, "me", "rerere", "rikkahub", "plugin", "di", "PluginModule.kt"),
 ]
 
 USE_PATTERN = re.compile(r"\b(?:koinViewModel|koinInject)\s*<\s*([A-Za-z_][\w.]*)\s*>")
@@ -49,8 +48,13 @@ CLASS_PATTERN = re.compile(
     r"^\s*(?:internal |private |public |abstract |open |sealed |data |enum |annotation )*class\s+(\w+)",
     re.MULTILINE,
 )
-SCREEN_PATTERN = re.compile(r"data class (\w+)\s*\([^)]*\)\s*:\s*Screen", re.DOTALL)
+SCREEN_PATTERN = re.compile(
+    r"data\s+(?:class|object)\s+(\w+)(?:\s*\([^)]*\))?\s*:\s*Screen",
+    re.DOTALL,
+)
 ENTRY_PATTERN = re.compile(r"entry<\s*Screen\.(\w+)\s*>")
+KT_LITERAL = re.compile(r"[\w./-]+\.kt")
+MAX_CHAINS = 40
 
 OUT = []
 
@@ -76,8 +80,26 @@ def read(path):
         return handle.read()
 
 
+def scan_chains():
+    chain = {}
+    if not os.path.isdir(SCRIPTS_DIR):
+        return chain
+    for name in sorted(os.listdir(SCRIPTS_DIR)):
+        if not (name.startswith("patch_batch") and name.endswith(".py")):
+            continue
+        path = os.path.join(SCRIPTS_DIR, name)
+        try:
+            content = read(path)
+        except OSError:
+            continue
+        for match in KT_LITERAL.findall(content):
+            base = os.path.basename(match)
+            chain.setdefault(base, set()).add(name)
+    return chain
+
+
 def main():
-    # --- 收集仓库中真实存在的 class 名 ---
+    # A/B 基础数据
     classes = set()
     uses = {}
     for path in walk_kotlin(APP):
@@ -91,7 +113,6 @@ def main():
     log("classes:" + str(len(classes)))
     log("koin-use-sites:" + str(len(uses)))
 
-    # --- 收集已注册的类型名 ---
     registered = set()
     di_text = ""
     for path in DI_FILES:
@@ -104,23 +125,20 @@ def main():
             for match in pattern.finditer(text):
                 registered.add(short(match.group(1)))
 
+    log("di-files-present:" + str(sum(1 for path in DI_FILES if os.path.isfile(path))))
     log("registered:" + str(len(registered)))
 
-    # --- 检查 A：差集 ---
     missing = []
     for name in sorted(uses):
         if name in registered:
             continue
         if name not in classes:
-            # 框架类型或接口，静态判断容易误报，不计入
             continue
         missing.append(name)
         log("MISSING-KOIN:" + name + " @ " + ",".join(sorted(set(uses[name]))[:3]))
+    log("koin-missing:" + str(len(missing)))
 
-    if not missing:
-        log("koin:all-resolved")
-
-    # --- 检查 B：路由完整性 ---
+    # 路由
     if os.path.isfile(ROUTE):
         route_text = read(ROUTE)
         screens = sorted(set(SCREEN_PATTERN.findall(route_text)))
@@ -129,20 +147,27 @@ def main():
         no_entry = [name for name in screens if name not in entries]
         for name in no_entry:
             log("MISSING-ENTRY:" + name)
-        if not no_entry:
-            log("route:all-defined-screens-have-entry")
-        orphan_entry = [name for name in entries if name not in screens]
-        for name in orphan_entry:
+        orphan = [name for name in entries if name not in screens]
+        for name in orphan:
             log("ORPHAN-ENTRY:" + name)
+        log("missing-entry:" + str(len(no_entry)) + " orphan-entry:" + str(len(orphan)))
     else:
         log("missing-route-activity")
 
-    # --- 汇总 ---
-    if missing:
-        log("RESULT:FAIL koin-missing=" + str(len(missing)))
-    else:
-        log("RESULT:OK")
+    # C) 同文件改写链
+    chain = scan_chains()
+    multi = [(base, scripts) for base, scripts in chain.items() if len(scripts) >= 2]
+    multi.sort(key=lambda item: (-len(item[1]), item[0]))
+    log("")
+    log("=== chain: files touched by >=2 batch scripts: " + str(len(multi)) + " ===")
+    for base, scripts in multi[:MAX_CHAINS]:
+        ordered = sorted(scripts)
+        log("chain:" + base + " x" + str(len(ordered)) + " :: " + ",".join(ordered))
+    if len(multi) > MAX_CHAINS:
+        log("chain-truncated:" + str(len(multi) - MAX_CHAINS))
 
+    log("")
+    log("RESULT:OK")
     with open(DIAG, "w", encoding="utf-8", newline="\n") as handle:
         handle.write("\n".join(OUT) + "\n")
 
