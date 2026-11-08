@@ -1,21 +1,14 @@
-"""batch372 — 「文件与工具 → 权限管理」
+"""batch372 v2 — 「文件与工具 → 权限管理」
 
-用户反馈：聊天框 → 文件与工具 → 里面的入口点开是「快捷消息 / 模式注入 / 世界书 / 技能」，
-内容不对。要求改成权限中心，只显示：
-  助手本地工具内允许的权限 + MCP + 记忆 + 工作区 等等
-并且每项都有类似开关可以直接开关。
+v1（48408d3）已把面板落地，但 MCP 区复用了 McpPickerListItem（二级弹层多选），
+用户要的是「开关」，所以 v2 把 MCP 改成内联 Switch 列表（一屏直读直改）。
 
-做法：
-1) 新建 RhPermissionCenter.kt（同包）：分组列表面板
-   - 本地工具：先列「已开启」的（Switch 可直接关），再给一个「显示全部工具」展开全量 50 项
-   - MCP：复用同包 McpPickerListItem（多选服务器）
-   - 记忆：长期 / 全局共享 / 短期（互斥处理）
-   - 工作区：绑定 / 解绑（就地选择）
-   - 其他：联网搜索 / 最近对话引用 / 时间提醒
-   - 底部保留「快捷消息 · 提示词注入 · 技能」入口，避免功能变死
-2) FilesPicker.kt：把原来的「扩展」行替换成「权限管理」行，点击打开新面板。
+其余同 v1：
+  本地工具（已启用可关 + 显示全部 50 项）/ 记忆（长期·全局·短期，互斥）/ 工作区（就地选择）/ 其他（搜索·最近对话·时间提醒）
+  底部保留「快捷消息 · 提示词注入 · 技能」入口，避免原功能变成死入口。
 
-锚点按 CI 真形态（snapshot）写：起止标记切片，不做整块精确匹配。
+同时把 RhPermSwitchRow 的 supportingContent 改成固定 lambda + 内部条件渲染，
+避免 `if (x != null) { { Text() } } else null` 这种 lambda 推断在 Compose 编译器下翻车。
 """
 
 import os
@@ -82,7 +75,6 @@ import androidx.compose.ui.unit.dp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Codesandbox
 import me.rerere.hugeicons.stroke.Folder01
-import me.rerere.hugeicons.stroke.Settings02
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.tools.LocalToolOption
 import me.rerere.rikkahub.data.datastore.Settings
@@ -293,12 +285,22 @@ internal fun RhPermissionCenterSheet(
             if (settings.mcpServers.isEmpty()) {
                 RhPermHint("未添加 MCP 服务器")
             } else {
-                McpPickerListItem(
-                    assistant = assistant,
-                    servers = settings.mcpServers,
-                    mcpManager = mcpManager,
-                    onUpdateAssistant = onUpdateAssistant,
-                )
+                settings.mcpServers.forEach { server ->
+                    val serverName = server.commonOptions.name
+                    RhPermSwitchRow(
+                        title = if (serverName.isBlank()) "MCP 服务器" else serverName,
+                        subtitle = if (server.commonOptions.enable) null else "已在设置中禁用",
+                        checked = assistant.mcpServers.contains(server.id),
+                        onCheckedChange = { enabled ->
+                            val next = if (enabled) {
+                                assistant.mcpServers + server.id
+                            } else {
+                                assistant.mcpServers - server.id
+                            }
+                            onUpdateAssistant(assistant.copy(mcpServers = next))
+                        },
+                    )
+                }
             }
 
             HorizontalDivider()
@@ -472,6 +474,18 @@ private fun RhPermHint(text: String) {
 }
 
 @Composable
+private fun RhPermSubtitle(text: String?) {
+    if (text == null) {
+        return
+    }
+    Text(
+        text = text,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
 private fun RhPermSwitchRow(
     title: String,
     subtitle: String?,
@@ -480,11 +494,7 @@ private fun RhPermSwitchRow(
 ) {
     ListItem(
         headlineContent = { Text(title) },
-        supportingContent = if (subtitle != null) {
-            { Text(subtitle, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-        } else {
-            null
-        },
+        supportingContent = { RhPermSubtitle(subtitle) },
         trailingContent = {
             Switch(checked = checked, onCheckedChange = onCheckedChange)
         },
@@ -580,55 +590,74 @@ END = "        // rhHeartRate: live heart-rate broadcast entry"
 
 def main():
     picker = open(PICKER, "r", encoding="utf-8").read()
-    before = bal(picker)
 
     if "rhPermCenter372" in picker:
         note("picker already patched, skip")
+        if "RhPermissionCenterSheet(" not in picker:
+            note("FAIL sheet call missing in patched picker")
+            open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
+            raise SystemExit(1)
     else:
+        before = bal(picker)
         if picker.count(START) != 1:
             note("FAIL start anchor count=" + str(picker.count(START)))
+            open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
             raise SystemExit(1)
         if picker.count(END) != 1:
             note("FAIL end anchor count=" + str(picker.count(END)))
+            open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
             raise SystemExit(1)
         i = picker.index(START)
         j = picker.index(END)
         if j <= i:
             note("FAIL end before start")
+            open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
             raise SystemExit(1)
-        old_block = picker[i:j]
-        note("old block len=" + str(len(old_block)))
-
+        note("old block len=" + str(j - i))
         new_picker = picker[:i] + NEW_BLOCK + picker[j:]
         after = bal(new_picker)
         note("picker balance " + str(before) + " -> " + str(after))
         if after != before:
             note("FAIL picker balance drift")
+            open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
             raise SystemExit(1)
         if "RhPermissionCenterSheet(" not in new_picker:
             note("FAIL sheet call missing")
+            open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
             raise SystemExit(1)
-
-        # 新文件先落盘，避免 picker 引用不到
-        open(NEWFILE, "w", encoding="utf-8").write(NEW_SRC)
         open(PICKER, "w", encoding="utf-8").write(new_picker)
-        note("picker rewritten, new file written")
+        note("picker rewritten")
+
+    check = bal(NEW_SRC)
+    note("v2 source balance " + str(check) + " len=" + str(len(NEW_SRC)))
+    if check != (0, 0):
+        note("FAIL v2 source unbalanced")
+        open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
+        raise SystemExit(1)
+    open(NEWFILE, "w", encoding="utf-8").write(NEW_SRC)
 
     src = open(NEWFILE, "r", encoding="utf-8").read()
-    check = bal(src)
-    note("new file balance " + str(check) + " len=" + str(len(src)))
-    if check != (0, 0):
-        note("FAIL new file unbalanced")
-        raise SystemExit(1)
-    for must in ["rhPermCenter372", "RhPermissionCenterSheet", "RH_ALL_TOOLS", "McpPickerListItem("]:
-        if must not in src:
-            note("FAIL missing " + must)
+    must = [
+        "rhPermCenter372",
+        "RhPermissionCenterSheet",
+        "RH_ALL_TOOLS",
+        "assistant.copy(mcpServers = next)",
+        "RhPermSubtitle",
+        "快捷消息 · 提示词注入 · 技能",
+    ]
+    for item in must:
+        if item not in src:
+            note("FAIL missing " + item)
+            open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
             raise SystemExit(1)
-    if src.count("LocalToolOption.") < 50:
-        note("WARN tool refs=" + str(src.count("LocalToolOption.")))
+    if "McpPickerListItem(" in src:
+        note("FAIL old mcp picker still used")
+        open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
+        raise SystemExit(1)
 
-    note("DONE permission center wired")
-    print("::error title=rhPermCenter372::OK 权限管理面板已落地（本地工具/MCP/记忆/工作区/其他能力）")
+    note("tool refs=" + str(src.count("LocalToolOption.")))
+    note("DONE permission center v2 (mcp inline switches)")
+    print("::error title=rhPermCenter372::OK 权限管理面板 v2：本地工具/MCP/记忆/工作区/其他能力 全部真开关")
     open(DIAG, "w", encoding="utf-8").write("\n".join(log) + "\n")
 
 
