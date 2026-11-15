@@ -27,9 +27,49 @@ jobs:
           java-version: '21'
 
       # :web needs bun (installWebUiDeps) and pnpm (buildWebUi on Linux).
-      - uses: oven-sh/setup-bun@v2
+      # rhCiFix379: the upstream action pulls bun from the GitHub release CDN, which
+      # answered 504 for this repo at 2026-11-08 08:52 and 08:55 and took the whole job
+      # down before "Apply source patches" (61s / 71s, everything else skipped for 5 days).
+      # Keep the action as the primary path but never let it block, then fall back twice:
+      # bun.sh installer (3 rounds x 3 curl retries) -> npm package (ships its own binary,
+      # does not touch the release CDN). Only if all three fail does the job stop.
+      - name: Setup bun
+        id: setup_bun
+        uses: oven-sh/setup-bun@v2
+        continue-on-error: true
         with:
           bun-version: latest
+
+      - name: Ensure bun (fallbacks)
+        run: |
+          set -uo pipefail
+          if command -v bun >/dev/null 2>&1; then
+            echo "bun ready: $(bun --version)"
+            exit 0
+          fi
+          echo "::warning::setup-bun did not provide bun, trying fallbacks"
+          ok=0
+          for i in 1 2 3; do
+            if curl -fsSL --retry 3 --retry-delay 5 https://bun.sh/install | bash; then
+              ok=1
+              break
+            fi
+            echo "bun.sh attempt $i failed"
+            sleep 8
+          done
+          if [ "$ok" -eq 1 ] && [ -x "$HOME/.bun/bin/bun" ]; then
+            echo "BUN_INSTALL=$HOME/.bun" >> "$GITHUB_ENV"
+            echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+            echo "bun installed via bun.sh"
+            exit 0
+          fi
+          echo "::warning::bun.sh install failed, trying npm registry"
+          if npm install -g bun; then
+            echo "bun installed via npm"
+            exit 0
+          fi
+          echo "::error::bun installation failed through all fallbacks"
+          exit 1
 
       - name: Install pnpm (used by :web:buildWebUi on Linux)
         run: npm install -g pnpm
