@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # upfix381: 回移上游 4 个已实锤的官方修复 (run671 静态定位, 2026-11-21)
+# attempt2: run672 在 setup-java 阶段基础设施抖动失败 (patch/compile 未执行),
+#           本提交仅为重触发, 代码零改动。
 #
 #  A1 (#2000, 上游 c211c0d44): search_web 结果超 32KB 被 maybeTruncateToolOutput
 #     截成 4KB 文本预览, UI 渲染器读不到 JSON 字段 → 搜索结果显示为空。
