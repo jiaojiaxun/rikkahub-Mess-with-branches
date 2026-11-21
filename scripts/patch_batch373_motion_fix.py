@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-# upfix381 UI rollback (user request, 2026-11-21): batch373's transition replacement
-# (rhMotion* specs in RouteActivity) is withdrawn. batch368 (the five dead vals)
-# is withdrawn too, so no orphan definitions remain.
-print("batch373 disabled: transition rework rolled back by user request (see batch381)")
+# rhNoop373: 依赖 368 的修正批，368 已回退，本批同样空操作。
+import os, sys
+from pathlib import Path
+
+root = Path(__file__).resolve().parent.parent
+(root / "ci_diag_batch373_motion_fix.txt").write_text(
+    "noop: reverted together with batch368\n",
+    encoding="utf-8",
+)
+print("batch373 noop")
+sys.exit(0)

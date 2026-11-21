@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
-# upfix381 UI rollback (user request, 2026-11-21): batch369's thought/tool drawer
-# animation (AnimatedVisibility + Crossfade replacing animateContentSize) is withdrawn.
-print("batch369 disabled: drawer animation rolled back by user request (see batch381)")
+# rhNoop369: UI 回退 —— 思考抽屉动画改回上游默认。
+import os, sys
+from pathlib import Path
+
+root = Path(__file__).resolve().parent.parent
+(root / "ci_diag_batch369_motion_drawer.txt").write_text(
+    "noop: reverted (thought drawer animation back to upstream default)\n",
+    encoding="utf-8",
+)
+print("batch369 noop")
+sys.exit(0)
