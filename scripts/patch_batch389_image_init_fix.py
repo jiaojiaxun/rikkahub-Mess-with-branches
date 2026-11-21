@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # rhImageId389: 真正初始化图片编号索引
 # 384 用行首 startswith("TokenUnitStore.init(") 匹配，但真实行是
-# "me.rerere.rikkahub.utils.TokenUnitStore.init(this)" → anchor:missing，整批空转。
-import os, sys枝叶
+# "me.rerere.rikkahub.utils.TokenUnitStore.init(this)" -> anchor:missing，整批空转。
+import os
+import sys
 from pathlib import Path
 
 ROOT = Path(os.environ.get("GITHUB_WORKSPACE") or ".")
