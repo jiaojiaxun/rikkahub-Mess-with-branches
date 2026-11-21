@@ -64,7 +64,7 @@ fun PlanBar(
     var expanded by remember { mutableStateOf(false) }
     val arrowRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(200),
+        animationSpec = tween(260),
         label = "planBarArrow",
     )
 
@@ -72,7 +72,7 @@ fun PlanBar(
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer { this.alpha = alpha },
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.largeIncreased, // rhTopBarBubbles300-plan
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
     ) {

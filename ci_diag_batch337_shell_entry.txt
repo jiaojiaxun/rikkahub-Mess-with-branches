@@ -1,0 +1,2 @@
+entry switched: APPLET_PATH/sh -> EXEC_PATH + argv[1]=sh (line 151)
+parens before=(0, 0, 0) after=(0, 0, 0)

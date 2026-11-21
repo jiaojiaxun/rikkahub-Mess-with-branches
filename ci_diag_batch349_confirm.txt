@@ -1,0 +1,11 @@
+[batch349] wrote PhoneConfirmBus.kt
+[batch349] wrote PhoneConfirmHost.kt
+[batch349] ChatPage: PhoneConfirmHost mounted
+[batch349] PhoneCore: Verdict.Confirm added
+[batch349] PhoneCore: gate returns Confirm by rule
+[batch349] PhoneCore: describeAction inserted
+[batch349] PhoneCore: checkWrite suspend + Confirm branch
+[batch349] PhoneCore: 6 action fns -> suspend
+[batch349] skip open gate
+[batch349] PhoneTools: 5 needsApproval -> false
+[batch349] DONE

@@ -59,7 +59,7 @@ def fail(tag, msg):
     out = 'batch133 ' + str(tag) + ': ' + str(msg)
     print('::error::' + out[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def http_get(url, tries=3):

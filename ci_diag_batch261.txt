@@ -1,0 +1,2 @@
+ChatMessageTools OK: MCP tool row shows server avatar when configured (fallback intact)
+1 mcp tool avatar DONE

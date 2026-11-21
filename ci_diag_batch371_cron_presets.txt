@@ -1,0 +1,20 @@
+already:presets-file
+anchor-import:1
+anchor-chips:1
+anchor-supporting:1
+anchor-describe:1
+braces:(0, 0)->(0, 0)
+page-size:17557
+check:import-present:ok
+check:chips-use-presets:ok
+check:hardcoded-list-gone:ok
+check:supporting-describes:ok
+check:describe-weekday:ok
+check:describe-hourly-step:ok
+check:desc-fn-intact:ok
+check:cronparser-kept:ok
+check:preset-count-12:FAIL
+check:four-categories:FAIL
+check:match-fn:FAIL
+RESULT:FAIL
+failures:check:preset-count-12|check:four-categories|check:match-fn

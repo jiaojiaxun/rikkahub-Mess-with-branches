@@ -14,11 +14,13 @@ import me.rerere.ai.core.Tool
 import me.rerere.ai.ui.ImageAspectRatio
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.ai.ImageGenerationService
+import me.rerere.rikkahub.utils.RhImageIdRegistry
 import org.koin.core.context.GlobalContext
 
 /**
- * `generate_image` - lets the assistant create pictures with the image model selected on
- * the image creation page. Images are saved to the gallery and shown inline in the chat.
+ * rhImageId382: every saved picture is registered under a stable SHA-256 id, and the ids
+ * are returned inside the result envelope. That lets the model bring hop back into the
+ * reply body with the `!img[<id>]` marker instead of leaving it buried in this tool call.
  */
 fun createImageGenerationTool(): Tool = Tool(
     name = "generate_image",
@@ -39,7 +41,7 @@ fun createImageGenerationTool(): Tool = Tool(
                 }
                 putJsonObject("aspect_ratio") {
                     put("type", "string")
-                    put("description", "Aspect ratio (default ${ImageAspectRatio.SQUARE.name})")
+                    put("description", "Aspect ratio (default " + ImageAspectRatio.SQUARE.name + ")")
                     putJsonArray("enum") { ImageAspectRatio.entries.forEach { add(it.name) } }
                 }
             },
@@ -67,13 +69,24 @@ fun createImageGenerationTool(): Tool = Tool(
         if (images.isEmpty()) {
             return@Tool listOf(UIMessagePart.Text(fmErrEnvelope("no_image", "The image model returned no image")))
         }
-        images.map { UIMessagePart.Image(url = "file://${it.filePath}") } + UIMessagePart.Text(
+        val idPairs = images.mapNotNull { image ->
+            RhImageIdRegistry.register(image.filePath)?.let { id -> id to image.filePath }
+        }
+        images.map { UIMessagePart.Image(url = "file://" + it.filePath) } + UIMessagePart.Text(
             buildJsonObject {
                 put("success", true)
                 put("count", images.size)
                 put("saved_to_gallery", true)
                 put("model", images.first().model)
                 putJsonArray("paths") { images.forEach { add(it.filePath) } }
+                putJsonArray("image_ids") { idPairs.forEach { pair -> add(pair.first) } }
+                put(
+                    "how_to_show",
+                    "The picture already sits inside this tool call, which the user usually does not open. " +
+                        "To show it again in the reply body, write the marker !img[<id>] on its own line, " +
+                        "using the exact id from image_ids. It renders as the real image. " +
+                        "Never invent an id and never paste file paths to the user."
+                )
                 put("note", "The images are already displayed to the user. Do not paste the paths unless asked.")
             }.toString()
         )

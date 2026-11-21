@@ -15,7 +15,30 @@ interface WorkspaceShellRunner {
      * Throws IllegalStateException on setup failure (rootfs / proot / loader missing).
      */
     fun start(context: WorkspaceShellContext): Process
+
+    /**
+     * rhLocalTerminal358: 交互式终端的启动参数, 不支持交互式终端时返回 null。
+     * 与 [execute] 的区别只是 exec 目标换成登录/交互 shell, 且由终端模拟器接管 I/O。
+     */
+    fun terminalLaunch(context: WorkspaceTerminalContext): WorkspaceTerminalLaunch? = null
 }
+
+/** 交互式终端启动前的输入: 只带路径与开关, 不带命令文本 */
+data class WorkspaceTerminalContext(
+    val filesDir: File,
+    val linuxDir: File,
+    val tempDir: File,
+    val bindMounts: List<WorkspaceBindMount> = emptyList(),
+    val shellCompatibilityMode: Boolean = false,
+)
+
+/** 交给终端模拟器拉起的本地进程; argv 不含 executable 自身 */
+data class WorkspaceTerminalLaunch(
+    val executable: String,
+    val cwd: String,
+    val args: List<String>,
+    val env: List<String>,
+)
 
 data class WorkspaceShellContext(
     val root: String,

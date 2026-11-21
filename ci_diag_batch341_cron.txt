@@ -1,0 +1,5 @@
+[batch341] scheduler: setExpedited added
+[batch341] worker: started history added
+[batch341] CronTools: trigger note added
+[batch341] AppControlService: trigger note added
+[batch341] steps ok=4/4

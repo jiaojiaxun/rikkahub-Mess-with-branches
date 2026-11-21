@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -18,6 +19,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import me.rerere.ai.provider.EmbeddingGenerationParams
 import me.rerere.ai.provider.EmbeddingGenerationResult
 import me.rerere.ai.provider.ImageEditParams
@@ -40,6 +42,7 @@ import me.rerere.common.http.await
 import me.rerere.common.http.getByKey
 import okhttp3.MultipartBody
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -390,6 +393,13 @@ class OpenAIProvider(
         }
 
         val key = keyRoulette.next(providerSetting.apiKey, providerSetting.id.toString())
+
+        // upfix381: OpenRouter 无 /images/edits 端点, 参考图走图像生成接口 (上游 85af5b910)
+        if (providerSetting.baseUrl.toHttpUrlOrNull()?.host?.lowercase() == "openrouter.ai") {
+            editImageWithInputReferences(providerSetting, params, key).forEach { emit(it) }
+            return@flow
+        }
+
         val bodyBuilder = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("model", params.model.modelId)
@@ -444,6 +454,61 @@ class OpenAIProvider(
         }
 
         items.forEach { emit(it) }
+    }
+
+    // upfix381: OpenRouter 没有 /images/edits, 参考图改走图像生成接口的 input_references (移植上游 85af5b910)
+    @OptIn(ExperimentalEncodingApi::class)
+    private suspend fun editImageWithInputReferences(
+        providerSetting: ProviderSetting.OpenAI,
+        params: ImageEditParams,
+        key: String,
+    ): List<ImageGenerationItem> = withContext(Dispatchers.IO) {
+        val requestBody = json.encodeToString(
+            buildJsonObject {
+                put("model", params.model.modelId)
+                put("prompt", params.prompt)
+                put("n", params.numOfImages)
+                put(
+                    "size",
+                    when (params.aspectRatio) {
+                        ImageAspectRatio.SQUARE -> "1024x1024"
+                        ImageAspectRatio.LANDSCAPE -> "1536x1024"
+                        ImageAspectRatio.PORTRAIT -> "1024x1536"
+                    }
+                )
+                putJsonArray("input_references") {
+                    params.images.forEach { path ->
+                        val imageFile = File(path)
+                        require(imageFile.exists()) {
+                            "Image file does not exist: $path"
+                        }
+                        addJsonObject {
+                            put("type", "image_url")
+                            putJsonObject("image_url") {
+                                put(
+                                    "url",
+                                    "data:${imageFile.imageMediaType()};base64,${Base64.encode(imageFile.readBytes())}"
+                                )
+                            }
+                        }
+                    }
+                }
+            }.mergeCustomBody(params.customBody)
+        )
+
+        val request = Request.Builder()
+            .url("${providerSetting.baseUrl}/images/generations")
+            .headers(params.customHeaders.toHeaders())
+            .addHeader("Authorization", "Bearer $key")
+            .post(requestBody.toRequestBody("application/json".toMediaType()))
+            .configureReferHeaders(providerSetting.baseUrl)
+            .build()
+
+        val response = client.newCall(request).await()
+        if (!response.isSuccessful) {
+            error("Failed to edit image: ${response.code} ${response.body?.string()}")
+        }
+        parseImageResponse(response.body.string())
     }
 
     private suspend fun parseImageResponse(bodyStr: String): List<ImageGenerationItem> {

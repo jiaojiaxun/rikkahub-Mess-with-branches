@@ -1612,5 +1612,20 @@
   <string name="setting_update_reminder_pause_days">%1$d 天</string>
   <string name="setting_update_reminder_resume_now">立即恢復</string>
   <string name="reasoning_max">最大</string>
+    <!-- rh-batch1 -->
+    <string name="chat_tool_approval_allow_chat">本对话内允许</string>
+    <string name="chat_tool_approval_allow_always">始终允许</string>
+    <string name="chat_tool_approval_hint">长按「允许」可选择范围，长按「拒绝」可填写原因</string>
+    <string name="chat_html_exit_native">恢复原生</string>
+    <string name="setting_display_page_collapse_user_message_title" formatted="true">折叠长用户消息</string>
+    <string name="setting_display_page_collapse_user_message_desc" formatted="true">你发送的长消息默认折叠，点“展开全文”查看</string>
+    <string name="setting_display_page_collapse_user_message_lines" formatted="true">超过 %d 行折叠</string>
+    <string name="chat_message_expand" formatted="true">展开全文</string>
+    <string name="chat_message_collapse" formatted="true">收起</string>
+    <string name="compaction_stream_title" formatted="true">压缩模型实时输出</string>
+    <string name="chat_input_file_imported_to_workspace" formatted="true">%1$s 已导入工作区：%2$s</string>
+    <string name="chat_input_file_no_workspace" formatted="true">%s 无法直接发送，给助手绑定工作区后会自动导入</string>
+    <string name="backup_page_local_backup_export_pure">轻量备份（不含附件）</string>
+    <string name="backup_page_local_backup_export_pure_desc">只备份对话数据和设置，不含 uploads/ 附件，体积小</string>
 </resources>
 

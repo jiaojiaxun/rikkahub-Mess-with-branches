@@ -1,0 +1,7 @@
+override: object inserted
+remember: override index wired
+compute: override parameter added
+compute: override wins over auto match
+sheet: balance title cycles silently
+balance (0, 0) -> (0, 0)
+written 35741 bytes

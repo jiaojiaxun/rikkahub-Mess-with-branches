@@ -1,0 +1,18 @@
+anchor:1
+wrote:fix
+braces:(0, 0)->(0, 0)
+file-size:37849
+check:uses-key-area:ok
+check:no-hardcoded-area-line:ok
+check:fallback-present:ok
+check:entry-kept:ok
+-- call app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceDetailPage.kt @line305
+  302: 
+  303:                             else -> when (entry.detectFileType()) {
+  304:                                 WorkspaceFileType.TEXT -> navController.navigate(
+>>305:                                     Screen.WorkspaceFileEditor(id, state.area.name, entry.path)
+  306:                                 )
+  307: 
+  308:                                 WorkspaceFileType.IMAGE -> vm.exportToCacheFile(entry, context.cacheDir) { file ->
+call-sites:1
+RESULT:OK

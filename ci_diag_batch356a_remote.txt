@@ -1,0 +1,6 @@
+SshConfig:wrote
+Settings:wrote
+repo-import:ok
+repo-conn:ok
+repo-tosettings:ok
+RESULT:OK

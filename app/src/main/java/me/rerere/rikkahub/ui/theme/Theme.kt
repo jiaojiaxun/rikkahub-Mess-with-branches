@@ -17,6 +17,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily // rhGlobalFont
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -46,6 +47,16 @@ fun RikkahubTheme(
     content: @Composable () -> Unit
 ) {
     val settings by rememberUserSettingsState()
+
+    // rhGlobalFont: 全局字体(应用到所有页面的排版)
+    val rhFontContext = LocalContext.current
+    val rhGlobalFontFamily = remember(settings.displaySetting.chatFontFamily, settings.displaySetting.chatCustomFontPath) {
+        settings.displaySetting.resolveChatFontFamily(rhFontContext)
+    }
+    val rhGlobalTypography = remember(rhGlobalFontFamily) {
+        if (rhGlobalFontFamily == FontFamily.Default) Typography
+        else Typography.withCustomFontFamily(rhGlobalFontFamily)
+    }
 
     val darkTheme = when (colorMode) {
         ColorMode.SYSTEM -> isSystemInDarkTheme()
@@ -104,7 +115,7 @@ fun RikkahubTheme(
     ) {
         MaterialExpressiveTheme(
             colorScheme = colorSchemeConverted,
-            typography = Typography,
+            typography = rhGlobalTypography, // rhGlobalFont
             content = content,
             motionScheme = MotionScheme.expressive()
         )

@@ -24,11 +24,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dokar.sonner.ToastType
 import kotlinx.coroutines.launch
+import me.rerere.rikkahub.R // rhPhone348e
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.context.LocalToaster
@@ -79,14 +81,18 @@ fun WorkspaceFileEditorPage(
             TopAppBar(
                 title = {
                     Text(
-                        text = fileName,
+                        text = if (area == WorkspaceStorageArea.FILES) {
+                            fileName
+                        } else {
+                            fileName + " (" + stringResource(R.string.workspace_file_read_only) + ")"
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
                 navigationIcon = { BackButton() },
                 actions = {
-                    if (!loading && loadError == null) {
+                    if (!loading && loadError == null && area == WorkspaceStorageArea.FILES) {
                         TextButton(
                             onClick = {
                                 if (saving) return@TextButton
@@ -146,7 +152,7 @@ fun WorkspaceFileEditorPage(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .imePadding(),
-                readOnly = false,
+                readOnly = area != WorkspaceStorageArea.FILES,
                 lineLimits = TextFieldLineLimits.MultiLine(),
                 textStyle = LocalTextStyle.current.copy(
                     fontFamily = JetbrainsMono,

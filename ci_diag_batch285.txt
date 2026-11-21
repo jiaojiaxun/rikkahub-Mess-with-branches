@@ -1,0 +1,5 @@
+pref OK: DisplaySetting.perConversationModel=true
+conf OK: model/assistant/bind gated by switch
+vm OK: off -> assistant model, on -> conversation model
+page OK: switch off -> null (input bar falls back to assistant model)
+ui OK: switch row added to message display card

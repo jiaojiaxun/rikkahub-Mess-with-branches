@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.rerere.rikkahub.data.cron.CronJobStore
+import me.rerere.rikkahub.data.cron.CronPresets // rhCronPreset371
 import me.rerere.rikkahub.data.cron.ScheduledJobRunRecord
 import me.rerere.rikkahub.data.model.CronJob
 import me.rerere.rikkahub.data.model.CronParser
@@ -39,6 +40,14 @@ import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.Add01
+import androidx.compose.foundation.layout.Spacer // rhCronBeautify
+import androidx.compose.foundation.layout.width // rhCronBeautify
+import androidx.compose.material3.Surface // rhCronBeautify
 
 /**
  * 定时任务管理页（fork 新增）。
@@ -60,11 +69,18 @@ fun SettingScheduledJobsPage() {
     val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var detailJob by remember { mutableStateOf<CronJob?>(null) }
+    var showCreateDialog by remember { mutableStateOf(false) } // rhCronManual
+    var editJob by remember { mutableStateOf<CronJob?>(null) } // rhCronManual
 
     Scaffold(
         topBar = {
             LargeFlexibleTopAppBar(
                 title = { Text("定时任务") },
+                actions = { // rhCronManual
+                    IconButton(onClick = { showCreateDialog = true }) {
+                        Icon(HugeIcons.Add01, contentDescription = "新建任务")
+                    }
+                },
                 navigationIcon = { BackButton() },
                 scrollBehavior = scrollBehavior,
                 colors = CustomColors.topBarColors,
@@ -97,7 +113,7 @@ fun SettingScheduledJobsPage() {
                                 headlineContent = { Text(job.name) },
                                 supportingContent = {
                                     Column {
-                                        Text(job.cronExpression + "  ·  " + job.prompt.take(60))
+                                        Text(describeCron(job.cronExpression) + "  ·  " + job.prompt.take(60))
                                         val next = job.nextRunAt
                                         if (next != null) {
                                             Text(
@@ -157,7 +173,7 @@ fun SettingScheduledJobsPage() {
             title = { Text(job.name) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("cron：" + job.cronExpression)
+                    Text("cron：" + job.cronExpression + "（" + describeCron(job.cronExpression) + "）")
                     Text("提示词：" + job.prompt)
                     val next = job.nextRunAt
                     if (next != null) Text("下次执行：" + formatTime(next))
@@ -177,6 +193,12 @@ fun SettingScheduledJobsPage() {
             },
             confirmButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { // rhCronManual
+                        editJob = job
+                        detailJob = null
+                    }) {
+                        Text("编辑")
+                    }
                     TextButton(onClick = {
                         scheduler.triggerNow(job.id)
                         detailJob = null
@@ -196,6 +218,155 @@ fun SettingScheduledJobsPage() {
                 TextButton(onClick = { detailJob = null }) { Text("关闭") }
             },
         )
+    }
+    if (showCreateDialog || editJob != null) { // rhCronManual
+        val editing = editJob
+        var jobName by remember { mutableStateOf(editing?.name ?: "") }
+        var cronExpr by remember { mutableStateOf(editing?.cronExpression ?: "0 9 * * *") }
+        var jobPrompt by remember { mutableStateOf(editing?.prompt ?: "") }
+        var jobEnabled by remember { mutableStateOf(editing?.enabled ?: true) }
+        val cronValid = CronParser.isValid(cronExpr)
+        AlertDialog(
+            onDismissRequest = {
+                showCreateDialog = false
+                editJob = null
+            },
+            title = { Text(if (editing != null) "编辑任务" else "新建任务") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = jobName,
+                        onValueChange = { jobName = it },
+                        label = { Text("任务名称") },
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = cronExpr,
+                        onValueChange = { cronExpr = it },
+                        label = { Text("Cron 表达式") },
+                        supportingText = {
+                            Text(
+                                // rhCronPreset371: 直接显示"人话"，比"格式正确"有用
+                                text = if (cronValid) describeCron(cronExpr) else "格式错误，应为：分 时 日 月 周",
+                                color = if (cronValid) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                },
+                            )
+                        },
+                        singleLine = true,
+                    )
+                    
+                    // rhCronPreset372: 直接复用 data/cron/CronPresets.kt 里已有的预设表
+                    // —— 那份是 CronTools 与 AppControlService 共用的唯一数据源。
+                    // 这里只负责渲染：每行 3 个，命中当前表达式的高亮。
+                    Text(
+                        text = "常用预设",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    CronPresets.ALL.chunked(3).forEach { rowPresets ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            rowPresets.forEach { preset ->
+                                val selected = preset.cronExpression == cronExpr.trim()
+                                Surface(
+                                    onClick = { cronExpr = preset.cronExpression },
+                                    shape = MaterialTheme.shapes.small,
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    },
+                                ) {
+                                    Text(
+                                        text = preset.title,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = jobPrompt,
+                        onValueChange = { jobPrompt = it },
+                        label = { Text("提示词") },
+                        minLines = 3,
+                    )
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("启用")
+                        Switch(checked = jobEnabled, onCheckedChange = { jobEnabled = it })
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            val job = (editing ?: CronJob(
+                                id = java.util.UUID.randomUUID().toString(),
+                                name = jobName,
+                                prompt = jobPrompt,
+                                cronExpression = cronExpr,
+                            )).copy(
+                                name = jobName,
+                                prompt = jobPrompt,
+                                cronExpression = cronExpr,
+                                enabled = jobEnabled,
+                            )
+                            store.upsert(job)
+                            if (jobEnabled) scheduler.schedule(job) else scheduler.cancel(job.id)
+                        }
+                        showCreateDialog = false
+                        editJob = null
+                    },
+                    enabled = jobName.isNotBlank() && cronValid,
+                ) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showCreateDialog = false
+                    editJob = null
+                }) { Text("取消") }
+            },
+        )
+    }
+}
+
+// rhCronDesc: cron 表达式 → 中文描述
+private fun describeCron(expr: String): String {
+    val parts = expr.trim().split(Regex("\\s+"))
+    if (parts.size != 5) return expr
+    val (min, hour, day, month, week) = parts
+    fun num(s: String): Int? = s.toIntOrNull()
+    fun pad2(n: Int): String = n.toString().padStart(2, '0')
+    return when {
+        min.startsWith("*/") -> "每 " + min.removePrefix("*/") + " 分钟"
+        min == "*" -> "每分钟"
+        hour == "*" -> "每小时第 " + min + " 分钟"
+        // rhCronPreset371: 补两个洞 —— 小时的 */N 与工作日
+        hour.startsWith("*/") -> "每 " + hour.removePrefix("*/") + " 小时（第 " + min + " 分）"
+        week == "1-5" && day == "*" ->
+            "工作日 " + (num(hour)?.let { pad2(it) } ?: hour) + ":" + (num(min)?.let { pad2(it) } ?: min)
+        week != "*" -> {
+            val dayName = when (week) {
+                "0", "7" -> "日"
+                "1" -> "一"
+                "2" -> "二"
+                "3" -> "三"
+                "4" -> "四"
+                "5" -> "五"
+                "6" -> "六"
+                else -> week
+            }
+            "每周" + dayName + " " + (num(hour)?.let { pad2(it) } ?: hour) + ":" + (num(min)?.let { pad2(it) } ?: min)
+        }
+        day != "*" -> "每月 " + day + " 号 " + (num(hour)?.let { pad2(it) } ?: hour) + ":" + (num(min)?.let { pad2(it) } ?: min)
+        else -> "每天 " + (num(hour)?.let { pad2(it) } ?: hour) + ":" + (num(min)?.let { pad2(it) } ?: min)
     }
 }
 

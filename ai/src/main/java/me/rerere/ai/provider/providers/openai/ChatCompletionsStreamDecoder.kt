@@ -43,7 +43,8 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
 
         val chunks = buildList {
             event.data.trim().split("\n").filter(String::isNotBlank).forEach { line ->
-                val payload = json.parseToJsonElement(line).jsonObject
+                // upfix381: 部分中转在流中夹 data: null 行, 非对象行直接跳过 (上游 #2137)
+                val payload = json.parseToJsonElement(line).jsonObjectOrNull ?: return@forEach
                 payload["error"]?.let { throw it.parseErrorDetail() }
                 responseId = payload["id"]?.jsonPrimitive?.contentOrNull ?: responseId
                 responseModel = payload["model"]?.jsonPrimitive?.contentOrNull ?: responseModel
@@ -93,9 +94,9 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
     }
 
     private fun parseMessage(payload: JsonObject): UIMessage {
-        val role = MessageRole.valueOf(
-            payload["role"]?.jsonPrimitive?.contentOrNull?.uppercase() ?: "ASSISTANT"
-        )
+        val role = MessageRole.fromValueOrNull(
+            payload["role"]?.jsonPrimitiveOrNull?.contentOrNull
+        ) ?: MessageRole.ASSISTANT
         val content = payload["content"]?.jsonPrimitiveOrNull?.contentOrNull ?: ""
         val reasoning = payload["reasoning_content"]?.jsonPrimitiveOrNull?.contentOrNull
             ?: payload["reasoning"]?.jsonPrimitiveOrNull?.contentOrNull
@@ -135,7 +136,7 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
     private fun accumulateReasoningDetails(details: JsonArray?): JsonObject? {
         if (details == null) return null
         details.forEachIndexed { fallbackIndex, element ->
-            val incoming = element.jsonObject
+            val incoming = element.jsonObjectOrNull ?: return@forEachIndexed
             val index = incoming["index"]?.jsonPrimitive?.intOrNull ?: fallbackIndex
             reasoningDetailsByIndex[index] = mergeReasoningDetail(reasoningDetailsByIndex[index], incoming)
         }

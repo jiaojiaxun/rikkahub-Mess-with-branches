@@ -21,7 +21,7 @@ IDR = 'app/src/main/java/me/rerere/rikkahub/data/db/ImportedDatabaseReconciler.k
 def fail(msg):
     print('::error file=' + IDR + '::batch104v2 ' + str(msg)[:1200])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

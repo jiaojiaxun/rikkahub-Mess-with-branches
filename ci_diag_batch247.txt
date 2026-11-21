@@ -1,0 +1,59 @@
+fill_zh added=47 existing=0 ph_skip=0 no_en=0
+fill_zh WROTE 47 keys
+fill_zh gemini/grok OK
+P2 visible-ish missing=54 accessibility_excluded=55
+P2 assistant_page_local_tools_keyboard_setup_message :: Keyboard control needs the companion agent-keyboard app installed AND set as the active keyboard. Install it, then go to Settings &gt; System &gt; Languages &amp; input &gt; On-screen keyboard and switch to agent-keyboard. Without both, every keyboard tool will return an error.
+P2 gemini_ban_warning_body :: This provider signs in with Antigravity\'s own OAuth credentials and calls a private Google endpoint from an app Google did not publish. Google\'s terms let them suspend or terminate accounts for accessing their services through unapproved clients, and there is no appeal path built for this. Use a throwaway Google account you can afford to lose, never one tied to your email, photos, purchases, or work.
+P2 grok_provider_description :: Uses your xAI Grok subscription (SuperGrok or X Premium+) via OAuth device sign-in and the xAI Responses API. Requires an active subscription; no API key needed.
+P2 grok_token_available :: Token available
+P2 grok_token_expired :: Token expired
+P2 grok_token_not_checked :: Token status not checked
+P2 grok_token_unavailable :: Token unavailable
+P2 grok_weekly_limit :: Weekly limit
+P2 imggen_page_image_missing :: Image file is missing, it may not have been restored from backup
+P2 language_arabic :: 🇸🇦 العربية
+P2 language_persian :: 🇮🇷 فارسی
+P2 language_urdu :: 🇵🇰 اردو
+P2 local_llm_catalog_tag_tools :: Tools
+P2 local_llm_hf_back_to_results :: Back to search results
+P2 local_llm_hf_downloads_format :: %1$d downloads
+P2 local_llm_hf_file_size_gb_format :: %1$.2f GB
+P2 local_llm_hf_files_error_format :: Could not list files: %1$s
+P2 local_llm_hf_loading_files :: Loading files…
+P2 local_llm_hf_no_gguf_files :: No .gguf files in this repo
+P2 local_llm_hf_requires_access :: This repo is gated or private. It needs an access token, which this app does not support. Pick a public repo instead.
+P2 local_llm_hf_search_action :: Search
+P2 local_llm_hf_search_failed_format :: Search failed: %1$s
+P2 local_llm_hf_search_no_results :: No GGUF repos found
+P2 local_llm_hf_search_placeholder :: Model name, e.g. Qwen3
+P2 local_llm_hf_search_title :: Search HuggingFace
+P2 local_llm_llamacpp_catalog_subtitle :: Curated GGUF models with a tool-calling chat template. Pick one for one-tap install.
+P2 local_llm_llamacpp_catalog_title :: Available models
+P2 local_llm_llamacpp_import_action :: Install a GGUF you already have
+P2 local_llm_perf_telemetry_format :: Prefill %1$.1f tok/s · Decode %2$.1f tok/s
+P2 local_llm_spec_decoding_engaged_short :: MTP on
+P2 local_llm_vision_retry :: Re-try vision
+P2 local_llm_vision_unavailable_caption :: Vision unavailable on this device — running text-only
+P2 plugin_import_security_warning_action :: 导入前请检查插件名称、作者、版本和权限声明。
+P2 plugin_import_security_warning_message :: 插件将在受限 QuickJS 沙箱中运行；网络请求仅允许清单中的域名，工具调用需要授权。请只导入可信来源的 ZIP 文件。
+P2 plugin_import_security_warning_title :: 插件安全提示
+P2 safe_mode_enter_app :: Enter App
+P2 search_duplicate_key_continue :: Save anyway
+P2 search_duplicate_key_message :: This API key is already configured for %s. The key itself is hidden.
+P2 search_duplicate_key_title :: Duplicate API key
+P2 setting_browser_per_tool_timeout_desc :: Hard time budget for each browser tool call. Range 10 s to 10 min.
+P2 setting_browser_per_tool_timeout_unit :: seconds
+P2 setting_browser_single_task_timeout_desc :: Hard cap on one AI-driven browser task to bound runaway loops. Range 1 min to 60 min.
+P2 setting_browser_single_task_timeout_unit :: minutes
+P2 setting_page_search_web_fetch_tools_desc :: Let the assistant fetch and read web page content directly. On by default; turn off to rely only on your configured search provider.
+P2 setting_page_search_web_fetch_tools_title :: Web fetch and extract
+P2 setting_tts_page_default_playback_speed :: Default playback speed
+P2 setting_tts_page_default_playback_speed_description :: Applied locally to every TTS provider without changing its synthesis settings.
+P2 stats_page_cache_hit_rate :: Cache hit rate
+P2 theme_name_claude :: Claude
+P2 workspace_detail_deselect_all :: 取消全选
+P2 workspace_detail_exit_selection :: 退出多选
+P2 workspace_detail_export_selected :: 导出选中
+P2 workspace_detail_select_all :: 全选
+P2 workspace_detail_selected_count :: 已选 %1$d/%2$d 项
+dump remaining missing OK

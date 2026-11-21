@@ -60,6 +60,7 @@ fun WorkspacePage(vm: WorkspaceVM = koinViewModel()) {
     val navController = LocalNavController.current
     val workspaces by vm.workspaces.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    var showTypeSheet by rememberSaveable { mutableStateOf(false) }
     var showAddDialog by rememberSaveable { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<WorkspaceEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<WorkspaceEntity?>(null) }
@@ -74,7 +75,7 @@ fun WorkspacePage(vm: WorkspaceVM = koinViewModel()) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
+            FloatingActionButton(onClick = { showTypeSheet = true }) {
                 Icon(HugeIcons.Add01, contentDescription = stringResource(R.string.accessibility_add_workspace))
             }
         },
@@ -99,6 +100,64 @@ fun WorkspacePage(vm: WorkspaceVM = koinViewModel()) {
                     onDelete = { deleteTarget = workspace },
                     onOpen = { navController.navigate(Screen.WorkspaceDetail(workspace.id)) },
                 )
+            }
+        }
+    }
+
+    if (showTypeSheet) {
+        androidx.compose.material3.ModalBottomSheet(onDismissRequest = { showTypeSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.workspace_page_create),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showTypeSheet = false
+                            showAddDialog = true
+                        },
+                    colors = CustomColors.cardColorsOnSurfaceContainer,
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = stringResource(R.string.workspace_page_type_local),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = stringResource(R.string.workspace_page_type_local_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showTypeSheet = false
+                            navController.navigate(Screen.WorkspaceSshEditor())
+                        },
+                    colors = CustomColors.cardColorsOnSurfaceContainer,
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = stringResource(R.string.workspace_page_type_ssh),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = stringResource(R.string.workspace_page_type_ssh_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }
@@ -215,7 +274,12 @@ private fun WorkspaceCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = stringResource(R.string.workspace_detail_area_files),
+                        text = if (workspace.isSsh()) {
+                            workspace.sshSettings()?.let { "${it.username}@${it.host}:${it.port}" }
+                                ?: stringResource(R.string.workspace_page_type_ssh)
+                        } else {
+                            stringResource(R.string.workspace_detail_area_files)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

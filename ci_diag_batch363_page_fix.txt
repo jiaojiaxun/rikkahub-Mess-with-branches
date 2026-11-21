@@ -1,0 +1,16 @@
+done:state-lasterror
+done:capture-failure
+done:clear-failure
+done:page-effect
+braces:page-when:(0, 0)->(0, 0)
+wrote:page-when:15015
+done:page-error-slot
+check:state-has-lasterror:ok
+check:failure-recorded:ok
+check:failure-cleared:ok
+check:page-no-ssh-effect:ok
+check:page-no-unsupported:ok
+check:page-shows-error:ok
+check:session-create-kept:ok
+check:361-patch-in-launch:ok
+RESULT:OK

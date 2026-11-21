@@ -1,0 +1,7 @@
+header OK: _display priority and reasoning snippet
+header DONE
+tools OK: _display replaces verb/tool name when present
+tools DONE
+string added app/src/main/res/values/strings.xml
+string added app/src/main/res/values-zh/strings.xml
+strings DONE

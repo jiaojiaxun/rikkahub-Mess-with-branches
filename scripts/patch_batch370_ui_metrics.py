@@ -13,7 +13,7 @@
 #   8) 硬编码 Color(0x........) 次数
 #
 # 输出 ci_diag_batch370_ui_metrics.txt，每类给出 Top 15 与总数，附带"收敛建议"。
-# 只读，永不 exit(1)。
+# 只读，永不 exit(0)。
 
 import os
 import re

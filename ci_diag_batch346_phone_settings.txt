@@ -1,0 +1,5 @@
+[batch346] wrote PhoneControlStore.kt
+[batch346] RikkaHubApp: PhoneControlStore.init added
+[batch346] SettingPage: phone control card inserted
+[batch346] FAIL LocalTools anchor count=0
+[batch346] steps ok=3/4

@@ -1,0 +1,3 @@
+reg:ok
+note:ok
+written

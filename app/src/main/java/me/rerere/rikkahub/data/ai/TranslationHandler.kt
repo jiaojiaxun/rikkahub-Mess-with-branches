@@ -26,6 +26,7 @@ import java.util.Locale
  */
 class TranslationHandler(
     private val providerManager: ProviderManager,
+    private val aiLoggingManager: AILoggingManager, // rhTranslateUsageT9
 ) {
     fun translateText(
         settings: Settings,
@@ -39,6 +40,7 @@ class TranslationHandler(
             ?: error("Translation provider not found")
 
         val providerHandler = providerManager.getProviderByType(provider)
+        aiLoggingManager.recordProviderUsed(provider.id) // rhTranslateUsageT9
 
         if (!ModelRegistry.QWEN_MT.match(model.modelId)) {
             val prompt = settings.translatePrompt.applyPlaceholders(

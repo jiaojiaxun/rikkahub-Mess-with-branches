@@ -1,0 +1,7 @@
+[batch347] wrote PhonePoliciesStore.kt
+[batch347] RikkaHubApp: PhonePoliciesStore.init added
+[batch347] LocalTools: global switch ORed in (line 894)
+[batch347] PhoneCore: policies -> store getter
+[batch347] FAIL PhoneTools needsApproval count=5 (expected 6)
+[batch347] SettingPage: confirm mode + 3 unlocks inserted
+[batch347] steps ok=5/6

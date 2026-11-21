@@ -64,6 +64,7 @@ interface SearchService<T : SearchServiceOptions> {
                 is SearchServiceOptions.GrokOptions -> GrokSearchService
                 is SearchServiceOptions.TinyfishOptions -> TinyfishSearchService
                 is SearchServiceOptions.SerperOptions -> SerperSearchService
+                is SearchServiceOptions.DeepSeekOptions -> DeepSeekSearchService // rhDeepSeek316
                 is SearchServiceOptions.CustomJsOptions -> CustomJsSearchService
             } as SearchService<T>
         }
@@ -195,6 +196,7 @@ sealed class SearchServiceOptions {
             GrokOptions::class to "Grok",
             TinyfishOptions::class to "Tinyfish",
             SerperOptions::class to "Serper",
+            DeepSeekOptions::class to "DeepSeek", // rhDeepSeek316
             CustomJsOptions::class to "Custom JS",
         )
     }
@@ -345,6 +347,13 @@ sealed class SearchServiceOptions {
         override val id: Uuid = Uuid.random(),
         val apiKey: String = "",
     ) : SearchServiceOptions()
+
+    @Serializable
+    @SerialName("deepseek")
+    data class DeepSeekOptions(
+        override val id: Uuid = Uuid.random(),
+        val apiKey: String = "",
+    ) : SearchServiceOptions() // rhDeepSeek316
 
     @Serializable
     @SerialName("custom_js")

@@ -1,0 +1,1 @@
+applied=page-covered-note,strings-en,strings-zh failed=none

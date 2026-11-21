@@ -13,7 +13,7 @@ Context (2026-10-07):
   ChatService; the user did not report seeing it, so the id may be null at write time.
   This script dumps the transport chain so the next CI run yields ground truth.
 
-Policy: diagnostic script - missing anchors skip with ::warning instead of exit(1),
+Policy: diagnostic script - missing anchors skip with ::warning instead of exit(0),
 because failing the patch step would block the whole build. The dump is the payload.
 '''
 from pathlib import Path

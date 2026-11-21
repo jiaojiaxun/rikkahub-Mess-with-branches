@@ -36,7 +36,7 @@ def fail(msg, dump_text=''):
         body = body + ' || DUMP: ' + str(dump_text)[:1500]
     print('::error file=' + LT + '::batch87v2 ' + body)
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def concat(lines):

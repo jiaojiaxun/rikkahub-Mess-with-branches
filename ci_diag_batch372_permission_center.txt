@@ -1,0 +1,6 @@
+old block len=1567
+picker balance (0, 0) -> (0, 0)
+picker rewritten
+v2 source balance (0, 0) len=18297
+tool refs=100
+DONE permission center v2 (mcp inline switches)

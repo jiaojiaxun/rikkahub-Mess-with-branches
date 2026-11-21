@@ -1,0 +1,20 @@
+braces:state-lasterror:(0, 0)->(0, 0)
+wrote:state-lasterror:9316
+braces:capture-failure:(0, 0)->(0, 0)
+wrote:capture-failure:9429
+braces:clear-failure:(0, 0)->(0, 0)
+wrote:clear-failure:9463
+braces:page-effect:(0, 0)->(0, 0)
+wrote:page-effect:15038
+already:page-when
+braces:page-error-slot:(0, 0)->(0, 0)
+wrote:page-error-slot:15179
+check:state-has-lasterror:ok
+check:failure-recorded:ok
+check:failure-cleared:ok
+check:page-no-ssh-effect:ok
+check:page-no-unsupported:FAIL
+check:page-shows-error:ok
+check:session-create-kept:ok
+RESULT:FAIL
+failures:check:page-no-unsupported

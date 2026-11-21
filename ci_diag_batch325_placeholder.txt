@@ -1,0 +1,2 @@
+placeholder: anchor count=1 backup_count=2
+placeholder: assistant-name wording installed

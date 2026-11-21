@@ -41,6 +41,7 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.preferences.ToolApprovalPreferences
+import me.rerere.rikkahub.data.datastore.SettingsStore // rhApprovalIdentityMcpUi
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.theme.CustomColors
@@ -64,6 +65,24 @@ fun SettingToolApprovalsPage() {
     val prefs: ToolApprovalPreferences = koinInject()
     val granted by prefs.alwaysAllowFlow.collectAsStateWithLifecycle(initialValue = emptySet())
     val yolo by prefs.globalYoloFlow.collectAsStateWithLifecycle(initialValue = false)
+    // rhApprovalIdentityMcpUi: MCP 服务器级授权（与单工具授权并列，互不覆盖）
+    val settingsStore: SettingsStore = koinInject()
+    val appSettings by settingsStore.settingsFlow.collectAsStateWithLifecycle(
+        initialValue = me.rerere.rikkahub.data.datastore.Settings.dummy()
+    )
+    val mcpServerAlways by prefs.mcpServerAlwaysFlow.collectAsStateWithLifecycle(
+        initialValue = emptySet()
+    )
+    // 候选服务器键：已配置服务器 + 已授权键反推（服务器被改名/删除后仍可撤销授权）
+    val mcpServerKeys: List<String> = remember(appSettings.mcpServers, granted, mcpServerAlways) {
+        val fromConfig = appSettings.mcpServers.map { server ->
+            "mcp__" + server.id.toString().take(8).replace("-", "") + "_" + server.commonOptions.name
+        }
+        val fromGrants = (granted + mcpServerAlways)
+            .filter { it.startsWith("mcp__") && it.indexOf("__", 5) > 0 }
+            .map { it.substringBeforeLast("__") }
+        (fromConfig + fromGrants).filter { it.isNotBlank() }.distinct().sorted()
+    }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val scope = rememberCoroutineScope()
 
@@ -180,6 +199,65 @@ fun SettingToolApprovalsPage() {
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
+            if (mcpServerKeys.isNotEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.setting_page_tool_approvals_mcp_header),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        mcpServerKeys.forEach { serverKey ->
+                            val serverGranted = serverKey in mcpServerAlways
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    Text(
+                                        text = serverKey.removePrefix("mcp__"),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        text = stringResource(
+                                            if (serverGranted) R.string.setting_page_tool_approvals_mcp_on
+                                            else R.string.setting_page_tool_approvals_mcp_off
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Switch(
+                                    checked = serverGranted,
+                                    onCheckedChange = { want ->
+                                        scope.launch {
+                                            if (want) prefs.grantMcpServerAlways(serverKey)
+                                            else prefs.revokeMcpServerAlways(serverKey)
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             if (granted.isEmpty()) {
                 item {
                     Text(
@@ -197,8 +275,18 @@ fun SettingToolApprovalsPage() {
                             .padding(horizontal = 8.dp),
                     ) {
                         granted.sorted().forEach { toolName ->
+                            // rhApprovalIdentityCovered: 该单工具授权已被整台服务器的授权覆盖时标注
+                            val rhCoveredServerKey = me.rerere.rikkahub.data.ai.tools.ToolApprovalIdentity
+                                .mcpServerKeyOf(toolName)
+                            val rhCoveredNote: (@Composable () -> Unit)? =
+                                if (rhCoveredServerKey != null && rhCoveredServerKey in mcpServerAlways) {
+                                    { Text(stringResource(R.string.setting_page_tool_approvals_mcp_covered)) }
+                                } else {
+                                    null
+                                }
                             item(
                                 headlineContent = { Text(toolName) },
+                                supportingContent = rhCoveredNote,
                                 trailingContent = {
                                     IconButton(onClick = {
                                         scope.launch { prefs.revoke(toolName) }

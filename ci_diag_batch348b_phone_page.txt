@@ -1,0 +1,5 @@
+[batch348b] wrote SettingPhoneControlPage.kt
+[batch348b] Screen.SettingToolApprovals definition not found
+[batch348b] entryProvider: SettingPhoneControl registered
+[batch348b] SettingPage: long block -> one entry row
+[batch348b] DONE

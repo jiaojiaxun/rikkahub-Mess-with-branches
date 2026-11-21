@@ -1,0 +1,10 @@
+wrote:dedupe-kdoc
+anchor-patch:1
+wrote:patch
+braces:(0, 0)->(0, 0)
+file-size:9430
+check:kdoc-deduped:ok
+check:patch-added:ok
+check:launch-present:ok
+check:preflight-kept:ok
+RESULT:OK

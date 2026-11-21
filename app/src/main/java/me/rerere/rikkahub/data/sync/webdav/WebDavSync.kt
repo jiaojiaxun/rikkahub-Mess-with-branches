@@ -21,6 +21,8 @@ import me.rerere.rikkahub.data.sync.AGENT_FULL_SETTINGS_ENTRY
 import me.rerere.rikkahub.data.sync.BackupExportFormat
 import me.rerere.rikkahub.data.sync.BackupProgress
 import me.rerere.rikkahub.data.sync.BackupRestoreMode
+import me.rerere.rikkahub.data.sync.merge.MergeApplyResult
+import me.rerere.rikkahub.data.sync.merge.MergePlan
 import me.rerere.rikkahub.data.sync.fileName
 import me.rerere.rikkahub.data.sync.isBackupArchiveName
 import me.rerere.rikkahub.utils.fileSizeToString
@@ -36,6 +38,8 @@ import java.util.zip.ZipOutputStream
 
 private const val TAG = "WebDavSync"
 private const val COPY_BUFFER_SIZE = 16 * 1024
+private const val LITE_MAX_FILE_SIZE = 3L * 1024 * 1024 // rhLiteThreshold
+private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif") // rhLiteThreshold
 
 class WebDavSync(
     private val settingsStore: SettingsStore,
@@ -217,10 +221,14 @@ class WebDavSync(
                 } else {
                     createOfficialDatabaseSnapshot(dbRoot)
                 }
-                if (full) agentDb = createFullDatabaseSnapshot(dbRoot)
+                // rh-batch6v2:lite-db (lite = full agent DB snapshot, but no uploads/ in archive)
+                if (full || format == BackupExportFormat.LITE) agentDb = createFullDatabaseSnapshot(dbRoot)
             }
 
-            val officialSettings = createOfficialSettingsText().toByteArray()
+            val officialSettings = createOfficialSettingsText().let { text ->
+            // rh-batch6v2:lite-settings (lite = same settings, no uploads in archive)
+            text
+        }.toByteArray()
             val agentSettings = if (full) {
                 json.encodeToString(settingsStore.settingsFlow.value).toByteArray()
             } else null
@@ -240,7 +248,9 @@ class WebDavSync(
                 }
                 agentDb?.let { add(it to AGENT_FULL_DB_ENTRY) }
             }
-            val fileEntries = if (includeFiles) backupFileEntries(full) else emptyList()
+            val includeImages = config.liteAttachmentTypes.isEmpty() || WebDavConfig.LiteAttachmentType.IMAGE in config.liteAttachmentTypes // rhLiteThreshold
+            val liteMax = if (format == BackupExportFormat.LITE) LITE_MAX_FILE_SIZE else Long.MAX_VALUE // rhLiteThreshold
+            val fileEntries = if (includeFiles) backupFileEntries(full, liteMax, includeImages) else emptyList()
             val totalBytes = (officialSettings.size + (agentSettings?.size ?: 0)).toLong() +
                 dbEntries.sumOf { it.first.length() } + fileEntries.sumOf { it.first.length() }
 
@@ -302,10 +312,10 @@ class WebDavSync(
      * uploads/ and fonts/ and aborts the whole import on a nested uploads path, so nested files
      * go under [AGENT_FULL_PREFIX] (this app maps them back; the official app skips them).
      */
-    private fun backupFileEntries(full: Boolean): List<Pair<File, String>> = buildList {
+    private fun backupFileEntries(full: Boolean, maxFileSize: Long = Long.MAX_VALUE, includeImages: Boolean = true): List<Pair<File, String>> = buildList {
         listOf(FileFolders.UPLOAD, FileFolders.FONTS).forEach { folder ->
             val root = File(context.filesDir, folder)
-            root.walkTopDown().filter(File::isFile).forEach { file ->
+            root.walkTopDown().filter { it.isFile && it.length() <= maxFileSize && (includeImages || it.extension.lowercase() !in IMAGE_EXTS) }.forEach { file ->
                 val relative = file.relativeTo(root).invariantSeparatorsPath
                 when {
                     !relative.contains('/') -> add(file to "$folder/$relative")
@@ -314,13 +324,13 @@ class WebDavSync(
             }
         }
         val trees = if (full) {
-            listOf(FileFolders.SKILLS, FileFolders.IMAGES, FileFolders.TOOL_OUTPUTS, "workspaces")
+            listOf(FileFolders.SKILLS, FileFolders.IMAGES, FileFolders.TOOL_OUTPUTS, "workspaces", "scripts") // rhBackupScripts265
         } else {
-            listOf(FileFolders.SKILLS)
+            listOf(FileFolders.SKILLS, "scripts") // rhBackupScripts265
         }
         trees.forEach { folder ->
             val root = File(context.filesDir, folder)
-            root.walkTopDown().filter(File::isFile).forEach { file ->
+            root.walkTopDown().filter { it.isFile && it.length() <= maxFileSize && (includeImages || it.extension.lowercase() !in IMAGE_EXTS) }.forEach { file ->
                 add(file to "$folder/${file.relativeTo(root).invariantSeparatorsPath}")
             }
         }
@@ -693,6 +703,68 @@ class WebDavSync(
                 while (cursor.moveToNext()) add(cursor.getString(nameIndex))
             }
         }
+
+
+    // ------------------------------------------------------------ [batch156] 两阶段合并
+
+    /** 两阶段合并：仅下载到缓存（调用方负责删除返回的文件）。 */
+    suspend fun downloadBackupForMerge(
+        config: WebDavConfig,
+        item: WebDavBackupItem,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): File = withContext(Dispatchers.IO) {
+        val backupFile = resolveCacheFile(item.displayName)
+            ?: throw IllegalArgumentException("不安全的备份文件名")
+        val client = getClient(config)
+        onProgress(BackupProgress("下载备份", total = item.size, detail = item.displayName))
+        client.downloadToFile(item.displayName, backupFile) { completed, total ->
+            onProgress(
+                BackupProgress(
+                    phase = "下载备份",
+                    completed = completed,
+                    total = total.takeIf { it > 0L } ?: item.size,
+                    detail = "已下载 ${completed.fileSizeToString()}",
+                    totalLabel = "实际 ZIP 文件",
+                )
+            )
+        }.getOrThrow()
+        backupFile
+    }
+
+    /** 阶段一：解压 + 扫描差异（不写库）。 */
+    suspend fun beginMergeRestore(
+        backupFile: File,
+        config: WebDavConfig,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): Pair<StagedMergeBackup, MergePlan> = withContext(Dispatchers.IO) {
+        BackupArchiveRestorer(
+            context = context,
+            json = json,
+            settingsStore = settingsStore,
+            appDatabase = appDatabase,
+            workspaceManager = workspaceManager,
+        ).stageForMerge(backupFile, config, onProgress)
+    }
+
+    /** 阶段二：按用户确认的决策应用合并。 */
+    suspend fun applyMergeRestore(
+        staged: StagedMergeBackup,
+        plan: MergePlan,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): MergeApplyResult = withContext(Dispatchers.IO) {
+        BackupArchiveRestorer(
+            context = context,
+            json = json,
+            settingsStore = settingsStore,
+            appDatabase = appDatabase,
+            workspaceManager = workspaceManager,
+        ).applyStagedMerge(staged, plan, onProgress)
+    }
+
+    /** 放弃合并：清理 staging。 */
+    fun discardMergeRestore(staged: StagedMergeBackup) {
+        staged.stagingDir.deleteRecursively()
+    }
 
     private fun resolveCacheFile(displayName: String): File? {
         val name = File(displayName).name

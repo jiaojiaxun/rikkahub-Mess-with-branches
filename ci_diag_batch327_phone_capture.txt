@@ -1,0 +1,4 @@
+[batch327] root=/home/runner/work/rikkahub-Mess-with-branches/rikkahub-Mess-with-branches
+[batch327] wrote app/src/main/java/me/rerere/rikkahub/phone/PhoneCapture.kt (9993 chars)
+[batch327] wrote app/src/main/java/me/rerere/rikkahub/phone/PhoneFormat.kt (26717 chars)
+[batch327] DONE files=2

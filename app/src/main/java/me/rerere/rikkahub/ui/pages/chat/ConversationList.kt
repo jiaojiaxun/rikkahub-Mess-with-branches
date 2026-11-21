@@ -2,6 +2,8 @@ package me.rerere.rikkahub.ui.pages.chat
 
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Folder01
+import me.rerere.hugeicons.stroke.ArrowDown01
+import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Forward02
 import me.rerere.hugeicons.stroke.Pin
 import me.rerere.hugeicons.stroke.PinOff
@@ -10,10 +12,12 @@ import me.rerere.hugeicons.stroke.PencilEdit01
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +41,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +54,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.paging.compose.LazyPagingItems
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import androidx.paging.compose.itemKey
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.model.Conversation
@@ -83,12 +92,19 @@ fun ColumnScope.ConversationList(
     onRename: (Conversation) -> Unit = {},
     onPin: (Conversation) -> Unit = {},
     onMoveToAssistant: (Conversation) -> Unit = {},
-    onMoveToFolder: (Conversation) -> Unit = {}
+    onMoveToFolder: (Conversation) -> Unit = {},
+    getChildren: (kotlin.uuid.Uuid) -> Flow<List<Conversation>> = { emptyFlow() }, // rhFoldTree
 ) {
     var hasScrolledToCurrent by remember(current.id) { mutableStateOf(false) }
+    // rhDrawerScrollFix: 用户手动滚动后,永久放弃本次「自动定位到当前会话」
+    var userDragged by remember(current.id) { mutableStateOf(false) }
+    LaunchedEffect(listState, current.id) {
+        snapshotFlow { listState.isScrollInProgress }
+            .collect { scrolling -> if (scrolling) userDragged = true }
+    }
 
-    LaunchedEffect(current.id, conversations.itemCount, hasScrolledToCurrent) {
-        if (hasScrolledToCurrent) return@LaunchedEffect
+    LaunchedEffect(current.id, conversations.itemCount, hasScrolledToCurrent, userDragged) {
+        if (hasScrolledToCurrent || userDragged) return@LaunchedEffect
         val currentIndex = conversations.itemSnapshotList.items.indexOfFirst {
             (it as? ConversationListItem.Item)?.conversation?.id == current.id
         }
@@ -160,6 +176,7 @@ fun ColumnScope.ConversationList(
                         onPin = onPin,
                         onMoveToAssistant = onMoveToAssistant,
                         onMoveToFolder = onMoveToFolder,
+                        getChildren = getChildren, // rhFoldTree
                         modifier = Modifier.animateItem()
                     )
                 }
@@ -231,9 +248,16 @@ private fun ConversationItem(
     onPin: (Conversation) -> Unit = {},
     onMoveToAssistant: (Conversation) -> Unit = {},
     onMoveToFolder: (Conversation) -> Unit = {},
-    onClick: (Conversation) -> Unit
+    onClick: (Conversation) -> Unit,
+    getChildren: (kotlin.uuid.Uuid) -> Flow<List<Conversation>> = { emptyFlow() }, // rhFoldTree
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    // rhFoldTree: 折叠树展开态
+    var isExpanded by remember { mutableStateOf(false) }
+    val childrenFlow = remember(conversation.id) { getChildren(conversation.id) }
+    val children by childrenFlow.collectAsState(initial = emptyList())
+    val hasChildren = children.isNotEmpty()
+    
     val backgroundColor = if (selected) {
         MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp)
     } else {
@@ -269,6 +293,16 @@ private fun ConversationItem(
             Spacer(Modifier.weight(1f))
 
             // 置顶图标
+            // rhFoldTree: 折叠树展开箭头（有子代理时显示）
+            if (hasChildren) {
+                Icon(
+                    imageVector = if (isExpanded) HugeIcons.ArrowDown01 else HugeIcons.ArrowRight01,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp).clickable { isExpanded = !isExpanded },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
             AnimatedVisibility(conversation.isPinned) {
                 Icon(
                     imageVector = HugeIcons.Pin,
@@ -362,6 +396,42 @@ private fun ConversationItem(
                         Icon(HugeIcons.Delete01, null)
                     }
                 )
+            }
+        }
+    }
+
+    // rhSubAgentNest (batch83): 展开时把子代理对话嵌套渲染在父对话下方
+    if (isExpanded && children.isNotEmpty()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 28.dp, top = 2.dp, bottom = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            children.forEach { child ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(50f))
+                        .clickable { onClick(child) }
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.Forward02,
+                        contentDescription = null,
+                        modifier = Modifier.size(10.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        text = child.title.ifBlank { stringResource(id = R.string.chat_page_new_message) },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

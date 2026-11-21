@@ -1,0 +1,5 @@
+[batch350] wrote PhoneScreenshot.kt
+[batch350] PhoneCore: Result.imageUrl added
+[batch350] PhoneCore: screen reads image arg
+[batch350] PhoneTools: run Text+Image, screen schema +image
+[batch350] DONE

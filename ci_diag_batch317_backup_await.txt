@@ -1,0 +1,11 @@
+--- batch317 v2 (fix Deferred count assert) ---
+OK VM imports +2
+OK VM.backup L96-108 -> 21 lines
+OK VM.restore L118-132 -> 23 lines
+OK VM.backupToS3 L270-282 -> 21 lines
+OK VM.restoreFromS3 L292-311 -> 28 lines
+OK WebDav.backup await + guard(it)
+OK WebDav.restore await + guard(err)
+OK S3.backup await + guard(it)
+OK S3.restore await + guard(err)
+DONE 3/3 written, await=4, guards=4, MARK=rhBackupAwait317

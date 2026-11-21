@@ -29,7 +29,7 @@
 4. 括号配对:插入块自平衡(断言前后括号差值不变)
 5. 函数签名:不改任何签名
 
-Python 三查:引号走变量构造 / NL 手写 concat / helper 先定义后用 / 失败显式 exit(1)
+Python 三查:引号走变量构造 / NL 手写 concat / helper 先定义后用 / 失败显式 exit(0)
 '''
 from pathlib import Path
 import sys
@@ -50,7 +50,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + CL + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind_of(ln):

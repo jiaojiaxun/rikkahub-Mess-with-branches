@@ -1,0 +1,11 @@
+braces:workspace-kt:(0, 0)->(0, 0)
+wrote:workspace-kt:2743
+braces:manager-ctor:(0, 0)->(0, 0)
+wrote:manager-ctor:8641
+already:manager-transport
+braces:app-module:(0, 0)->(0, 0)
+wrote:app-module:6314
+scan:detail:supportsTerminal(=1,isSsh()=2,WorkspaceTerminal=1
+scan:list:supportsTerminal(=0,isSsh()=1,WorkspaceTerminal=0
+RESULT:FAIL
+failures:cross:no-local-transport|cross:no-terminal-launch

@@ -1,0 +1,3 @@
+INFO global balance delta=0 (informational, not asserted)
+ChatPage OK: TopBar pure-presentational, single source of truth
+1 topbar pure presentational DONE

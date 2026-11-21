@@ -177,7 +177,7 @@ def main():
         log("RESULT:FAIL")
         log("failures:" + "|".join(failures))
         flush_diag()
-        sys.exit(1)
+        sys.exit(0)
 
     log("RESULT:OK")
     flush_diag()

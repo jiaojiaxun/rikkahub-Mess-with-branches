@@ -5,6 +5,8 @@ import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.data.ai.AILoggingManager
 import me.rerere.rikkahub.data.ai.ImageGenerationService
 import me.rerere.rikkahub.data.ai.tools.LocalTools
+import me.rerere.rikkahub.subagent.SubAgentEngine
+import me.rerere.rikkahub.subagent.SubAgentRegistry
 import me.rerere.rikkahub.data.ai.tools.local.BiometricResultBuffer
 import me.rerere.rikkahub.data.ai.tools.local.CameraResultBuffer
 import me.rerere.rikkahub.data.event.AppEventBus
@@ -78,6 +80,8 @@ val appModule = module {
             safPickerResultBuffer = get(),
             storageVolumeGrantStore = get(),
             okHttpClient = get(),
+            subAgentEngine = get(),
+            subAgentRegistry = get(),
         )
     }
 
@@ -87,6 +91,28 @@ val appModule = module {
 
     single {
         AppScope()
+    }
+
+    // rhTerminalManager355p: 终端会话按工作区存活, 离开终端页不结束会话
+    single {
+        me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceTerminalSessionManager(
+            context = get(),
+            appScope = get(),
+            workspaceRepository = get(),
+            // rhLocalTerminal359
+            workspaceManager = get(),
+        )
+    }
+
+    // Sub-agents: in-memory registry + engine
+    single { SubAgentRegistry() }
+    single {
+        SubAgentEngine(
+            registry = get(),
+            conversationRepo = get(),
+            settingsStore = get(),
+            appScope = get(),
+        )
     }
 
     // Background image generation (image page + generate_image tool).
@@ -113,6 +139,17 @@ val appModule = module {
         SoundEffectPlayer(get())
     }
 
+    /* rhCronJobDi: batch33 移植定时任务时漏掉的 DI 注册。
+       缺了它们，CronJobWorker 与设置页的 koinInject 会抛
+       NoDefinitionFoundException。前车之鉴：AAAelina 的 AppModule。 */
+    single {
+        me.rerere.rikkahub.data.cron.CronJobStore(get())
+    }
+
+    single {
+        me.rerere.rikkahub.service.CronJobScheduler(get(), get())
+    }
+
     single {
         AILoggingManager(get(), get())
     }
@@ -123,7 +160,7 @@ val appModule = module {
     single { me.rerere.llamacpp.LlamaCppRuntime() }
 
     single { NetworkTranslator(get()) }
-    single { TranslationHandler(get()) }
+    single { TranslationHandler(get(), get<AILoggingManager>()) } // rhTranslateUsageT9
     single { ModelContextLengthResolver(get()) }
 
     single {

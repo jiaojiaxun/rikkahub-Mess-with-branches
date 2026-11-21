@@ -21,7 +21,7 @@
 #   · ChatService 里 workspaceCwd 只出现在字段定义/透传、而 createWorkspaceTools 调用点没用到
 #     ⇒ 说明没接上，AI 的 shell 默认落在工作区根目录
 #
-# 只读脚本永不 exit(1)，不会影响构建链。
+# 只读脚本永不 exit(0)，不会影响构建链。
 
 import os
 

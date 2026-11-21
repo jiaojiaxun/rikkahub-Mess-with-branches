@@ -15,6 +15,12 @@ data class Tool(
     val parameters: () -> InputSchema? = { null },
     val systemPrompt: (model: Model, messages: List<UIMessage>) -> String = { _, _ -> "" },
     val needsApproval: (JsonElement) -> Boolean = { false },
+    /**
+     * rhApprovalIdentity: 审批身份键。默认 = 工具名；复合工具（如 rikkahub_apply_change）
+     * 覆盖为 "工具名@子动作"，把「始终允许」细化到动作粒度。同一键既用于授权
+     * 存储，也用于自动放行判定（见 ToolApprovalIdentity）。args 解析失败必须回落工具名。
+     */
+    val approvalKey: (JsonObject) -> String = { name },
     val execute: suspend (JsonElement) -> List<UIMessagePart>
 )
 

@@ -14,7 +14,7 @@
 #   C) colorScheme.primary 按文件聚合，找出滥用最集中的 10 个文件
 #   D) fillMaxWidth 按文件聚合 Top10（长文本页加 widthIn 的候选）
 #
-# 输出 ci_diag_batch377_polish_targets.txt。只读，永不 exit(1)。
+# 输出 ci_diag_batch377_polish_targets.txt。只读，永不 exit(0)。
 
 import os
 import re

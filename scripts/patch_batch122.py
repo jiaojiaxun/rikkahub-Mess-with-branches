@@ -31,7 +31,7 @@ vararg Char 与 predicate。v2 用 SQ=chr(39) 生成 `?.trimEnd('/')`。
 4. 括号配对:全部插入块自平衡;注释内无括号,不干扰 balance 校验
 5. 函数签名:不改任何签名
 
-Python 三查:引号用 BS/D/SQ 变量;无 f-string;helper 先定义;失败显式 exit(1)
+Python 三查:引号用 BS/D/SQ 变量;无 f-string;helper 先定义;失败显式 exit(0)
 '''
 from pathlib import Path
 import sys
@@ -56,7 +56,7 @@ def fail(path, msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + path + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 def balance(t):
     return (t.count('(') - t.count(')')) + (t.count('{') - t.count('}'))

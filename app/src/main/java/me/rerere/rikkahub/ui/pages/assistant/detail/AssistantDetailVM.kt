@@ -23,6 +23,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.AssistantMemory
 import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.model.Tag
+import me.rerere.rikkahub.data.repository.ConversationRepository // rhShortMemUI
 import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import kotlin.uuid.Uuid
@@ -36,6 +37,7 @@ class AssistantDetailVM(
     private val filesManager: FilesManager,
     private val skillManager: SkillManager,
     private val workspaceRepository: WorkspaceRepository,
+    private val conversationRepository: ConversationRepository, // rhShortMemUI
 ) : ViewModel() {
     private val assistantId = Uuid.parse(id)
 
@@ -68,7 +70,10 @@ class AssistantDetailVM(
 
     val memories = assistant
         .flatMapLatest { currentAssistant ->
-            if (currentAssistant.useGlobalMemory) {
+            // rhShortMemUI: 短期模式列出该助手全部会话的记忆, UI 按会话分组
+            if (currentAssistant.enableShortMemory) {
+                memoryRepository.getSessionMemoriesOfAssistantFlow(assistantId.toString())
+            } else if (currentAssistant.useGlobalMemory) {
                 memoryRepository.getGlobalMemoriesFlow()
             } else {
                 memoryRepository.getMemoriesOfAssistantFlow(assistantId.toString())
@@ -76,6 +81,14 @@ class AssistantDetailVM(
         }
         .stateIn(
             scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList()
+        )
+
+    // rhShortMemUI: 短期记忆管理页的会话标题映射(conversationId -> title)
+    val conversationTitles = conversationRepository
+        .getConversationsOfAssistant(assistantId)
+        .map { list -> list.associate { it.id.toString() to it.title } }
+        .stateIn(
+            scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyMap()
         )
 
     val providers = settingsStore
@@ -207,14 +220,17 @@ class AssistantDetailVM(
 
     fun addMemory(memory: AssistantMemory) {
         viewModelScope.launch {
-            val memoryAssistantId = if (assistant.value.useGlobalMemory) {
+            // rhShortMemUI: 短期模式跳过全局开关, 记忆归属调用方指定的会话
+            val shortMode = assistant.value.enableShortMemory
+            val memoryAssistantId = if (assistant.value.useGlobalMemory && !shortMode) {
                 MemoryRepository.GLOBAL_MEMORY_ID
             } else {
                 assistantId.toString()
             }
             memoryRepository.addMemory(
                 assistantId = memoryAssistantId,
-                content = memory.content
+                content = memory.content,
+                conversationId = if (shortMode) memory.conversationId else ""
             )
         }
     }

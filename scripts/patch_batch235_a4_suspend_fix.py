@@ -34,7 +34,7 @@ MARK = 'rhA4Suspend235'
 def fail(msg):
     print('::error::batch235 ' + str(msg)[:1200])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def main():

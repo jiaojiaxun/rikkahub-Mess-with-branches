@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
@@ -26,7 +28,12 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.nav.BackButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dokar.sonner.ToastType
+import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.backup.components.BackupDialog
+import androidx.compose.material3.AlertDialog
 import me.rerere.rikkahub.ui.pages.backup.tabs.ImportExportTab
 import me.rerere.rikkahub.ui.pages.backup.tabs.ReminderTab
 import me.rerere.rikkahub.ui.pages.backup.tabs.S3Tab
@@ -39,6 +46,7 @@ fun BackupPage(vm: BackupVM = koinViewModel()) {
     val pagerState = rememberPagerState { 4 }
     val scope = rememberCoroutineScope()
     var showRestartDialog by remember { mutableStateOf(false) }
+    val toaster = LocalToaster.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
@@ -124,6 +132,58 @@ fun BackupPage(vm: BackupVM = koinViewModel()) {
             }
         }
     }
+
+    // [batch158] 两阶段合并：差异确认对话框 + 结果处理
+    val mergeState by vm.mergeUiState.collectAsStateWithLifecycle()
+    LaunchedEffect(mergeState) {
+        when (val state = mergeState) {
+            is BackupVM.MergeUiState.Done -> {
+                toaster.show("合并完成：" + state.summary, type = ToastType.Success)
+                vm.cancelMerge()
+                showRestartDialog = true
+            }
+            is BackupVM.MergeUiState.Failed -> {
+                toaster.show("合并失败：" + state.message, type = ToastType.Error)
+                vm.cancelMerge()
+            }
+            else -> Unit
+        }
+    }
+    (mergeState as? BackupVM.MergeUiState.AwaitingDecision)?.let { state ->
+        MergeConfirmDialog(
+            plan = state.plan,
+            onConversationDecision = vm::updateConversationDecision,
+            onSettingsItemDecision = vm::updateSettingsItemDecision,
+            onToggleScalar = vm::toggleScalarAdoption,
+            onApplyAllBackup = vm::mergeAllUseBackup, // rhMergeBulk
+            onKeepAllLocal = vm::mergeAllKeepLocal, // rhMergeBulk
+            onConfirm = { vm.confirmMerge() },
+            onCancel = { vm.cancelMerge() },
+        )
+    }
+
+// rhMergeProgress249: 与导入/导出备份包一致的进度样式（波浪进度环 + 当前事项 + 百分比）
+val mergeProgress by vm.progress.collectAsStateWithLifecycle()
+if (mergeState is BackupVM.MergeUiState.Preparing || mergeState is BackupVM.MergeUiState.Applying) {
+    val isApplying = mergeState is BackupVM.MergeUiState.Applying
+    AlertDialog(
+        onDismissRequest = { },
+        icon = { CircularWavyProgressIndicator(modifier = Modifier.size(28.dp)) },
+        title = { Text(if (isApplying) "正在应用合并…" else "正在扫描备份差异…") },
+        text = {
+            val p = mergeProgress
+            Text(
+                if (p == null) {
+                    "请稍候，正在处理备份文件…"
+                } else {
+                    (if (p.detail.isNotBlank()) p.detail else p.phase) +
+                        (p.percent?.let { " " + it + "%" } ?: "")
+                }
+            )
+        },
+        confirmButton = { },
+    )
+}
 
     if (showRestartDialog) {
         BackupDialog()

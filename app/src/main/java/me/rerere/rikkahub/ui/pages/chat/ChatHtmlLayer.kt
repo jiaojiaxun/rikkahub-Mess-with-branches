@@ -97,7 +97,7 @@ fun Modifier.rhReadableOnSkin(): Modifier {
 }
 
 /** Height reserved for the native TopAppBar, excluding the status bar. */
-private const val TOP_BAR_DP = 64
+private const val TOP_BAR_DP = 56 // rhDsh324
 
 /** Approximate height of the native ChatInput, excluding the navigation bar (heuristic). */
 private const val INPUT_BAR_DP = 136

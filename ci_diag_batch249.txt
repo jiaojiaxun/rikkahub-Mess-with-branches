@@ -1,0 +1,39 @@
+chain OK: counter removed
+1 chain counter DONE
+tools OK: default expanded + no prefix + onClick=null + detail button
+2 tools expand DONE
+dialog OK: NEW excluded from confirm list
+3 merge dialog NEW DONE
+page OK: progress ring + current item
+4 backup page progress DONE
+strings OK: app/src/main/res/values/strings.xml
+strings OK: app/src/main/res/values-zh/strings.xml
+5 strings DONE
+probe app/src/main/java/me/rerere/rikkahub/data/db/entity/MemoryEntity.kt hits=2
+probe app/src/main/java/me/rerere/rikkahub/data/db/entity/MemoryEntity.kt L17:@ColumnInfo("conversation_id")
+probe app/src/main/java/me/rerere/rikkahub/data/db/entity/MemoryEntity.kt L18:val conversationId: String = "",
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt hits=15
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L17:entities.map { AssistantMemory(it.id, it.content, it.conversationId) }
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L22:.map { AssistantMemory(it.id, it.content, it.conversationId) }
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L28:entities.map { AssistantMemory(it.id, it.content, it.conversationId) }
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L33:.map { AssistantMemory(it.id, it.content, it.conversationId) }
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L49:conversationId = newMemory.conversationId,
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L53:suspend fun addMemory(assistantId: String, content: String, conversationId: String = ""): AssistantMemory {
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L57:conversationId = conversationId,
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L64:conversationId = conversationId,
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L72:fun getMemoriesOfConversationFlow(assistantId: String, conversationId: String): Flow<List<AssistantMemory>> =
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L73:memoryDAO.getMemoriesOfConversationFlow(assistantId, conversationId)
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L75:entities.map { AssistantMemory(it.id, it.content, it.conversationId) }
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L78:suspend fun getMemoriesOfConversation(assistantId: String, conversationId: String): List<AssistantMemory> {
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L79:return memoryDAO.getMemoriesOfConversation(assistantId, conversationId)
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L80:.map { AssistantMemory(it.id, it.content, it.conversationId) }
+probe app/src/main/java/me/rerere/rikkahub/data/repository/MemoryRepository.kt L87:entities.map { AssistantMemory(it.id, it.content, it.conversationId) }
+probe app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt hits=7
+probe app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt L478:val memoryCount = countRows(liveDb, "MemoryEntity")
+probe app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt L485:val snapshotMemoryCount = SQLiteDatabase.openDatabase(
+probe app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt L489:).use { countRows(it, "MemoryEntity") }
+probe app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt L498:require(snapshotMemoryCount == memoryCount) {
+probe app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt L499:"官方兼容快照丢失记忆: live=$memoryCount snapshot=$snapshotMemoryCount"
+probe app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt L507:"messageNodes=$snapshotMessageNodeCount memories=$snapshotMemoryCount favorites=$snapshotFavoriteCount",
+probe app/src/main/java/me/rerere/rikkahub/data/sync/webdav/WebDavSync.kt L588:require(countRows(db, "MemoryEntity") == memoryCount) {
+6 memory probe DONE

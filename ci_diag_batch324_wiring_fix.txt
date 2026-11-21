@@ -1,0 +1,4 @@
+chatpage: modelIdentifier anchor count=1
+chatpage: context window now resolves the conversation model first
+html layer: TOP_BAR_DP=64 anchor count=1
+html layer: TOP_BAR_DP 64 -> 56

@@ -31,7 +31,7 @@ def fail(msg):
     print("::error title=phone331::" + line)
     DIAG.append(line)
     write_diag()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def write_diag():

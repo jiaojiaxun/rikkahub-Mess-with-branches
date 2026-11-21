@@ -294,6 +294,7 @@ fun ChatMessageActionsSheet(
     isFavorite: Boolean = false,
     onToggleFavorite: (() -> Unit)? = null,
     onWebViewPreview: () -> Unit,
+    onQuote: (() -> Unit)? = null, // rhQuoteMenu
     onDismissRequest: () -> Unit
 ) {
     ModalBottomSheet(
@@ -334,6 +335,29 @@ fun ChatMessageActionsSheet(
                 }
             }
 
+            // rhQuoteMenu: 引用回复
+            if (onQuote != null) {
+                Card(
+                    onClick = {
+                        onDismissRequest()
+                        onQuote()
+                    },
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "引用回复",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                }
+            }
             // WebView Preview (only show if message has text content)
             val hasTextContent = message.parts.filterIsInstance<UIMessagePart.Text>()
                 .any { it.text.isNotBlank() }

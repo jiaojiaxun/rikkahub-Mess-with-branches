@@ -76,6 +76,8 @@ fun SettingSearchPage(vm: SettingVM = koinViewModel()) {
     val scope = rememberCoroutineScope()
     val nav = LocalNavController.current
     var showAddDialog by remember { mutableStateOf(false) }
+    var duplicateProviderName by remember { mutableStateOf<String?>(null) }
+    var pendingDuplicateOptions by remember { mutableStateOf<SearchServiceOptions?>(null) }
 
     Scaffold(
         topBar = {
@@ -180,18 +182,61 @@ fun SettingSearchPage(vm: SettingVM = koinViewModel()) {
         }
     }
 
+    duplicateProviderName?.let { providerName ->
+        AlertDialog(
+            onDismissRequest = {
+                duplicateProviderName = null
+                pendingDuplicateOptions = null
+            },
+            title = { Text(stringResource(R.string.search_duplicate_key_title)) },
+            text = {
+                Text(stringResource(R.string.search_duplicate_key_message, providerName))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDuplicateOptions?.let { options ->
+                        vm.updateSettings(
+                            settings.copy(searchServices = listOf(options) + settings.searchServices)
+                        )
+                        scope.launch { lazyListState.animateScrollToItem(0) }
+                    }
+                    duplicateProviderName = null
+                    pendingDuplicateOptions = null
+                    showAddDialog = false
+                }) {
+                    Text(stringResource(R.string.search_duplicate_key_continue))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    duplicateProviderName = null
+                    pendingDuplicateOptions = null
+                }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+
     if (showAddDialog) {
         AddProviderDialog(
             onDismiss = { showAddDialog = false },
             onConfirm = { options ->
-                showAddDialog = false
-                vm.updateSettings(
-                    settings.copy(
-                        searchServices = listOf(options) + settings.searchServices
+                val duplicate = findDuplicateSearchApiKey(options, settings.searchServices)
+                if (duplicate != null) {
+                    pendingDuplicateOptions = options
+                    duplicateProviderName = settings.searchServices
+                        .firstOrNull { it.id == duplicate }?.displayName
+                } else {
+                    showAddDialog = false
+                    vm.updateSettings(
+                        settings.copy(
+                            searchServices = listOf(options) + settings.searchServices
+                        )
                     )
-                )
-                scope.launch {
-                    lazyListState.animateScrollToItem(0)
+                    scope.launch {
+                        lazyListState.animateScrollToItem(0)
+                    }
                 }
             }
         )

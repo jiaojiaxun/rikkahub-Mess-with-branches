@@ -69,7 +69,12 @@ object ImportedDatabaseReconciler {
         "lorebook_ids", "workspace_cwd", "folder_id", "chat_model_id",
     )
 
-    /** The current slim workspace table: the removed shell_status column must never be present. */
+    // batch89FixAlreadyCurrent: columns the fork adds on top of any upstream schema.
+    // An upstream v24 file legitimately lacks chat_model_id, so it must be
+    // backfilled by the alreadyCurrent branch below, not required up front.
+    private val FORK_ONLY_CONVERSATION_COLUMNS = setOf("chat_model_id")
+
+    /** The workspace table base columns. shell_status / shell_compatibility_mode (v36+) may also be present. */
     internal val CURRENT_WORKSPACE_COLUMNS = setOf(
         "id",
         "name",
@@ -80,8 +85,9 @@ object ImportedDatabaseReconciler {
         "tool_approvals",
     )
 
+    // rhReconcilerShellCols: shell 列(v36+)允许存在; 判定只看 7 个基础列是否齐全
     internal fun isCurrentWorkspaceSchema(columns: Set<String>): Boolean =
-        CURRENT_WORKSPACE_COLUMNS.all(columns::contains) && "shell_status" !in columns
+        CURRENT_WORKSPACE_COLUMNS.all(columns::contains)
 
     /**
      * True when the shared conversation schema already contains every column that the old
@@ -173,7 +179,7 @@ object ImportedDatabaseReconciler {
                     // custom_system_prompt crash reported for such exports.
                     val sharedSchemaCurrent =
                         isCurrentSharedSchema(conversationColumns) &&
-                            REQUIRED_CONVERSATION_COLUMNS.all(conversationColumns::contains)
+                            (REQUIRED_CONVERSATION_COLUMNS - FORK_ONLY_CONVERSATION_COLUMNS).all(conversationColumns::contains) // batch89FixAlreadyCurrent
                     if (sharedSchemaCurrent && !workspaceExists) {
                         createWorkspaceTable(db)
                         workspaceSchemaCurrent = true
@@ -208,6 +214,9 @@ object ImportedDatabaseReconciler {
                                 "ALTER TABLE `ConversationEntity` ADD COLUMN `chat_model_id` TEXT NOT NULL DEFAULT ''"
                             )
                         }
+                        if (!hasColumn(db, "ConversationEntity", "parent_chat_id")) {
+                            db.execSQL("ALTER TABLE `ConversationEntity` ADD COLUMN `parent_chat_id` TEXT")
+                        } // rhParentChatId
                         // No migration should run: the file is either already stamped at the
                         // fork's version, or it is an upstream file whose shared schema already
                         // matches it. Point Room's identity row and user_version at the fork so
@@ -262,6 +271,8 @@ object ImportedDatabaseReconciler {
                 `updated_at` INTEGER NOT NULL,
                 `last_access_at` INTEGER,
                 `tool_approvals` TEXT NOT NULL DEFAULT '{}',
+                `shell_status` TEXT NOT NULL DEFAULT 'DISABLED',
+                `shell_compatibility_mode` INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY(`id`)
             )
         """.trimIndent())
@@ -304,14 +315,18 @@ object ImportedDatabaseReconciler {
                     `updated_at` INTEGER NOT NULL,
                     `last_access_at` INTEGER,
                     `tool_approvals` TEXT NOT NULL DEFAULT '{}',
+                `shell_status` TEXT NOT NULL DEFAULT 'DISABLED',
+                `shell_compatibility_mode` INTEGER NOT NULL DEFAULT 0,
                     PRIMARY KEY(`id`)
                 )
             """.trimIndent())
-            val targetColumns = listOf("id", "name", "root", "created_at", "updated_at", "last_access_at", "tool_approvals")
+            val targetColumns = listOf("id", "name", "root", "created_at", "updated_at", "last_access_at", "tool_approvals", "shell_status", "shell_compatibility_mode")
             val expressions = targetColumns.map { column ->
                 when {
                     column in existingColumns -> "`$column`"
                     column == "tool_approvals" -> "'{}'"
+            column == "shell_status" -> "'DISABLED'"
+            column == "shell_compatibility_mode" -> "0"
                     else -> "NULL"
                 }
             }

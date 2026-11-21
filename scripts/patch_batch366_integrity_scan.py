@@ -15,7 +15,7 @@
 #      统计每个文件被多少个批次脚本引用 —— 用来提前发现「后一批依赖前一批产物」的脆弱链
 #      （371→372 就是这类：371 插入、372 再改 371 的产物）。
 #
-# 只读，永不 exit(1)。输出 ci_diag_batch366_integrity.txt。
+# 只读，永不 exit(0)。输出 ci_diag_batch366_integrity.txt。
 
 import os
 import re

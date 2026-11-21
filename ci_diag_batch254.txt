@@ -1,0 +1,69 @@
+chatvm OK: currentChatModel -> getChatModelOf(conversation)
+1 currentChatModel -> session scope DONE
+probe ChatPage hits=6
+page L139:val currentChatModel by vm.currentChatModel.collectAsStateWithLifecycle()
+page L241:currentChatModel = currentChatModel,
+page L273:currentChatModel = currentChatModel,
+page L300:currentChatModel: Model?,
+page L510:if (currentChatModel == null) {
+page L541:vm.setChatModel(assistant = setting.getCurrentAssistant(), model = it)
+2 ChatPage model entry probe DONE
+reconciler L95-140 lines=41
+rec L95:* official/third-party exports contain conversations but omit empty workspace metadata.
+rec L96:*/
+rec L97:internal fun isCurrentSharedSchema(columns: Set<String>): Boolean =
+rec L98:MODERN_COLUMN_SENTINELS.all(columns::contains)
+rec L100:private const val CONTEXT_COMPACTION_DDL =
+rec L101:"CREATE TABLE IF NOT EXISTS `conversation_compaction` (`conversation_id` TEXT NOT NULL, `summary` TEXT NOT NULL, `tail_start_node_id` TEXT, `source_end_node_id` TEXT NOT NULL, `sum
+rec L103:/** Tables belonging to features removed from the slim build. Never recreate them on import. */
+rec L104:private val REMOVED_FEATURE_TABLES = listOf(
+rec L105:"scheduled_jobs",
+rec L106:"scheduled_job_runs",
+rec L107:"ssh_hosts",
+rec L108:"telegram_chats",
+rec L109:"workflows",
+rec L110:"workflow_runs",
+rec L111:"agent_runs",
+rec L112:)
+rec L114:/**
+rec L115:* Indices the fork's 27->28 auto-migration adds on tables that already exist before that
+rec L116:* step (`ConversationEntity`, `MemoryEntity`). That migration is a pure schema diff compiled
+rec L117:* from app/schemas/.../27.json and 28.json, so it never runs on the "already current" path
+rec L118:* below, which stamps the file straight to [EXPECTED_VERSION]: the indices would otherwise
+rec L119:* be silently missing (issue #60, `Found: indices = {}` on `ConversationEntity`). Every
+rec L120:* statement is `IF NOT EXISTS`, so running this against a database that already has the
+rec L121:* indices - including a genuine backup already on v30 - is a safe no-op that touches no data.
+rec L122:*/
+rec L123:internal val BACKFILL_INDEX_DDL: List<String> = listOf(
+rec L124:"CREATE INDEX IF NOT EXISTS `index_ConversationEntity_assistant_id_is_pinned_update_at` ON `ConversationEntity` (`assistant_id`, `is_pinned`, `update_at`)",
+rec L125:"CREATE INDEX IF NOT EXISTS `index_ConversationEntity_is_pinned_update_at` ON `ConversationEntity` (`is_pinned`, `update_at`)",
+rec L126:"CREATE INDEX IF NOT EXISTS `index_MemoryEntity_assistant_id` ON `MemoryEntity` (`assistant_id`)",
+rec L127:)
+rec L129:/**
+rec L130:* Call after a restore has written the database file, and only when the restore actually
+rec L131:* included the database. Safe to call when the file is a genuine agent backup (every
+rec L132:* statement is idempotent) or when the file does not exist (no-op).
+rec L133:*/
+rec L134:fun reconcile(context: Context) {
+rec L135:reconcileDatabaseFile(context.getDatabasePath(DB_NAME))
+rec L136:}
+rec L138:/**
+rec L139:* Testable core of [reconcile]: operate on the raw db file at [dbFile] directly, so a test
+rec L140:* can exercise it against a temp file instead of the app's live `rikka_hub` database.
+probe AssistantDetailVM memories hits=15
+dvm L42:private val assistantId = Uuid.parse(id)
+dvm L66:settings.assistants.find { it.id == assistantId } ?: Assistant()
+dvm L71:val memories = assistant
+dvm L74:if (currentAssistant.enableShortMemory) {
+dvm L75:memoryRepository.getSessionMemoriesOfAssistantFlow(assistantId.toString())
+dvm L76:} else if (currentAssistant.useGlobalMemory) {
+dvm L77:memoryRepository.getGlobalMemoriesFlow()
+dvm L79:memoryRepository.getMemoriesOfAssistantFlow(assistantId.toString())
+dvm L88:.getConversationsOfAssistant(assistantId)
+dvm L207:val prior = current.assistants.firstOrNull { it.id == assistantId }
+dvm L214:if (it.id == assistantId) next else it
+dvm L224:val shortMode = assistant.value.enableShortMemory
+dvm L225:val memoryAssistantId = if (assistant.value.useGlobalMemory && !shortMode) {
+dvm L228:assistantId.toString()
+dvm L231:assistantId = memoryAssistantId,
+3 memory chain probe DONE

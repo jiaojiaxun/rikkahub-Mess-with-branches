@@ -9,7 +9,7 @@ This patch replaces the whole region between the two known function names
 instead of scanning braces: rhStepsStartMillis -> rhStepsEndMillis.
 
 It also re-asserts the reference group semantics if 291 did not land it.
-Single write per file, no multi-line Python parentheses, no exit(1) literal.
+Single write per file, no multi-line Python parentheses, no exit(0) literal.
 '''
 from pathlib import Path
 

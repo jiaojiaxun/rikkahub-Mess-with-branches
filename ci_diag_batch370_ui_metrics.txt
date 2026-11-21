@@ -1,0 +1,30 @@
+files:668
+
+[padding] total=875
+  top: 8dp×267, 16dp×245, 4dp×127, 12dp×94, 2dp×32, 6dp×24, 32dp×16, 10dp×14, 20dp×11, 24dp×8, 1dp×8, 0dp×7, 14dp×6, 48dp×5, 28dp×3
+[spacedBy] total=662
+  top: 8dp×285, 4dp×119, 16dp×111, 12dp×79, 6dp×36, 2dp×22, 10dp×4, 5dp×3, 18dp×1, 3dp×1, 1dp×1
+[rounded] total=114
+  top: 8dp×23, 16dp×22, 12dp×16, 4dp×14, 20dp×7, 999dp×6, 10dp×5, 14dp×3, 18dp×3, 22dp×3, 24dp×2, 5dp×2, 3dp×2, 2dp×2, 6dp×1
+[size-limit] total=39
+  top: 120dp×7, 200dp×4, 400dp×4, 240dp×3, 180dp×2, 800dp×2, 360dp×2, 48dp×1, 96dp×1, 320dp×1, 140dp×1, 300dp×1, 50dp×1, 52dp×1, 100dp×1
+[size] total=303
+  top: 16dp×65, 20dp×29, 24dp×28, 18dp×23, 32dp×22, 14dp×17, 8dp×14, 36dp×13, 48dp×12, 40dp×12, 28dp×11, 22dp×10, 12dp×5, 10dp×4, 4dp×4
+[elevation] total=40
+  top: 2dp×13, 0dp×11, 4dp×9, 8dp×3, 6dp×2, 1dp×2
+
+[fontSize] total=43
+  top: 12sp×13, 11sp×6, 13sp×5, 10sp×5, 20sp×2, 15sp×2, 18sp×2, 16sp×1, 24sp×1, 39sp×1, 48sp×1, 22sp×1, 26sp×1, 14sp×1, 28sp×1
+
+fillMaxWidth:978
+colorScheme.primary:168
+hardcoded-Color(0x..):628
+
+--- propose ---
+spacing-scale: 4 / 8 / 12 / 16 / 24 / 32
+radius-scale: 8 / 12 / 16 / 20 (pill=50%)
+font-scale: 11 / 12 / 13 / 14 / 16 / 18 / 22
+page-horizontal-padding: 16dp
+card-inner-padding: 16dp
+list-item-gap: 8dp
+RESULT:OK

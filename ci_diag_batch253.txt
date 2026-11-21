@@ -1,0 +1,6 @@
+mcpconfig OK: McpCommonOptions.avatar added
+1 McpCommonOptions.avatar DONE
+setting page OK: avatar + onClick edit + status dot
+2 SettingMcpPage avatar (editable) DONE
+picker OK: read-only avatar in assistant MCP list
+3 McpPicker avatar (read-only) DONE

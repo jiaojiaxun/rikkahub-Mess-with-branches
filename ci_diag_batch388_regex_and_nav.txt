@@ -1,0 +1,9 @@
+const:before=private val RH_IMAGE_ID_REGEX = Regex("!img\\[([0-9a-fA-F]{64})\\]")
+const:after=private val RH_IMAGE_ID_REGEX = Regex("!img\\[([0-9a-fA-F]{64})\\]")
+const:pattern-ok=True
+const:replace-sites=1
+const:rhImageId383=1
+nav:ssh-screen=1
+nav:ssh-page=2
+nav:ssh-var=1
+nav:detail=1

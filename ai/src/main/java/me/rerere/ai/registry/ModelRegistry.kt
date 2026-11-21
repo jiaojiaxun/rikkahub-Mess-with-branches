@@ -12,23 +12,27 @@ object ModelRegistry {
         tokens("gpt", "4", "o")
         visionInput()
         toolAbility()
+        contextLength(128000)
     }
 
     private val GPT_4_1 = defineModel {
         tokens("gpt", "4", "1")
         visionInput()
         toolAbility()
+        contextLength(1047576)
     }
 
     val OPENAI_O_MODELS = defineModel {
         tokens(tokenRegex("^o$"), tokenRegex("^\\d+$"))
         visionInput()
         toolReasoningAbility()
+        contextLength(200000)
     }
 
     private val GPT_OSS = defineModel {
         tokens("gpt", "oss")
         toolReasoningAbility()
+        contextLength(131072)
     }
 
     val GPT_5 = defineModel {
@@ -37,66 +41,77 @@ object ModelRegistry {
         notTokens("gpt", "5", "chat")
         visionInput()
         toolReasoningAbility()
+        contextLength(400000)
     }
 
     private val GPT_5_1 = defineModel {
         tokens("gpt", "5", "1")
         visionInput()
         toolReasoningAbility()
+        contextLength(400000)
     }
 
     private val GPT_5_2 = defineModel {
         tokens("gpt", "5", "2")
         visionInput()
         toolReasoningAbility()
+        contextLength(400000)
     }
 
     private val GPT_5_3 = defineModel {
         tokens("gpt", "5", "3")
         visionInput()
         toolAbility()
+        contextLength(400000)
     }
 
     private val GPT_5_4 = defineModel {
         tokens("gpt", "5", "4")
         visionInput()
         toolReasoningAbility()
+        contextLength(400000)
     }
 
     private val GPT_5_4_MINI = defineModel {
         tokens("gpt", "5", "4", "mini")
         visionInput()
         toolReasoningAbility()
+        contextLength(400000)
     }
 
     private val GPT_5_4_NANO = defineModel {
         tokens("gpt", "5", "4", "nano")
         visionInput()
         toolReasoningAbility()
+        contextLength(400000)
     }
 
     private val GPT_5_5 = defineModel {
         tokens("gpt", "5", "5")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     private val GPT_5_6 = defineModel {
         tokens("gpt", "5", "6")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     private val GPT_6 = defineModel {
         tokens("gpt", "6")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     private val GEMINI_20_FLASH = defineModel {
         tokens("gemini", "2", "0", "flash")
         visionInput()
         toolAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_2_5_FLASH = defineModel {
@@ -104,12 +119,14 @@ object ModelRegistry {
         notTokens("image")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_2_5_PRO = defineModel {
         tokens("gemini", "2", "5", "pro")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_2_5_IMAGE = defineModel {
@@ -134,24 +151,28 @@ object ModelRegistry {
         tokens("gemini", "3", "pro")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_3_FLASH = defineModel {
         tokens("gemini", "3", "flash")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_3_1_PRO_PREVIEW = defineModel {
         tokens("gemini", "3", "1", "pro", "preview")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS = defineModel {
         tokens("gemini", "3", "1", "pro", "preview", "customtools")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_3_1_FLASH_IMAGE = defineModel {
@@ -165,18 +186,21 @@ object ModelRegistry {
         tokens("gemini", "3", "5")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_FLASH_LATEST = defineModel {
         exact("gemini-flash-latest")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_PRO_LATEST = defineModel {
         exact("gemini-pro-latest")
         visionInput()
         toolReasoningAbility()
+        contextLength(1048576)
     }
 
     val GEMINI_LATEST = defineGroup {
@@ -195,48 +219,56 @@ object ModelRegistry {
         tokens("claude", "3", "5", "sonnet")
         visionInput()
         toolReasoningAbility()
+        contextLength(200000)
     }
 
     private val CLAUDE_SONNET_3_7 = defineModel {
         tokens("claude", "3", "7", "sonnet")
         visionInput()
         toolReasoningAbility()
+        contextLength(200000)
     }
 
     private val CLAUDE_4 = defineModel {
         tokens("claude", "4")
         visionInput()
         toolReasoningAbility()
+        contextLength(200000)
     }
 
     val CLAUDE_4_5 = defineModel {
         tokens("claude", "4", "5")
         visionInput()
         toolReasoningAbility()
+        contextLength(200000)
     }
 
     private val CLAUDE_SONNET_4_6 = defineModel {
         tokens("claude", "sonnet", "4", "6")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val CLAUDE_OPUS_4_6 = defineModel {
         tokens("claude", "opus", "4", "6")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val CLAUDE_OPUS_4_7 = defineModel {
         tokens("claude", "opus", "4", "7")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val CLAUDE_OPUS_4_8 = defineModel {
         tokens("claude", "opus", "4", "8")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val CLAUDE_SONNET_5 = defineModel {
@@ -244,6 +276,7 @@ object ModelRegistry {
         notTokens("claude", "sonnet", "4")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val CLAUDE_OPUS_5 = defineModel {
@@ -251,6 +284,7 @@ object ModelRegistry {
         notTokens("claude", "opus", "4")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     val CLAUDE_SERIES = defineGroup {
@@ -271,11 +305,13 @@ object ModelRegistry {
     private val DEEPSEEK_V3_MODEL = defineModel {
         tokens("deepseek", "v", "3")
         toolAbility()
+        contextLength(128000)
     }
 
     private val DEEPSEEK_CHAT = defineModel {
         tokens("deepseek", "chat")
         toolAbility()
+        contextLength(1000000)
     }
 
     private val DEEPSEEK_V3 = defineGroup {
@@ -285,11 +321,13 @@ object ModelRegistry {
     private val DEEPSEEK_R1_MODEL = defineModel {
         tokens("deepseek", "r", "1")
         toolReasoningAbility()
+        contextLength(128000)
     }
 
     private val DEEPSEEK_REASONER = defineModel {
         tokens("deepseek", "reasoner")
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     // 2026-09-10: DeepSeek retired V4-Flash / V4-Flash-Vision-Exp. On the official API,
@@ -301,6 +339,7 @@ object ModelRegistry {
         tokens("deepseek", "v", "4", "flash")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     // Upstream 2.4.11 / 2.5.5: experimental vision id, kept as its own entry.
@@ -308,12 +347,14 @@ object ModelRegistry {
         tokens("deepseek", "v", "4", "flash", "vision", "exp")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val DEEPSEEK_V4_PRO = defineModel {
         tokens("deepseek", "v", "4", "pro")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     // Current official id for V4.1-Flash (upstream 2.5.2, 46cacf23).
@@ -321,6 +362,7 @@ object ModelRegistry {
         tokens("deepseek", "flash")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     // Open-weights / third-party ids such as deepseek-ai/DeepSeek-V4.1-Flash (upstream 2.5.1, ab07ac1f).
@@ -328,6 +370,7 @@ object ModelRegistry {
         tokens("deepseek", "v", "4", "1", "flash")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val DEEPSEEK_R1 = defineGroup {
@@ -337,113 +380,133 @@ object ModelRegistry {
     private val DEEPSEEK_V3_1 = defineModel {
         tokens("deepseek", "v", "3", "1")
         toolReasoningAbility()
+        contextLength(128000)
     }
 
     private val DEEPSEEK_V3_2 = defineModel {
         tokens("deepseek", "v", "3", "2")
         toolReasoningAbility()
+        contextLength(128000)
     }
 
     private val QWEN_3 = defineModel {
         tokens("qwen", "3")
         toolReasoningAbility()
+        contextLength(128000)
     }
 
     private val QWEN_3_5 = defineModel {
         tokens("qwen", "3", "5")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val QWEN_3_6 = defineModel {
         tokens("qwen", "3", "6")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val QWEN_3_7 = defineModel {
         tokens("qwen", "3", "7")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val QWEN_3_8 = defineModel {
         tokens("qwen", "3", "8")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val QWEN_3_5_MAX = defineModel {
         tokens("qwen", "3", "5", "max")
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val QWEN_3_6_MAX = defineModel {
         tokens("qwen", "3", "6", "max")
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val QWEN_3_7_MAX = defineModel {
         tokens("qwen", "3", "7", "max")
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val QWEN_3_8_MAX = defineModel {
         tokens("qwen", "3", "8", "max")
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val DOUBAO_1_6 = defineModel {
         tokens("doubao", "1", "6")
         visionInput()
         toolReasoningAbility()
+        contextLength(256000)
     }
 
     private val DOUBAO_1_8 = defineModel {
         tokens("doubao", "1", "8")
         visionInput()
         toolReasoningAbility()
+        contextLength(256000)
     }
 
     private val DOUBAO_2_0 = defineModel {
         tokens("doubao", "2", "0")
         visionInput()
         toolReasoningAbility()
+        contextLength(256000)
     }
 
     private val DOUBAO_2_1 = defineModel {
         tokens("doubao", "2", "1")
         visionInput()
         toolReasoningAbility()
+        contextLength(256000)
     }
 
     private val GROK_4 = defineModel {
         tokens("grok", "4")
         visionInput()
         toolReasoningAbility()
+        contextLength(256000)
     }
 
     private val KIMI_K2 = defineModel {
         tokens("kimi", "k", "2")
         toolReasoningAbility()
+        contextLength(128000)
     }
 
     val KIMI_K2_5 = defineModel {
         tokens("kimi", "k", "2", "5")
         visionInput()
         toolReasoningAbility()
+        contextLength(256000)
     }
 
     val KIMI_K2_6 = defineModel {
         tokens("kimi", "k", "2", "6")
         visionInput()
         toolReasoningAbility()
+        contextLength(256000)
     }
 
     val KIMI_K3 = defineModel {
         tokens("kimi", "k", "3")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     // 兼容不带 kimi 前缀的裸 id "k3"
@@ -451,18 +514,21 @@ object ModelRegistry {
         exact("k3")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val STEP_3 = defineModel {
         tokens("step", "3")
         visionInput()
         toolReasoningAbility()
+        contextLength(128000)
     }
 
     private val STEP_3_7_FLASH = defineModel {
         tokens("step", "3", "7", "flash")
         visionInput()
         toolReasoningAbility()
+        contextLength(128000)
     }
 
     // Upstream 2.5.3 (c3d6867c).
@@ -470,6 +536,7 @@ object ModelRegistry {
         tokens("step", "5")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val INTERN_S1 = defineModel {
@@ -481,63 +548,75 @@ object ModelRegistry {
     private val GLM_4_5 = defineModel {
         tokens("glm", "4", "5")
         toolReasoningAbility()
+        contextLength(128000)
     }
 
     private val GLM_4_6 = defineModel {
         tokens("glm", "4", "6")
         toolReasoningAbility()
+        contextLength(200000)
     }
 
     private val GLM_4_7 = defineModel {
         tokens("glm", "4", "7")
         toolReasoningAbility()
+        contextLength(200000)
     }
 
     private val GLM_5 = defineModel {
         tokens("glm", "5")
         toolReasoningAbility()
+        contextLength(200000)
     }
 
     private val GLM_5_1 = defineModel {
         tokens("glm", "5", "1")
         toolReasoningAbility()
+        contextLength(200000)
     }
 
     private val GLM_5_2 = defineModel {
         tokens("glm", "5", "2")
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val GLM_5_3 = defineModel {
         tokens("glm", "5", "3")
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val GLM_5_3_FLASH = defineModel {
         tokens("glm", "5", "3", "flash")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val MINIMAX_M2 = defineModel {
         tokens("minimax", "m", "2")
         toolReasoningAbility()
+        contextLength(204800)
     }
 
     private val MINIMAX_M2_5 = defineModel {
         tokens("minimax", "m", "2", "5")
         toolReasoningAbility()
+        contextLength(204800)
     }
 
     private val MINIMAX_M2_7 = defineModel {
         tokens("minimax", "m", "2", "7")
         toolReasoningAbility()
+        contextLength(204800)
     }
 
     private val MINIMAX_M3 = defineModel {
         tokens("minimax", "m", "3")
         visionInput()
         toolReasoningAbility()
+        contextLength(1000000)
     }
 
     private val XIAOMI_MIMO_V2 = defineModel {
@@ -565,6 +644,7 @@ object ModelRegistry {
         tokens("mimo", "v", "2", "6")
         visionInput()
         toolReasoningAbility()
+        contextLength(208000)
     }
 
     private val XIAOMI_MIMO_V3 = defineModel {
@@ -727,6 +807,12 @@ object ModelRegistry {
             if (ModelAbility.TOOL in abilities) add(ModelAbility.TOOL)
             if (ModelAbility.REASONING in abilities) add(ModelAbility.REASONING)
         }
+    }
+
+    // rhCtxRegistry (batch52): 按注册表解析上下文长度；多模型命中时取最大值。
+    // 调用方优先级：OpenRouter/平台实测 model.contextLength > 本注册表默认。
+    val MODEL_CONTEXT_LENGTH = ModelData { modelId ->
+        resolveModels(modelId).mapNotNull { it.contextLength }.maxOrNull()
     }
 
     private fun resolveModels(modelId: String): List<ModelDefinition> {

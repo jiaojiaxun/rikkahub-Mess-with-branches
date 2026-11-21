@@ -1,0 +1,9 @@
+[batch338] root=/home/runner/work/rikkahub-Mess-with-branches/rikkahub-Mess-with-branches
+[batch338] wrote TokenUnitStore.kt
+[batch338] patched RikkaHubApp.kt (init)
+[batch338] patched SettingPreferencesUIPage.kt (state + item)
+FAIL FilesPicker token line not found
+FAIL provider page preset line not found
+[batch338] patched ChatPage.kt (untitled title)
+[batch338] steps ok=4/6
+FAIL partial apply

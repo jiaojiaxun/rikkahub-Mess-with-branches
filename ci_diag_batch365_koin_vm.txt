@@ -1,0 +1,17 @@
+anchor-import:1
+wrote:import
+anchor-block:1
+wrote:registration
+braces:(0, 0)->(0, 0)
+file-size:4168
+vm:WorkspaceDetailVM:ok
+vm:WorkspaceInstallVM:ok
+vm:WorkspaceSshEditorVM:ok
+vm:WorkspaceVM:ok
+vm-total:4
+check:import-present:ok
+check:registration-present:ok
+check:params-id:ok
+check:detail-still-there:ok
+check:mark-present:ok
+RESULT:OK

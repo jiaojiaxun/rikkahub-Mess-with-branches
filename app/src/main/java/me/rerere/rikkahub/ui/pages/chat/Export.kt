@@ -120,7 +120,9 @@ fun ChatExportSheet(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val settings = LocalSettings.current
-    var imageExportOptions by remember { mutableStateOf(ImageExportOptions()) }
+        var imageExportOptions by remember { mutableStateOf(ImageExportOptions()) }
+    // rh-batch11: markdown-without-thinking - applies to the Markdown export only.
+    var includeReasoning by remember { mutableStateOf(true) }
 
     if (visible) {
         ModalBottomSheet(
@@ -134,13 +136,29 @@ fun ChatExportSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(text = stringResource(id = R.string.chat_page_export_format))
+                                Text(text = stringResource(id = R.string.chat_page_export_format))
+
+                // rh-batch11: markdown-without-thinking - its own row rather than a row inside
+                // the Markdown card, whose onClick performs the export (a Switch in there would
+                // trigger both handlers).
+                ListItem(
+                    headlineContent = { Text("包含思考过程（Markdown 导出）") },
+                    supportingContent = {
+                        Text("关闭后导出的 .md 不含模型的思考过程")
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = includeReasoning,
+                            onCheckedChange = { includeReasoning = it }
+                        )
+                    }
+                )
 
                 val markdownSuccessMessage =
                     stringResource(id = R.string.chat_page_export_success, "Markdown")
                 OutlinedCard(
                     onClick = {
-                        exportToMarkdown(context, conversation, selectedMessages)
+                        exportToMarkdown(context, conversation, selectedMessages, includeReasoning)
                         toaster.show(
                             markdownSuccessMessage,
                             type = ToastType.Success
@@ -241,7 +259,11 @@ fun ChatExportSheet(
 private fun exportToMarkdown(
     context: Context,
     conversation: Conversation,
-    messages: List<UIMessage>
+    messages: List<UIMessage>,
+    // rh-batch11: markdown-without-thinking - when false the exported Markdown omits every
+    // reasoning block, both the message-level ones and those nested in tool call outputs.
+    // Defaults to true so any other caller keeps the previous behaviour.
+    includeReasoning: Boolean = true,
 ) {
     val filename = "chat-export-${LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"))}.md"
 
@@ -264,15 +286,18 @@ private fun exportToMarkdown(
                         appendLine()
                     }
 
-                    is UIMessagePart.Reasoning -> {
-                        part.reasoning.lines()
-                            .filter { it.isNotBlank() }
-                            .map { "> $it" }
-                            .forEach {
-                                append(it)
-                            }
-                        appendLine()
-                        appendLine()
+                                        is UIMessagePart.Reasoning -> {
+                        // rh-batch11: markdown-without-thinking
+                        if (includeReasoning) {
+                            part.reasoning.lines()
+                                .filter { it.isNotBlank() }
+                                .map { "> $it" }
+                                .forEach {
+                                    append(it)
+                                }
+                            appendLine()
+                            appendLine()
+                        }
                     }
 
                     is UIMessagePart.Tool -> {
@@ -306,13 +331,17 @@ private fun exportToMarkdown(
                                         appendLine()
                                     }
 
-                                    is UIMessagePart.Reasoning -> {
-                                        outputPart.reasoning.lines()
-                                            .filter { it.isNotBlank() }
-                                            .forEach {
-                                                append("> $it")
-                                                appendLine()
-                                            }
+                                                                        is UIMessagePart.Reasoning -> {
+                                        // rh-batch11: markdown-without-thinking - tool outputs can
+                                        // carry reasoning too (e.g. a summariser's trace).
+                                        if (includeReasoning) {
+                                            outputPart.reasoning.lines()
+                                                .filter { it.isNotBlank() }
+                                                .forEach {
+                                                    append("> $it")
+                                                    appendLine()
+                                                }
+                                        }
                                     }
 
                                     is UIMessagePart.Image -> {

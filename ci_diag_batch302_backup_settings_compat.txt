@@ -1,0 +1,5 @@
+OK wrote app/src/main/java/me/rerere/rikkahub/data/sync/SettingsBackupDecoder.kt
+OK wrote app/src/test/java/me/rerere/rikkahub/data/model/SettingsBackupDecoderTest.kt
+OK patched restorer settings decode
+compat: old providers/assistants/tts/asr/mcp entries are kept only when decodable
+compat: settings decode failure no longer aborts database/file restore

@@ -451,7 +451,7 @@ def main():
         f.write("\n".join(diag) + "\n")
     log("diag " + DIAG + " -> " + " | ".join(diag))
     if not ok:
-        # 不用 exit(1): 合组构建时单个批失败不应阻断后面的批, 但要留下 ::error 证据
+        # 不用 exit(0): 合组构建时单个批失败不应阻断后面的批, 但要留下 ::error 证据
         print("::error title=batch346::" + " | ".join(diag))
 
 

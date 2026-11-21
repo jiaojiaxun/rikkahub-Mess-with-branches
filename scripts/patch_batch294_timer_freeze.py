@@ -24,7 +24,7 @@ Fix:
   tool-only block without a known end still shows no fabricated duration.
 
 Single file write, line/function-boundary anchored, idempotent marker
-rhDrawer294, no exit(1) literal, no multi-line Python parentheses.
+rhDrawer294, no exit(0) literal, no multi-line Python parentheses.
 '''
 from pathlib import Path
 

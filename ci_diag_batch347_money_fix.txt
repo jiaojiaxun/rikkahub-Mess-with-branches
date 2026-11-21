@@ -1,0 +1,2 @@
+pricing: formatCny 4-decimal fix
+chrome: peak label only when peak

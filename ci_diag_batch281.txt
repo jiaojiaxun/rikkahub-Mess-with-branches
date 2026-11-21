@@ -1,0 +1,1 @@
+applied=store-stray-quote=2

@@ -18,12 +18,14 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch // rhHeartRateShare
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope // rhHeartRateShare
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +38,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ble.HeartRateMonitor
+import me.rerere.rikkahub.data.datastore.Settings // rhHeartRateShare
+import me.rerere.rikkahub.data.datastore.SettingsStore // rhHeartRateShare
+import kotlinx.coroutines.launch // rhHeartRateShare
+import org.koin.compose.koinInject // rhHeartRateShare
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -123,6 +129,31 @@ fun HeartRateDialog(
                         text = error,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
+                    )
+                }
+
+                // rhHeartRateShare: 是否把心率附在发送的消息里（持久设置）
+                val rhSettingsStore: SettingsStore = koinInject()
+                val rhSettings by rhSettingsStore.settingsFlow.collectAsStateWithLifecycle(
+                    initialValue = Settings.dummy()
+                )
+                val rhShareScope = rememberCoroutineScope()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = stringResource(R.string.heart_rate_share_with_ai),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Switch(
+                        checked = rhSettings.shareHeartRateWithAI,
+                        onCheckedChange = { checked ->
+                            rhShareScope.launch {
+                                rhSettingsStore.update { old -> old.copy(shareHeartRateWithAI = checked) }
+                            }
+                        },
                     )
                 }
 

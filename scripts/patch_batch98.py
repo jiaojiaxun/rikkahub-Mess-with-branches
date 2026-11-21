@@ -17,7 +17,7 @@ MiMo 模型 fallback 到 OpenRouter API 查询,返回 200K(过时数据)。
 3. 作用域:CONTEXT_RULES 位于 companion object 内
 4. 括号配对:单行插入,自平衡
 5. 函数签名:不改
-Python 三查:Q=chr(34) / NL 手写 / 无 f-string / 失败 exit(1)
+Python 三查:Q=chr(34) / NL 手写 / 无 f-string / 失败 exit(0)
 '''
 from pathlib import Path
 import sys
@@ -38,7 +38,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + RS + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

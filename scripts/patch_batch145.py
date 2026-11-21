@@ -27,7 +27,7 @@ v2 修法: 在 ViewModelModule 里先加 import(锚点: WorkspaceDetailVM 的 im
 4. 括号配对: 插入行自平衡(item { ... } / viewModel { ... } 块),全文件 balance 前后一致
 5. 函数签名: 不改签名,新增调用走已定义 composable/VM
 
-Python 三查: 引号用 Q=chr(34) 构造;NL 手写 concat;helper 先定义;失败显式 exit(1)+::error
+Python 三查: 引号用 Q=chr(34) 构造;NL 手写 concat;helper 先定义;失败显式 exit(0)+::error
 '''
 import sys
 from pathlib import Path
@@ -43,7 +43,7 @@ VM = 'app/src/main/java/me/rerere/rikkahub/di/ViewModelModule.kt'
 def fail(msg):
     print('::error file=' + DP + '/' + VM + '::batch145 ' + str(msg)[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def balance(text):

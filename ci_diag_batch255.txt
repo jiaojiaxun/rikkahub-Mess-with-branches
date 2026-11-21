@@ -1,0 +1,4 @@
+chatinput OK: ModelSelector reads session model id first
+1 ChatInput ModelSelector session id DONE
+chatpage OK: passes conversation.config.chatModelId
+2 ChatPage pass conversation model id DONE

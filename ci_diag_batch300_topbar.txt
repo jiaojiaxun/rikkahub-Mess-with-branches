@@ -1,0 +1,4 @@
+bubbles OK: self-contained component file
+page OK: title removed, three bubbles, utilities menu
+plan OK: shared radius and calmer spring timing
+dock OK: PlanBar shares ChatInput horizontal 8dp

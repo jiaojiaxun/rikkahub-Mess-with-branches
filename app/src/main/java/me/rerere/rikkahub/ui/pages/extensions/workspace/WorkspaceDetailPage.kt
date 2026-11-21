@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -31,8 +33,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowDown01
 import me.rerere.hugeicons.stroke.ArrowRight01
@@ -75,6 +83,7 @@ import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.utils.fileSizeToString
 import me.rerere.rikkahub.utils.plus
 import me.rerere.workspace.WorkspaceFileEntry
+import me.rerere.workspace.WorkspaceStorageArea
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -102,6 +111,12 @@ fun WorkspaceDetailPage(id: String) {
         val inputStream = context.contentResolver.openInputStream(uri) ?: return@rememberLauncherForActivityResult
         vm.importFile(inputStream, fileName)
     }
+    var selectionMode by remember { mutableStateOf(false) }
+    val rowsCount = remember(state.entries, state.expandedPaths, state.childrenCache) {
+        flattenWorkspaceTree(state.entries, state.expandedPaths, state.childrenCache).size
+    }
+    var selectedPaths by remember { mutableStateOf(setOf<String>()) }
+    var multiExportTargets by remember { mutableStateOf(listOf<WorkspaceFileEntry>()) }
     var exportTarget by remember { mutableStateOf<WorkspaceFileEntry?>(null) }
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("*/*"),
@@ -121,7 +136,47 @@ fun WorkspaceDetailPage(id: String) {
         vm.exportFolder(entry, destinationTree) { docUri -> context.contentResolver.openOutputStream(docUri) }
     }
 
-    BackHandler(enabled = pagerState.currentPage == 1 && state.path.isNotBlank()) {
+    val multiExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        val targets = multiExportTargets.also { multiExportTargets = emptyList() }
+        if (uri == null || targets.isEmpty()) return@rememberLauncherForActivityResult
+        val destinationTree = DocumentFile.fromTreeUri(context, uri) ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                targets.forEach { entry ->
+                    if (entry.isDirectory) {
+                        vm.exportFolder(entry, destinationTree) { docUri ->
+                            context.contentResolver.openOutputStream(docUri)
+                        }
+                    } else {
+                        val fileDoc = destinationTree.createFile("application/octet-stream", entry.name)
+                        if (fileDoc != null) {
+                            context.contentResolver.openOutputStream(fileDoc.uri)?.let { output ->
+                                vm.exportFile(entry, output)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        selectionMode = false
+        selectedPaths = emptySet()
+    }
+
+    fun startMultiExport(entries: List<WorkspaceFileEntry>) {
+        if (entries.isEmpty()) return
+        multiExportTargets = entries
+        multiExportLauncher.launch(null)
+    }
+
+    // v2: 多选时禁用 path BackHandler，避免它在多选中先消费返回（dispatcher 后进先出）
+    BackHandler(enabled = selectionMode) {
+        selectionMode = false
+        selectedPaths = emptySet()
+    }
+
+    BackHandler(enabled = pagerState.currentPage == 1 && state.path.isNotBlank() && !selectionMode) {
         vm.goUp()
     }
 
@@ -140,14 +195,39 @@ fun WorkspaceDetailPage(id: String) {
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = state.workspace?.name ?: stringResource(R.string.workspace_detail_title),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    if (selectionMode) {
+                        Text(stringResource(R.string.workspace_detail_selected_count, selectedPaths.size, rowsCount))
+                    } else {
+                        Text(
+                            text = state.workspace?.name ?: stringResource(R.string.workspace_detail_title),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 },
-                navigationIcon = { BackButton() },
+                navigationIcon = {
+                    if (selectionMode) {
+                        IconButton(onClick = {
+                            selectionMode = false
+                            selectedPaths = emptySet()
+                        }) {
+                            Icon(HugeIcons.ArrowTurnBackward, contentDescription = stringResource(R.string.workspace_detail_exit_selection))
+                        }
+                    } else {
+                        BackButton()
+                    }
+                },
                 actions = {
+                    if (state.workspace?.supportsTerminal() == true) {
+                        IconButton(onClick = { navController.navigate(Screen.WorkspaceTerminal(state.workspace!!.id)) }) {
+                            Icon(HugeIcons.Settings03, contentDescription = stringResource(R.string.workspace_terminal_title))
+                        }
+                    }
+                    if (state.workspace?.isSsh() == true) {
+                        IconButton(onClick = { navController.navigate(Screen.WorkspaceSshEditor(state.workspace!!.id)) }) {
+                            Icon(HugeIcons.Settings03, contentDescription = stringResource(R.string.workspace_ssh_editor_title_edit))
+                        }
+                    }
                     if (pagerState.currentPage == 1) {
                         IconButton(onClick = { filePicker.launch(arrayOf("*/*")) }) {
                             Icon(
@@ -195,7 +275,25 @@ fun WorkspaceDetailPage(id: String) {
 
                 1 -> WorkspaceFilesPage(
                     state = state,
+                    area = state.area,
+                    onSelectArea = vm::selectArea,
                     contentPadding = PaddingValues(),
+                    selectionMode = selectionMode,
+                    selectedPaths = selectedPaths,
+                    onToggleSelect = { entry ->
+                        val next = if (entry.path in selectedPaths) selectedPaths - entry.path else selectedPaths + entry.path
+                        selectedPaths = next
+                        if (next.isEmpty()) selectionMode = false
+                    },
+                    onEnterSelection = { entry ->
+                        selectionMode = true
+                        selectedPaths = setOf(entry.path)
+                    },
+                    onSelectedPathsChange = {
+                        selectedPaths = it
+                        if (it.isEmpty()) selectionMode = false
+                    },
+                    onExportSelected = { entries -> startMultiExport(entries) },
                     onGoUp = vm::goUp,
                     onToggleExpand = vm::toggleExpand,
                     onOpen = { entry ->
@@ -292,6 +390,7 @@ private fun WorkspaceBasicPage(
     workspace: WorkspaceEntity?,
     onToolApprovalChange: (String, Boolean) -> Unit,
 ) {
+    val navController = LocalNavController.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -320,6 +419,72 @@ private fun WorkspaceBasicPage(
                         stringResource(R.string.workspace_detail_area_files),
                         stringResource(R.string.workspace_detail_area_files),
                     )
+                    WorkspaceInfoRow(
+                        stringResource(R.string.workspace_detail_shell_status),
+                        when (workspace?.shellStatus) {
+                            "READY" -> stringResource(R.string.workspace_detail_shell_ready)
+                            "INSTALLING" -> stringResource(R.string.workspace_detail_shell_installing)
+                            "BROKEN" -> stringResource(R.string.workspace_detail_shell_broken)
+                            else -> stringResource(R.string.workspace_detail_shell_disabled)
+                        },
+                    )
+                }
+            }
+        }
+
+        if (workspace?.capabilities()?.rootfs != false) {
+            item {
+                // rhWsInstallCard: Rootfs 安装卡片(Linux 环境); SSH 工作区没有 rootfs, 不显示
+                WorkspaceInstallCard(workspace = workspace)
+            }
+        }
+
+        if (workspace?.isSsh() == true) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CustomColors.cardColorsOnSurfaceContainer,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.workspace_detail_ssh_connection),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        val settings = workspace.sshSettings()
+                        if (settings != null) {
+                            WorkspaceInfoRow(
+                                stringResource(R.string.workspace_detail_ssh_address),
+                                "${settings.username}@${settings.host}:${settings.port}",
+                            )
+                            settings.jumpHost?.let { jump ->
+                                WorkspaceInfoRow(
+                                    stringResource(R.string.workspace_ssh_editor_jump_host),
+                                    "${jump.username}@${jump.host}:${jump.port}",
+                                )
+                            }
+                            WorkspaceInfoRow(
+                                stringResource(R.string.workspace_ssh_editor_remote_dir),
+                                settings.remoteDir,
+                            )
+                            WorkspaceInfoRow(
+                                stringResource(R.string.workspace_ssh_editor_host_key),
+                                settings.hostKey?.fingerprint ?: stringResource(R.string.workspace_ssh_editor_host_key_unconfirmed),
+                            )
+                        }
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                navController.navigate(Screen.WorkspaceSshEditor(workspace.id))
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.workspace_ssh_editor_title_edit))
+                        }
+                    }
                 }
             }
         }
@@ -362,7 +527,7 @@ private fun WorkspaceToolApprovalCard(
                 )
             }
 
-            workspaceToolApprovalItems().forEach { (toolName, label) ->
+            workspaceToolApprovalItems(workspace).forEach { (toolName, label) ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -396,13 +561,20 @@ private fun WorkspaceToolApprovalCard(
 }
 
 @Composable
-private fun workspaceToolApprovalItems() = listOf(
-    "workspace_read_file" to stringResource(R.string.workspace_detail_tool_read_file),
-    "workspace_write_file" to stringResource(R.string.workspace_detail_tool_write_file),
-    "workspace_edit_file" to stringResource(R.string.workspace_detail_tool_edit_file),
-    "workspace_create_folder" to stringResource(R.string.workspace_detail_tool_create_folder),
-    "workspace_read_folder" to stringResource(R.string.workspace_detail_tool_list_files),
-)
+private fun workspaceToolApprovalItems(workspace: WorkspaceEntity?): List<Pair<String, String>> {
+    val capabilities = workspace?.capabilities()
+    return buildList {
+        add("workspace_read_file" to stringResource(R.string.workspace_detail_tool_read_file))
+        if (capabilities?.fileWriteTools != false) {
+            add("workspace_write_file" to stringResource(R.string.workspace_detail_tool_write_file))
+            add("workspace_edit_file" to stringResource(R.string.workspace_detail_tool_edit_file))
+            add("workspace_create_folder" to stringResource(R.string.workspace_detail_tool_create_folder))
+        }
+        if (capabilities?.localFiles != false) {
+            add("workspace_read_folder" to stringResource(R.string.workspace_detail_tool_list_files))
+        }
+    }
+}
 
 @Composable
 private fun WorkspaceInfoRow(
@@ -435,6 +607,8 @@ private fun WorkspaceInfoRow(
 @Composable
 private fun WorkspaceFilesPage(
     state: WorkspaceDetailState,
+    area: WorkspaceStorageArea,
+    onSelectArea: (WorkspaceStorageArea) -> Unit,
     contentPadding: PaddingValues,
     onGoUp: () -> Unit,
     onToggleExpand: (WorkspaceFileEntry) -> Unit,
@@ -442,6 +616,12 @@ private fun WorkspaceFilesPage(
     onDelete: (WorkspaceFileEntry) -> Unit,
     onExport: (WorkspaceFileEntry) -> Unit,
     onShare: (WorkspaceFileEntry) -> Unit,
+    selectionMode: Boolean,
+    selectedPaths: Set<String>,
+    onToggleSelect: (WorkspaceFileEntry) -> Unit,
+    onEnterSelection: (WorkspaceFileEntry) -> Unit,
+    onSelectedPathsChange: (Set<String>) -> Unit,
+    onExportSelected: (List<WorkspaceFileEntry>) -> Unit,
 ) {
     val rows = remember(state.entries, state.expandedPaths, state.childrenCache) {
         flattenWorkspaceTree(state.entries, state.expandedPaths, state.childrenCache)
@@ -453,11 +633,34 @@ private fun WorkspaceFilesPage(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            WorkspacePathBar(
-                path = state.path,
-                canGoUp = state.path.isNotBlank(),
-                onGoUp = onGoUp,
-            )
+            if (selectionMode) {
+                val allPaths = rows.map { it.entry.path }.toSet()
+                WorkspaceMultiSelectBar(
+                    selectedCount = selectedPaths.size,
+                    totalCount = rows.size,
+                    allSelected = allPaths.isNotEmpty() && selectedPaths.containsAll(allPaths),
+                    onToggleSelectAll = {
+                        onSelectedPathsChange(if (selectedPaths.containsAll(allPaths)) emptySet() else allPaths)
+                    },
+                    onExportSelected = {
+                        onExportSelected(rows.filter { it.entry.path in selectedPaths }.map { it.entry })
+                    },
+                )
+            } else {
+                WorkspacePathBar(
+                    path = state.path,
+                    canGoUp = state.path.isNotBlank(),
+                    onGoUp = onGoUp,
+                )
+            }
+        }
+
+        // 多选期间不显示切换器: 切区会重置 path/entries, 但调用方的选中集合不会同步,
+        // 跨区导出选中会点到不存在的路径。
+        if (!selectionMode) {
+            item {
+                WorkspaceAreaSelector(area = area, onSelectArea = onSelectArea)
+            }
         }
 
         state.error?.let { error ->
@@ -482,7 +685,66 @@ private fun WorkspaceFilesPage(
                 onDelete = { onDelete(row.entry) },
                 onExport = { onExport(row.entry) },
                 onShare = { onShare(row.entry) },
+                selectionMode = selectionMode,
+                selected = row.entry.path in selectedPaths,
+                onToggleSelect = { onToggleSelect(row.entry) },
+                onEnterSelection = { onEnterSelection(row.entry) },
             )
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceMultiSelectBar(
+    selectedCount: Int,
+    totalCount: Int,
+    allSelected: Boolean,
+    onToggleSelectAll: () -> Unit,
+    onExportSelected: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.workspace_detail_selected_count, selectedCount, totalCount),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(onClick = onToggleSelectAll) {
+            Text(
+                stringResource(
+                    if (allSelected) R.string.workspace_detail_deselect_all
+                    else R.string.workspace_detail_select_all
+                )
+            )
+        }
+        TextButton(onClick = onExportSelected, enabled = selectedCount > 0) {
+            Text(stringResource(R.string.workspace_detail_export_selected))
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceAreaSelector(
+    area: WorkspaceStorageArea,
+    onSelectArea: (WorkspaceStorageArea) -> Unit,
+) {
+    val options = listOf(
+        WorkspaceStorageArea.FILES to stringResource(R.string.workspace_detail_area_files),
+        WorkspaceStorageArea.LINUX to stringResource(R.string.workspace_detail_area_linux),
+    )
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (value, label) ->
+            SegmentedButton(
+                selected = area == value,
+                onClick = { onSelectArea(value) },
+                shape = SegmentedButtonDefaults.itemShape(index, options.size),
+            ) {
+                Text(label)
+            }
         }
     }
 }
@@ -525,13 +787,20 @@ private fun WorkspaceFileCard(
     onDelete: () -> Unit,
     onExport: () -> Unit,
     onShare: () -> Unit,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onToggleSelect: () -> Unit,
+    onEnterSelection: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onOpen),
+            .combinedClickable(
+                onClick = { if (selectionMode) onToggleSelect() else onOpen() },
+                onLongClick = { if (selectionMode) onToggleSelect() else onEnterSelection() },
+            ),
         colors = CustomColors.cardColorsOnSurfaceContainer,
     ) {
         Row(
@@ -540,6 +809,12 @@ private fun WorkspaceFileCard(
                 .padding(start = 16.dp + (depth * 20).dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (selectionMode) {
+                Checkbox(
+                    checked = selected,
+                    onCheckedChange = { onToggleSelect() },
+                )
+            }
             if (entry.isDirectory) {
                 IconButton(
                     onClick = onToggleExpand,

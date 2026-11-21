@@ -1,0 +1,28 @@
+shadow-files:0
+shadow-changes:0
+leftover-card-elevation:0
+
+[color-literal] total=628 distinct=371
+  0xFFFFFFFF x40
+  0xFF000000 x19
+  0xFFFFDAD6 x9
+  0xFF93000A x9
+  0xFF343434 x7
+  0xFF444444 x7
+  0xFFFCFCFC x6
+  0xFFB5B5B5 x6
+  0xFFFFB4AB x5
+  0xFF690005 x5
+  0xFFEBEBEB x5
+  0xFFc18401 x4
+  0xFFFFD9DD x4
+  0xFFBA1A1A x4
+  0xFFF0DEDF x4
+  0xFFEAE1D4 x4
+  0xFF252525 x4
+  0xFFE2E3D8 x4
+  0xFFDFE3E7 x4
+  0xFFd19a66 x3
+[color-white] uses=14 with-alpha=5
+[color-black] uses=31 with-alpha=1
+RESULT:OK

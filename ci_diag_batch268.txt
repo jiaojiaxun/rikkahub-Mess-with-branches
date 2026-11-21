@@ -1,0 +1,2 @@
+ChatInput OK: both capability checks read session model (same Elvis chain as rhConvModel255)
+1 chatinput session model DONE

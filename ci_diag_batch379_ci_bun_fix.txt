@@ -1,0 +1,10 @@
+already:fix
+file-size:13648
+check:continue-on-error:ok
+check:fallback-step:ok
+check:bun-sh-install:ok
+check:npm-fallback:ok
+check:path-export:ok
+check:pnpm-step-kept:ok
+check:setup-bun-kept:ok
+RESULT:OK

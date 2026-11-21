@@ -1,0 +1,237 @@
+=== A. M3 semantic color copies: 32 ===
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SakuraTheme.kt @line35  0xFFBA1A1A -> error
+  33: private val tertiaryContainerLight = Color(0xFFFFDDB8)
+  34: private val onTertiaryContainerLight = Color(0xFF5E411C)
+>>35: private val errorLight = Color(0xFFBA1A1A)
+  36: private val onErrorLight = Color(0xFFFFFFFF)
+  37: private val errorContainerLight = Color(0xFFFFDAD6)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SakuraTheme.kt @line37  0xFFFFDAD6 -> errorContainer
+  35: private val errorLight = Color(0xFFBA1A1A)
+  36: private val onErrorLight = Color(0xFFFFFFFF)
+>>37: private val errorContainerLight = Color(0xFFFFDAD6)
+  38: private val onErrorContainerLight = Color(0xFF93000A)
+  39: private val backgroundLight = Color(0xFFFFF8F7)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SakuraTheme.kt @line38  0xFF93000A -> onErrorContainer
+  36: private val onErrorLight = Color(0xFFFFFFFF)
+  37: private val errorContainerLight = Color(0xFFFFDAD6)
+>>38: private val onErrorContainerLight = Color(0xFF93000A)
+  39: private val backgroundLight = Color(0xFFFFF8F7)
+  40: private val onBackgroundLight = Color(0xFF22191A)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SakuraTheme.kt @line71  0xFFFFB4AB -> error
+  69: private val tertiaryContainerDark = Color(0xFF5E411C)
+  70: private val onTertiaryContainerDark = Color(0xFFFFDDB8)
+>>71: private val errorDark = Color(0xFFFFB4AB)
+  72: private val onErrorDark = Color(0xFF690005)
+  73: private val errorContainerDark = Color(0xFF93000A)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SakuraTheme.kt @line72  0xFF690005 -> onError
+  70: private val onTertiaryContainerDark = Color(0xFFFFDDB8)
+  71: private val errorDark = Color(0xFFFFB4AB)
+>>72: private val onErrorDark = Color(0xFF690005)
+  73: private val errorContainerDark = Color(0xFF93000A)
+  74: private val onErrorContainerDark = Color(0xFFFFDAD6)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SakuraTheme.kt @line73  0xFF93000A -> onErrorContainer
+  71: private val errorDark = Color(0xFFFFB4AB)
+  72: private val onErrorDark = Color(0xFF690005)
+>>73: private val errorContainerDark = Color(0xFF93000A)
+  74: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  75: private val backgroundDark = Color(0xFF1A1112)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SakuraTheme.kt @line74  0xFFFFDAD6 -> errorContainer
+  72: private val onErrorDark = Color(0xFF690005)
+  73: private val errorContainerDark = Color(0xFF93000A)
+>>74: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  75: private val backgroundDark = Color(0xFF1A1112)
+  76: private val onBackgroundDark = Color(0xFFF0DEDF)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/AutumnTheme.kt @line34  0xFFBA1A1A -> error
+  32: private val tertiaryContainerLight = Color(0xFFC8ECC9)
+  33: private val onTertiaryContainerLight = Color(0xFF2F4D34)
+>>34: private val errorLight = Color(0xFFBA1A1A)
+  35: private val onErrorLight = Color(0xFFFFFFFF)
+  36: private val errorContainerLight = Color(0xFFFFDAD6)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/AutumnTheme.kt @line36  0xFFFFDAD6 -> errorContainer
+  34: private val errorLight = Color(0xFFBA1A1A)
+  35: private val onErrorLight = Color(0xFFFFFFFF)
+>>36: private val errorContainerLight = Color(0xFFFFDAD6)
+  37: private val onErrorContainerLight = Color(0xFF93000A)
+  38: private val backgroundLight = Color(0xFFFFF8F1)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/AutumnTheme.kt @line37  0xFF93000A -> onErrorContainer
+  35: private val onErrorLight = Color(0xFFFFFFFF)
+  36: private val errorContainerLight = Color(0xFFFFDAD6)
+>>37: private val onErrorContainerLight = Color(0xFF93000A)
+  38: private val backgroundLight = Color(0xFFFFF8F1)
+  39: private val onBackgroundLight = Color(0xFF1F1B13)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/AutumnTheme.kt @line70  0xFFFFB4AB -> error
+  68: private val tertiaryContainerDark = Color(0xFF2F4D34)
+  69: private val onTertiaryContainerDark = Color(0xFFC8ECC9)
+>>70: private val errorDark = Color(0xFFFFB4AB)
+  71: private val onErrorDark = Color(0xFF690005)
+  72: private val errorContainerDark = Color(0xFF93000A)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/AutumnTheme.kt @line71  0xFF690005 -> onError
+  69: private val onTertiaryContainerDark = Color(0xFFC8ECC9)
+  70: private val errorDark = Color(0xFFFFB4AB)
+>>71: private val onErrorDark = Color(0xFF690005)
+  72: private val errorContainerDark = Color(0xFF93000A)
+  73: private val onErrorContainerDark = Color(0xFFFFDAD6)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/AutumnTheme.kt @line72  0xFF93000A -> onErrorContainer
+  70: private val errorDark = Color(0xFFFFB4AB)
+  71: private val onErrorDark = Color(0xFF690005)
+>>72: private val errorContainerDark = Color(0xFF93000A)
+  73: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  74: private val backgroundDark = Color(0xFF16130B)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/AutumnTheme.kt @line73  0xFFFFDAD6 -> errorContainer
+  71: private val onErrorDark = Color(0xFF690005)
+  72: private val errorContainerDark = Color(0xFF93000A)
+>>73: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  74: private val backgroundDark = Color(0xFF16130B)
+  75: private val onBackgroundDark = Color(0xFFEAE1D4)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SpringTheme.kt @line34  0xFFBA1A1A -> error
+  32: private val tertiaryContainerLight = Color(0xFFBCECE7)
+  33: private val onTertiaryContainerLight = Color(0xFF1F4E4B)
+>>34: private val errorLight = Color(0xFFBA1A1A)
+  35: private val onErrorLight = Color(0xFFFFFFFF)
+  36: private val errorContainerLight = Color(0xFFFFDAD6)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SpringTheme.kt @line36  0xFFFFDAD6 -> errorContainer
+  34: private val errorLight = Color(0xFFBA1A1A)
+  35: private val onErrorLight = Color(0xFFFFFFFF)
+>>36: private val errorContainerLight = Color(0xFFFFDAD6)
+  37: private val onErrorContainerLight = Color(0xFF93000A)
+  38: private val backgroundLight = Color(0xFFF9FAEF)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SpringTheme.kt @line37  0xFF93000A -> onErrorContainer
+  35: private val onErrorLight = Color(0xFFFFFFFF)
+  36: private val errorContainerLight = Color(0xFFFFDAD6)
+>>37: private val onErrorContainerLight = Color(0xFF93000A)
+  38: private val backgroundLight = Color(0xFFF9FAEF)
+  39: private val onBackgroundLight = Color(0xFF1A1C16)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SpringTheme.kt @line70  0xFFFFB4AB -> error
+  68: private val tertiaryContainerDark = Color(0xFF1F4E4B)
+  69: private val onTertiaryContainerDark = Color(0xFFBCECE7)
+>>70: private val errorDark = Color(0xFFFFB4AB)
+  71: private val onErrorDark = Color(0xFF690005)
+  72: private val errorContainerDark = Color(0xFF93000A)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SpringTheme.kt @line71  0xFF690005 -> onError
+  69: private val onTertiaryContainerDark = Color(0xFFBCECE7)
+  70: private val errorDark = Color(0xFFFFB4AB)
+>>71: private val onErrorDark = Color(0xFF690005)
+  72: private val errorContainerDark = Color(0xFF93000A)
+  73: private val onErrorContainerDark = Color(0xFFFFDAD6)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SpringTheme.kt @line72  0xFF93000A -> onErrorContainer
+  70: private val errorDark = Color(0xFFFFB4AB)
+  71: private val onErrorDark = Color(0xFF690005)
+>>72: private val errorContainerDark = Color(0xFF93000A)
+  73: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  74: private val backgroundDark = Color(0xFF12140E)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/SpringTheme.kt @line73  0xFFFFDAD6 -> errorContainer
+  71: private val onErrorDark = Color(0xFF690005)
+  72: private val errorContainerDark = Color(0xFF93000A)
+>>73: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  74: private val backgroundDark = Color(0xFF12140E)
+  75: private val onBackgroundDark = Color(0xFFE2E3D8)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/OceanTheme.kt @line34  0xFFBA1A1A -> error
+  32: private val tertiaryContainerLight = Color(0xFFE3DFFF)
+  33: private val onTertiaryContainerLight = Color(0xFF454364)
+>>34: private val errorLight = Color(0xFFBA1A1A)
+  35: private val onErrorLight = Color(0xFFFFFFFF)
+  36: private val errorContainerLight = Color(0xFFFFDAD6)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/OceanTheme.kt @line36  0xFFFFDAD6 -> errorContainer
+  34: private val errorLight = Color(0xFFBA1A1A)
+  35: private val onErrorLight = Color(0xFFFFFFFF)
+>>36: private val errorContainerLight = Color(0xFFFFDAD6)
+  37: private val onErrorContainerLight = Color(0xFF93000A)
+  38: private val backgroundLight = Color(0xFFF6FAFD)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/OceanTheme.kt @line37  0xFF93000A -> onErrorContainer
+  35: private val onErrorLight = Color(0xFFFFFFFF)
+  36: private val errorContainerLight = Color(0xFFFFDAD6)
+>>37: private val onErrorContainerLight = Color(0xFF93000A)
+  38: private val backgroundLight = Color(0xFFF6FAFD)
+  39: private val onBackgroundLight = Color(0xFF171C1F)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/OceanTheme.kt @line70  0xFFFFB4AB -> error
+  68: private val tertiaryContainerDark = Color(0xFF454364)
+  69: private val onTertiaryContainerDark = Color(0xFFE3DFFF)
+>>70: private val errorDark = Color(0xFFFFB4AB)
+  71: private val onErrorDark = Color(0xFF690005)
+  72: private val errorContainerDark = Color(0xFF93000A)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/OceanTheme.kt @line71  0xFF690005 -> onError
+  69: private val onTertiaryContainerDark = Color(0xFFE3DFFF)
+  70: private val errorDark = Color(0xFFFFB4AB)
+>>71: private val onErrorDark = Color(0xFF690005)
+  72: private val errorContainerDark = Color(0xFF93000A)
+  73: private val onErrorContainerDark = Color(0xFFFFDAD6)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/OceanTheme.kt @line72  0xFF93000A -> onErrorContainer
+  70: private val errorDark = Color(0xFFFFB4AB)
+  71: private val onErrorDark = Color(0xFF690005)
+>>72: private val errorContainerDark = Color(0xFF93000A)
+  73: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  74: private val backgroundDark = Color(0xFF0F1417)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/OceanTheme.kt @line73  0xFFFFDAD6 -> errorContainer
+  71: private val onErrorDark = Color(0xFF690005)
+  72: private val errorContainerDark = Color(0xFF93000A)
+>>73: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  74: private val backgroundDark = Color(0xFF0F1417)
+  75: private val onBackgroundDark = Color(0xFFDFE3E7)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/MinimalTheme.kt @line74  0xFFFFB4AB -> error
+  72: private val tertiaryContainerDark = Color(0xFF5B4400)
+  73: private val onTertiaryContainerDark = Color(0xFFFFE6AA)
+>>74: private val errorDark = Color(0xFFFFB4AB)
+  75: private val onErrorDark = Color(0xFF690005)
+  76: private val errorContainerDark = Color(0xFF93000A)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/MinimalTheme.kt @line75  0xFF690005 -> onError
+  73: private val onTertiaryContainerDark = Color(0xFFFFE6AA)
+  74: private val errorDark = Color(0xFFFFB4AB)
+>>75: private val onErrorDark = Color(0xFF690005)
+  76: private val errorContainerDark = Color(0xFF93000A)
+  77: private val onErrorContainerDark = Color(0xFFFFDAD6)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/MinimalTheme.kt @line76  0xFF93000A -> onErrorContainer
+  74: private val errorDark = Color(0xFFFFB4AB)
+  75: private val onErrorDark = Color(0xFF690005)
+>>76: private val errorContainerDark = Color(0xFF93000A)
+  77: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  78: private val backgroundDark = Color(0xFF0F1012)
+-- app/src/main/java/me/rerere/rikkahub/ui/theme/presets/MinimalTheme.kt @line77  0xFFFFDAD6 -> errorContainer
+  75: private val onErrorDark = Color(0xFF690005)
+  76: private val errorContainerDark = Color(0xFF93000A)
+>>77: private val onErrorContainerDark = Color(0xFFFFDAD6)
+  78: private val backgroundDark = Color(0xFF0F1012)
+  79: private val onBackgroundDark = Color(0xFFE6E7EA)
+
+=== B. elevation 4/6/8 real forms: 14 ===
+app/src/main/java/me/rerere/rikkahub/browser/BrowserMiniChat.kt @line136  4dp :: tonalElevation = 4.dp,
+app/src/main/java/me/rerere/rikkahub/browser/BrowserMiniChat.kt @line137  6dp :: shadowElevation = 6.dp,
+app/src/main/java/me/rerere/rikkahub/browser/BrowserMiniChat.kt @line192  6dp :: tonalElevation = 6.dp,
+app/src/main/java/me/rerere/rikkahub/browser/BrowserMiniChat.kt @line193  8dp :: shadowElevation = 8.dp,
+app/src/main/java/me/rerere/rikkahub/ui/pages/share/handler/ShareHandlerPage.kt @line95  4dp :: tonalElevation = 4.dp,
+app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatList.kt @line950  4dp :: tonalElevation = 4.dp,
+app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatList.kt @line973  4dp :: tonalElevation = 4.dp,
+app/src/main/java/me/rerere/rikkahub/ui/components/ui/TTSController.kt @line67  4dp :: tonalElevation = 4.dp,
+app/src/main/java/me/rerere/rikkahub/ui/components/ui/TTSController.kt @line69  4dp :: shadowElevation = 4.dp,
+app/src/main/java/me/rerere/rikkahub/ui/components/ui/UIAvatar.kt @line158  4dp :: tonalElevation = 4.dp,
+app/src/main/java/me/rerere/rikkahub/ui/components/ui/ErrorCard.kt @line176  4dp :: shadowElevation = 4.dp,
+app/src/main/java/me/rerere/rikkahub/ui/components/ui/Emoji.kt @line284  8dp :: shadowElevation = 8.dp,
+app/src/main/java/me/rerere/rikkahub/ui/components/ui/Emoji.kt @line285  8dp :: tonalElevation = 8.dp
+app/src/main/java/me/rerere/rikkahub/ui/components/ui/Select.kt @line62  4dp :: tonalElevation = 4.dp,
+
+=== C. colorScheme.primary by file (top10) ===
+  x9  app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatDrawer.kt
+  x7  app/src/main/java/me/rerere/rikkahub/ui/components/ai/ModelList.kt
+  x7  app/src/main/java/me/rerere/rikkahub/ui/components/richtext/Markdown.kt
+  x6  app/src/main/java/me/rerere/rikkahub/data/datastore/DefaultProviders.kt
+  x6  app/src/main/java/me/rerere/rikkahub/ui/components/ai/SearchPicker.kt
+  x6  app/src/main/java/me/rerere/rikkahub/ui/components/richtext/MarkdownNew.kt
+  x5  app/src/main/java/me/rerere/rikkahub/ui/pages/backup/MergeConfirmDialog.kt
+  x4  app/src/main/java/me/rerere/rikkahub/browser/BrowserAiStripe.kt
+  x4  app/src/main/java/me/rerere/rikkahub/ui/pages/log/LogPage.kt
+  x4  app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantPromptPage.kt
+  total=170 files=77
+
+=== D. fillMaxWidth by file (top10) ===
+  x60  app/src/main/java/me/rerere/rikkahub/ui/pages/setting/components/TTSProviderConfigure.kt
+  x55  app/src/main/java/me/rerere/rikkahub/ui/pages/setting/components/ProviderConfigure.kt
+  x39  app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingSearchDetailPage.kt
+  x33  app/src/main/java/me/rerere/rikkahub/ui/pages/setting/components/ASRProviderConfigure.kt
+  x31  app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingProviderDetailPage.kt
+  x26  app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/PromptPage.kt
+  x26  app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatDrawer.kt
+  x24  app/src/main/java/me/rerere/rikkahub/plugin/ui/PluginUIDeclarativePage.kt
+  x19  app/src/main/java/me/rerere/rikkahub/ui/pages/extensions/workspace/WorkspaceSshEditorPage.kt
+  x16  app/src/main/java/me/rerere/rikkahub/ui/pages/assistant/detail/AssistantMemoryPage.kt
+  total=982 files=139
+
+RESULT:OK

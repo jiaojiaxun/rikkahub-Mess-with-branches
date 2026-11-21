@@ -1,0 +1,15 @@
+anchor:1
+wrote:fix
+braces:(0, 0)->(0, 0)
+page-size:17119
+check:no-categories:ok
+check:no-of-call:ok
+check:no-match-call:ok
+check:uses-all:ok
+check:uses-title:ok
+check:uses-cron-expression:ok
+check:import-kept:ok
+check:describe-weekday-kept:ok
+check:describe-hourly-kept:ok
+check:supporting-kept:ok
+RESULT:OK

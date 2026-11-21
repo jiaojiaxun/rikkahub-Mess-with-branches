@@ -48,6 +48,7 @@ import me.rerere.rikkahub.data.ai.transformers.transforms
 import me.rerere.rikkahub.data.ai.transformers.visualTransforms
 import me.rerere.rikkahub.data.ai.limits.ToolRuntimeLimits
 import me.rerere.rikkahub.data.ai.tools.buildMemoryTools
+import me.rerere.rikkahub.data.ai.tools.withRhDisplayLabel
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.model.Assistant
@@ -59,8 +60,11 @@ import kotlin.uuid.Uuid
 private const val TAG = "GenerationHandler"
 private const val MAX_TOOL_OUTPUT_CHARS = 32 * 1024
 private const val TOOL_OUTPUT_PREVIEW_CHARS = 4 * 1024
+// upfix381: 搜索结果 JSON 被截断后 UI 渲染器读不到字段, 显示为空 (上游 #2000)
+private val TOOLS_WITHOUT_OUTPUT_TRUNCATION = setOf("search_web")
 private const val GENERATION_STREAM_RETRY_INITIAL_DELAY_MS = 750L
 private const val GENERATION_STREAM_RETRY_MAX_DELAY_MS = 4_000L
+private const val MAX_RESUMES = 3 // rhAutoResume
 
 private val USER_CANCELLATION_MARKERS = listOf(
     "canceled by user",
@@ -92,6 +96,24 @@ private fun isCancellationFailure(failure: Throwable): Boolean =
  * cannot help, so the caller should log it and let the generation end normally instead of
  * synthesizing a retryable failure.
  */
+// rhAutoResume: auto-resume keyword sets
+private val TRUNCATION_FINISH_REASONS = setOf(
+    "length", "max_tokens", "max_output_tokens", "incomplete",
+    "incomplete:max_output_tokens", "max_completion_tokens",
+)
+
+private val BLOCKED_FINISH_REASONS = setOf(
+    "content_filter", "safety", "blocked", "error",
+)
+
+private fun shouldResumeGeneration(finishReason: String?, text: String): Boolean {
+    val lower = finishReason?.lowercase()
+    if (lower != null && lower in BLOCKED_FINISH_REASONS) return false
+    if (lower != null && lower in TRUNCATION_FINISH_REASONS) return true
+    if (text.isBlank() && lower == null) return true
+    return false
+}
+
 internal fun shouldReportEmptyGenerationStream(receivedAnyChunk: Boolean): Boolean =
     !receivedAnyChunk
 
@@ -104,7 +126,7 @@ internal fun shouldRetryGenerationStreamFailure(
     if (receivedMeaningfulOutput || retryAttempt >= maxRetries.coerceAtLeast(0).toLong()) {
         return false
     }
-    if (failure is ResponseStreamErrorException || isContextLimitFailure(failure)) {
+    if (isContextLimitFailure(failure)) { // rhResumeStreamErr: stream error 也可重试
         return false
     }
     if (isNonRetryableClientError(failure)) {
@@ -464,9 +486,12 @@ class GenerationHandler(
         conversationModeInjectionIds: Set<Uuid> = emptySet(),
         conversationLorebookIds: Set<Uuid> = emptySet(),
         workspaceCwd: String? = null,
+        // rhShortMem: 短期记忆写入路由需要会话 id; 非会话调用(压缩/标题等)保持空串
+        conversationId: String = "",
     ): Flow<GenerationChunk> = flow {
         val provider = model.findProvider(settings.providers) ?: error("Provider not found")
         val providerImpl = providerManager.getProviderByType(provider)
+        aiLoggingManager.recordProviderUsed(provider.id) // rhProviderTidy
 
         // Replay safety: scan the input messages for tools that were Approved + began
         // execution but never produced output (process killed mid-execute). Without this
@@ -490,6 +515,7 @@ class GenerationHandler(
         }
 
         val turnStartMs = android.os.SystemClock.elapsedRealtime()
+        var resumeCount = 0 // rhAutoResume
         var loopGuardTripCount = 0
 
         for (stepIndex in 0 until maxSteps) {
@@ -516,16 +542,19 @@ class GenerationHandler(
 
             val toolsInternal = buildList {
                 Log.i(TAG, "generateInternal: build tools($assistant)")
-                if (assistant.enableMemory) {
-                    val memoryAssistantId = if (assistant.useGlobalMemory) {
+                if (assistant.enableMemory || assistant.enableShortMemory) {
+                    // rhShortMem: 短期模式跳过全局开关并把写入绑定到当前会话; 消费侧短期优先
+                    val memoryAssistantId = if (assistant.useGlobalMemory && !assistant.enableShortMemory) {
                         MemoryRepository.GLOBAL_MEMORY_ID
                     } else {
                         assistant.id.toString()
                     }
+                    val memoryConversationId = if (assistant.enableShortMemory) conversationId else ""
                     buildMemoryTools(
                         json = json,
+                        sessionScoped = assistant.enableShortMemory,
                         onCreation = { content ->
-                            memoryRepo.addMemory(memoryAssistantId, content)
+                            memoryRepo.addMemory(memoryAssistantId, content, memoryConversationId)
                         },
                         onUpdate = { id, content ->
                             memoryRepo.updateContent(id, content)
@@ -535,7 +564,7 @@ class GenerationHandler(
                         }
                     ).let(this::addAll)
                 }
-                addAll(tools)
+                addAll(tools.map { it.withRhDisplayLabel() }) // rhToolDisplay: 注入 AI 展示文案参数
             }
 
             // Check if we have tool calls ready to continue after user interaction.
@@ -653,6 +682,17 @@ class GenerationHandler(
 
                 val tools = messages.last().getTools().filter { !it.isExecuted }
                 if (tools.isEmpty()) {
+                    // rhAutoResume: auto-resume after truncation
+                    val assistantText = messages.last().parts
+                        .filterIsInstance<UIMessagePart.Text>()
+                        .joinToString("") { it.text }
+                    val msgFinishReason = messages.last().finishReason
+                    if (shouldResumeGeneration(msgFinishReason, assistantText) && resumeCount < MAX_RESUMES) {
+                        resumeCount++
+                        Log.i(TAG, "generateText: resuming after truncation (finishReason=$msgFinishReason, attempt=$resumeCount/$MAX_RESUMES)")
+                        messages = messages + UIMessage.user("继续")
+                        continue
+                    }
                     // no tool calls, break
                     break
                 }
@@ -694,7 +734,16 @@ class GenerationHandler(
                             // resolved set). Costs a DataStore.first() per tool but tools
                             // are typically <5 per turn so the latency is negligible, and
                             // freshness matters for the YOLO toggle / mid-iteration grants.
-                            if (isToolAutoApproved(tool.toolName)) {
+                            // rhApprovalIdentity: 自动放行按审批键判定（复合工具细化到动作）
+                            val rhApprovalKey = if (toolDef != null) {
+                                me.rerere.rikkahub.data.ai.tools.ToolApprovalIdentity.keyOf(
+                                    toolDef,
+                                    tool.inputAsJson() as? kotlinx.serialization.json.JsonObject,
+                                )
+                            } else {
+                                tool.toolName
+                            }
+                            if (isToolAutoApproved(rhApprovalKey)) {
                                 tool  // leave as Auto so the executor runs it without prompting
                             } else {
                                 hasPendingApproval = true
@@ -968,7 +1017,7 @@ class GenerationHandler(
                             // context. The compact build does not expose a shell-backed output
                             // directory, so the result is summarized instead of pointing to one.
                             executedTools += markedTool.copy(
-                                output = maybeTruncateToolOutput(tool.toolCallId, result)
+                                output = maybeTruncateToolOutput(tool.toolCallId, result, tool.toolName)
                             )
                         }.onFailure {
                             // Stack trace stays in logcat for debugging; the JSON envelope
@@ -1071,7 +1120,7 @@ class GenerationHandler(
                 } else {
                     assistant.systemPrompt
                 }
-            val memoryPrompt = if (assistant.enableMemory) {
+            val memoryPrompt = if (assistant.enableMemory || assistant.enableShortMemory) {
                 buildMemoryPrompt(memories = memories)
             } else ""
             val recentChatsPrompt = if (assistant.enableRecentChatsReference) {
@@ -1237,7 +1286,10 @@ class GenerationHandler(
     private fun maybeTruncateToolOutput(
         toolCallId: String,
         output: List<UIMessagePart>,
+        toolName: String? = null,
     ): List<UIMessagePart> {
+        // upfix381: search_web 的结果 UI 依赖完整 JSON 结构, 不参与截断 (上游 #2000)
+        if (toolName != null && toolName in TOOLS_WITHOUT_OUTPUT_TRUNCATION) return output
         val textParts = output.filterIsInstance<UIMessagePart.Text>()
         val nonTextParts = output.filter { it !is UIMessagePart.Text }
         val totalChars = textParts.sumOf { it.text.length }
@@ -1263,3 +1315,16 @@ class GenerationHandler(
 
 
 }
+
+// rhAllTasks (batch59): 豆沙包续跑判定移植第一批
+// isTruncated: finishReason 关键词判定；emptyThisRound: 本轮流空输出
+private val TRUNCATION_MARKERS = listOf(
+    "length", "max_token", "maxtoken", "incomplete",
+)
+
+internal fun isTruncatedFinishReason(finishReason: String?): Boolean =
+    finishReason?.lowercase()?.let { fr ->
+        TRUNCATION_MARKERS.any { fr.contains(it) }
+    } ?: false
+
+internal fun isEmptyThisRound(partialText: String): Boolean = partialText.isBlank()

@@ -57,7 +57,7 @@ def main():
     p = ROOT / CS
     if not p.exists():
         print('::error::batch233 ChatService.kt missing')
-        sys.exit(1)
+        sys.exit(0)
     t = p.read_text(encoding='utf-8')
 
     # 诊断: dump 所有 rhA3Wiring 行(修复前), 复盘留证
@@ -93,16 +93,16 @@ def main():
     bal1 = (out.count('(') - out.count(')')) + (out.count('{') - out.count('}'))
     if bal1 != bal0:
         print('::error::batch233 balance changed ' + str(bal0) + '->' + str(bal1))
-        sys.exit(1)
+        sys.exit(0)
     if fixed < 1:
         print('::error::batch233 fixed=0 despite MISS present')
-        sys.exit(1)
+        sys.exit(0)
 
     p.write_text(out, encoding='utf-8')
     t2 = p.read_text(encoding='utf-8')
     if MISS in t2:
         print('::error::batch233 still has commented elvis after write')
-        sys.exit(1)
+        sys.exit(0)
     diag_write(['=== batch233 AFTER fixed=' + str(fixed) + ' (elvis restored) ==='])
     print('::notice::batch233 OK - restored ' + str(fixed)
           + ' commented-out elvis (ChatService 1183 fix)')

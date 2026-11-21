@@ -1,0 +1,43 @@
+skip-decl:SakuraTheme.kt :: private val errorLight = Color(0xFFBA1A1A)
+skip-decl:SakuraTheme.kt :: private val errorContainerLight = Color(0xFFFFDAD6)
+skip-decl:SakuraTheme.kt :: private val onErrorContainerLight = Color(0xFF93000A)
+skip-decl:SakuraTheme.kt :: private val errorDark = Color(0xFFFFB4AB)
+skip-decl:SakuraTheme.kt :: private val onErrorDark = Color(0xFF690005)
+skip-decl:SakuraTheme.kt :: private val errorContainerDark = Color(0xFF93000A)
+skip-decl:SakuraTheme.kt :: private val onErrorContainerDark = Color(0xFFFFDAD6)
+skip-decl:AutumnTheme.kt :: private val errorLight = Color(0xFFBA1A1A)
+skip-decl:AutumnTheme.kt :: private val errorContainerLight = Color(0xFFFFDAD6)
+skip-decl:AutumnTheme.kt :: private val onErrorContainerLight = Color(0xFF93000A)
+skip-decl:AutumnTheme.kt :: private val errorDark = Color(0xFFFFB4AB)
+skip-decl:AutumnTheme.kt :: private val onErrorDark = Color(0xFF690005)
+skip-decl:AutumnTheme.kt :: private val errorContainerDark = Color(0xFF93000A)
+skip-decl:AutumnTheme.kt :: private val onErrorContainerDark = Color(0xFFFFDAD6)
+skip-decl:SpringTheme.kt :: private val errorLight = Color(0xFFBA1A1A)
+skip-decl:SpringTheme.kt :: private val errorContainerLight = Color(0xFFFFDAD6)
+skip-decl:SpringTheme.kt :: private val onErrorContainerLight = Color(0xFF93000A)
+skip-decl:SpringTheme.kt :: private val errorDark = Color(0xFFFFB4AB)
+skip-decl:SpringTheme.kt :: private val onErrorDark = Color(0xFF690005)
+skip-decl:SpringTheme.kt :: private val errorContainerDark = Color(0xFF93000A)
+skip-decl:SpringTheme.kt :: private val onErrorContainerDark = Color(0xFFFFDAD6)
+skip-decl:OceanTheme.kt :: private val errorLight = Color(0xFFBA1A1A)
+skip-decl:OceanTheme.kt :: private val errorContainerLight = Color(0xFFFFDAD6)
+skip-decl:OceanTheme.kt :: private val onErrorContainerLight = Color(0xFF93000A)
+skip-decl:OceanTheme.kt :: private val errorDark = Color(0xFFFFB4AB)
+skip-decl:OceanTheme.kt :: private val onErrorDark = Color(0xFF690005)
+skip-decl:OceanTheme.kt :: private val errorContainerDark = Color(0xFF93000A)
+skip-decl:OceanTheme.kt :: private val onErrorContainerDark = Color(0xFFFFDAD6)
+skip-decl:MinimalTheme.kt :: private val errorDark = Color(0xFFFFB4AB)
+skip-decl:MinimalTheme.kt :: private val onErrorDark = Color(0xFF690005)
+skip-decl:MinimalTheme.kt :: private val errorContainerDark = Color(0xFF93000A)
+skip-decl:MinimalTheme.kt :: private val onErrorContainerDark = Color(0xFFFFDAD6)
+
+files-touched:0
+0xFFFFDAD6 -> errorContainer : 0
+0xFF93000A -> onErrorContainer : 0
+0xFFFFB4AB -> error : 0
+0xFF690005 -> onError : 0
+0xFFBA1A1A -> error : 0
+total-replaced:0
+skipped-decl-or-arrow:32
+leftover-param-position:0
+RESULT:OK

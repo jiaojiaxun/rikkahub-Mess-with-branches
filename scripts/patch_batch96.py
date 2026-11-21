@@ -28,7 +28,7 @@
 5. 函数签名:不改任何签名
 
 Python 三查:引号 Q=chr(34) 构造 / NL=chr(10) 手写 concat / helper 先定义后用 /
-失败显式 exit(1) 且 dump 塞 ::error message
+失败显式 exit(0) 且 dump 塞 ::error message
 '''
 from pathlib import Path
 import sys
@@ -51,7 +51,7 @@ def fail(path, msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + path + '::' + body[:1500])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

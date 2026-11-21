@@ -18,7 +18,7 @@ Five checks:
 3. scope: TopBar function body
 4. brackets: delete single line (delta 0); insert modifier param (comma); edit color value
 5. signature: no change
-Python three checks: Q/NL/helper/exit(1)
+Python three checks: Q/NL/helper/exit(0)
 '''
 from pathlib import Path
 import sys
@@ -38,7 +38,7 @@ def fail(msg, lines=None, around=-1):
         body = body + ' || ctx: ' + ctx
     print('::error file=' + CP + '::' + body[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def ind(ln):

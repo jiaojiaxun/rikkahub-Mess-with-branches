@@ -1,0 +1,16 @@
+transport:wrote
+session:wrote
+session:BRACES
+session:PARENS
+page:wrote
+ssh-terminal:ok
+ver:ok
+lib:ok
+app-modules:ok
+route-import:ok
+route-screen:ok
+route-entry:ok
+detail-terminal:ok
+strings-en:ok
+strings-zh:ok
+RESULT:FAIL

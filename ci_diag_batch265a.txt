@@ -1,0 +1,46 @@
+FILE app/src/main/java/me/rerere/rikkahub/data/files/FilesManager.kt
+  L489:object FileFolders {
+BackupArchiveRestorer hits=34
+rec L142:val safeName = normalizeEntryName(entry.name)
+rec L154:safeName.startsWith("${FileFolders.UPLOAD}/") -> resolveStagedFile(staging, safeName)
+rec L155:safeName.startsWith("${FileFolders.SKILLS}/") -> resolveStagedFile(staging, safeName)
+rec L156:safeName.startsWith("${FileFolders.FONTS}/") -> resolveStagedFile(staging, safeName)
+rec L157:safeName.startsWith("${FileFolders.IMAGES}/") -> resolveStagedFile(staging, safeName)
+rec L158:safeName.startsWith("${FileFolders.TOOL_OUTPUTS}/") -> resolveStagedFile(staging, safeName)
+rec L177:safeName.startsWith("${FileFolders.SKILLS}/") -> "恢复技能"
+rec L242:FileFolders.UPLOAD,
+rec L243:FileFolders.SKILLS,
+rec L244:FileFolders.FONTS,
+rec L245:FileFolders.IMAGES,
+rec L246:FileFolders.TOOL_OUTPUTS,
+rec L258:val target = resolveAppFile(rootName, relative.invariantSeparatorsPath) ?: return@forEach
+rec L349:private fun normalizeEntryName(raw: String): String? {
+rec L366:val rootAliases = mapOf(
+rec L367:"upload" to FileFolders.UPLOAD,
+rec L368:"uploads" to FileFolders.UPLOAD,
+rec L369:"files" to FileFolders.UPLOAD,
+rec L370:"skills" to FileFolders.SKILLS,
+rec L371:"skill" to FileFolders.SKILLS,
+rec L372:"fonts" to FileFolders.FONTS,
+rec L373:"images" to FileFolders.IMAGES,
+rec L374:"tool_outputs" to FileFolders.TOOL_OUTPUTS,
+rec L375:"tool-outputs" to FileFolders.TOOL_OUTPUTS,
+rec L379:val rootIndex = parts.indexOfFirst { it.lowercase() in rootAliases }
+rec L381:val root = rootAliases[parts[rootIndex].lowercase()] ?: return null
+rec L390:private fun resolveAppFile(root: String, relative: String): File? =
+rec L498:val safeName = normalizeEntryName(entry.name)
+rec L532:safeName.startsWith("${FileFolders.UPLOAD}/") -> resolveStagedFile(staging, safeName)
+rec L533:safeName.startsWith("${FileFolders.SKILLS}/") -> resolveStagedFile(staging, safeName)
+rec L534:safeName.startsWith("${FileFolders.FONTS}/") -> resolveStagedFile(staging, safeName)
+rec L535:safeName.startsWith("${FileFolders.IMAGES}/") -> resolveStagedFile(staging, safeName)
+rec L536:safeName.startsWith("${FileFolders.TOOL_OUTPUTS}/") -> resolveStagedFile(staging, safeName)
+rec L554:safeName.startsWith("${FileFolders.SKILLS}/") -> "恢复技能"
+WebDavSync backupFileEntries hits=8
+webdav L253:val fileEntries = if (includeFiles) backupFileEntries(full, liteMax, includeImages) else emptyList()
+webdav L315:private fun backupFileEntries(full: Boolean, maxFileSize: Long = Long.MAX_VALUE, includeImages: Boolean = true): List<Pair<File, String>> = buildList {
+webdav L316:listOf(FileFolders.UPLOAD, FileFolders.FONTS).forEach { folder ->
+webdav L317:val root = File(context.filesDir, folder)
+webdav L326:val trees = if (full) {
+webdav L327:listOf(FileFolders.SKILLS, FileFolders.IMAGES, FileFolders.TOOL_OUTPUTS, "workspaces")
+webdav L329:listOf(FileFolders.SKILLS)
+webdav L332:val root = File(context.filesDir, folder)

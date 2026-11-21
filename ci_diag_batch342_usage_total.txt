@@ -1,0 +1,6 @@
+message: field anchor count=1
+message: totalPromptTokens/totalCompletionTokens added
+handler: balance (0, 0) -> (0, 0)
+handler: per-step accounting installed
+chrome: balance (0, 0) -> (0, 0)
+chrome: totals preferred with fallback

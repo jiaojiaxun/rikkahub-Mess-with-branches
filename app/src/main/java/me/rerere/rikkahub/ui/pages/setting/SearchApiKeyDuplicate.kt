@@ -21,6 +21,7 @@ internal fun SearchServiceOptions.apiKeyForDuplicateCheck(): String? = when (thi
     is SearchServiceOptions.GrokOptions -> apiKey
     is SearchServiceOptions.TinyfishOptions -> apiKey
     is SearchServiceOptions.SerperOptions -> apiKey
+    is SearchServiceOptions.DeepSeekOptions -> apiKey // rhDeepSeek316
     is SearchServiceOptions.BingLocalOptions,
     is SearchServiceOptions.DuckDuckGoOptions,
     is SearchServiceOptions.SearXNGOptions,

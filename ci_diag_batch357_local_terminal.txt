@@ -1,0 +1,11 @@
+wrote:CMakeLists.txt:202
+wrote:termux_pty.cpp:4642
+wrote:JNI.java:1866
+wrote:LocalPtyTransport.java:6150
+gradle:rewritten
+gradle-braces:0
+present:CMakeLists.txt
+present:termux_pty.cpp
+present:JNI.java
+present:LocalPtyTransport.java
+RESULT:OK

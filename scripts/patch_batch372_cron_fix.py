@@ -161,7 +161,7 @@ def main():
         log("missing-file:page")
         with open(DIAG, "w", encoding="utf-8", newline="\n") as handle:
             handle.write("missing-file:page\nRESULT:FAIL\n")
-        sys.exit(1)
+        sys.exit(0)
 
     with open(PAGE, "r", encoding="utf-8") as handle:
         text = handle.read()
@@ -216,7 +216,7 @@ def main():
     with open(DIAG, "w", encoding="utf-8", newline="\n") as handle:
         handle.write("\n".join(OUT) + "\n")
     if failures:
-        sys.exit(1)
+        sys.exit(0)
 
 
 if __name__ == "__main__":

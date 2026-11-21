@@ -58,7 +58,11 @@ class WorkspaceCompletionProvider(
 
     private suspend fun loadEntries(): List<WorkspaceFileEntry> {
         val now = System.currentTimeMillis()
-        if (cachedAt > 0L && now - cachedAt < CACHE_TTL_MILLIS) {
+        // 远程工作区每列一个目录都是一次 SFTP 往返: 收窄索引范围并延长缓存,
+        // 否则 80 个目录 x 100ms 远超原 5 秒 TTL, 每次 @ 都会全量重扫。
+        val remote = repository.getById(workspaceId ?: return emptyList())?.isSsh() == true
+        val ttl = if (remote) REMOTE_CACHE_TTL_MILLIS else CACHE_TTL_MILLIS
+        if (cachedAt > 0L && now - cachedAt < ttl) {
             return cachedEntries
         }
 
@@ -74,8 +78,10 @@ class WorkspaceCompletionProvider(
         queue.add("")
         seenDirs += ""
         var visitedDirs = 0
+        val maxEntries = if (remote) MAX_REMOTE_INDEXED_ENTRIES else MAX_INDEXED_ENTRIES
+        val maxDirs = if (remote) MAX_REMOTE_INDEXED_DIRS else MAX_INDEXED_DIRS
 
-        while (queue.isNotEmpty() && result.size < MAX_INDEXED_ENTRIES && visitedDirs < MAX_INDEXED_DIRS) {
+        while (queue.isNotEmpty() && result.size < maxEntries && visitedDirs < maxDirs) {
             val path = queue.removeFirst()
             visitedDirs++
             val ignoreMatcher = matcherForDirectory(path, matcherCache)
@@ -91,12 +97,12 @@ class WorkspaceCompletionProvider(
                 emptyList()
             }
             entries.forEach { entry ->
-                if (result.size >= MAX_INDEXED_ENTRIES) return@forEach
+                if (result.size >= maxEntries) return@forEach
                 if (ignoreMatcher.isIgnored(entry.path, entry.isDirectory)) return@forEach
                 if (seenEntries.add(entry.path)) {
                     result += entry
                 }
-                if (entry.isDirectory && queue.size < MAX_INDEXED_DIRS && seenDirs.add(entry.path)) {
+                if (entry.isDirectory && queue.size < maxDirs && seenDirs.add(entry.path)) {
                     queue.add(entry.path)
                 }
             }
@@ -271,6 +277,9 @@ class WorkspaceCompletionProvider(
         private const val MAX_INDEXED_ENTRIES = 500
         private const val MAX_INDEXED_DIRS = 80
         private const val CACHE_TTL_MILLIS = 5_000L
+        private const val MAX_REMOTE_INDEXED_ENTRIES = 200
+        private const val MAX_REMOTE_INDEXED_DIRS = 20
+        private const val REMOTE_CACHE_TTL_MILLIS = 60_000L
         private const val DIRECTORY_SCORE_BONUS = 25
         private const val CWD_SCORE_BONUS = 1_500
     }

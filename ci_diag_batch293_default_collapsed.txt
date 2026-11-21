@@ -1,0 +1,1 @@
+drawer 293 OK: collapsed by default and independent of loading

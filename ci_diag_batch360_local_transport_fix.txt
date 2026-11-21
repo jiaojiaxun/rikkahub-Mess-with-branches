@@ -1,0 +1,13 @@
+anchor-fn:1
+braces-fn:(0, 0)->(0, 0)
+wrote:fn
+anchor-doc:1
+wrote:doc
+file-size:9227
+check:has-local-transport:ok
+check:has-terminal-launch:ok
+check:ssh-branch-kept:ok
+check:ssh-check-removed:ok
+check:ctor-param-used:ok
+check:doc-updated:ok
+RESULT:OK

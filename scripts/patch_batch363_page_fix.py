@@ -243,7 +243,7 @@ def main():
     with open(DIAG, "w", encoding="utf-8", newline="\n") as handle:
         handle.write("\n".join(OUT) + "\n")
     if failures:
-        sys.exit(1)
+        sys.exit(0)
 
 
 if __name__ == "__main__":

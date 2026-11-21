@@ -74,6 +74,7 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Clock
 
+// rh-batch1:responses-path
 private const val TAG = "ResponseAPI"
 private val USER_CANCELLATION_MARKERS = listOf(
     "canceled by user",
@@ -197,7 +198,7 @@ class ResponseAPI(
             stream = false,
         )
         val request = Request.Builder()
-            .url("${providerSetting.baseUrl}/responses")
+            .url("${providerSetting.baseUrl}${providerSetting.responsesPath.ifBlank { "/responses" }}")
             .headers(params.customHeaders.toHeaders())
             .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
             .addHeader(
@@ -240,7 +241,7 @@ class ResponseAPI(
             stream = true,
         )
         val request = Request.Builder()
-            .url("${providerSetting.baseUrl}/responses")
+            .url("${providerSetting.baseUrl}${providerSetting.responsesPath.ifBlank { "/responses" }}")
             .headers(params.customHeaders.toHeaders())
             .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
             .addHeader(

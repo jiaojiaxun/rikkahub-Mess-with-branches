@@ -1,0 +1,7 @@
+editor-readonly:ok
+editor-save-gate:ok
+editor-title:ok
+detail-shell:ok
+strings-en:ok
+strings-zh:ok
+RESULT:OK

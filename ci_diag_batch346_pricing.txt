@@ -1,0 +1,6 @@
+pricing: wrote 4871 bytes
+message: cached field anchor count=1
+message: totalCachedTokens added
+handler: cached accrual in all three paths
+chrome: pricing computation wired
+sheet: cost line installed

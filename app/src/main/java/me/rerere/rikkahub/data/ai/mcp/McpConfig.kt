@@ -3,6 +3,7 @@ package me.rerere.rikkahub.data.ai.mcp
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import me.rerere.ai.core.InputSchema
+import me.rerere.rikkahub.data.model.Avatar // rhMcpAvatar253
 import kotlin.uuid.Uuid
 
 @Serializable
@@ -12,6 +13,7 @@ data class McpCommonOptions(
     val headers: List<Pair<String, String>> = emptyList(),
     val tools: List<McpTool> = emptyList(),
     val oauth: McpOAuthState? = null,
+    val avatar: Avatar = Avatar.Dummy, // rhMcpAvatar253
 )
 
 /**

@@ -1,0 +1,4 @@
+SettingMcpPage OK: avatar replaces default icon when configured
+1 SettingMcpPage DONE
+picker already applied
+2 McpPicker DONE

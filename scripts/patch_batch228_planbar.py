@@ -13,7 +13,7 @@
 #                        + bottomBar Column 内挂 PlanBar(优先 quotePreview 前,回退 ChatInput( 前)
 #  F strings.xml en+zh  8 条文案(插入 </resources> 前,batch3/91/130 同款)
 #
-# warn-only(近期惯例): 任何锚点失败只记录 skipped + 末尾借 ::error 空通道汇总,不 exit(1)。
+# warn-only(近期惯例): 任何锚点失败只记录 skipped + 末尾借 ::error 空通道汇总,不 exit(0)。
 # 注意: strings 若失败会导致新文件引用缺失编译红,汇总里会显式标出。
 #
 # 五查:

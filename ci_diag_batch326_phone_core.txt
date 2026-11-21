@@ -1,0 +1,5 @@
+[batch326] root=/home/runner/work/rikkahub-Mess-with-branches/rikkahub-Mess-with-branches
+[batch326] wrote app/src/main/java/me/rerere/rikkahub/phone/PhoneUiTree.kt (3565 chars)
+[batch326] wrote app/src/main/java/me/rerere/rikkahub/phone/PhoneSensitive.kt (4275 chars)
+[batch326] wrote app/src/main/java/me/rerere/rikkahub/phone/PhoneMask.kt (2155 chars)
+FAIL unbalanced () in app/src/main/java/me/rerere/rikkahub/phone/PhoneRules.kt: 45/48

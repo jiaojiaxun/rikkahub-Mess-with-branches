@@ -12,6 +12,7 @@ import me.rerere.hugeicons.stroke.Cancel01
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -88,15 +89,19 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.UIMessagePart
+import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.ai.ContextBudgetPlanner
 import me.rerere.rikkahub.data.datastore.getAssistantById
+import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.translation.TranslationMode
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.ui.components.message.ChatMessage
+import me.rerere.rikkahub.ui.components.message.ChatMessageQuoteBlock
 import me.rerere.rikkahub.ui.components.ui.ErrorCardsDisplay
 import me.rerere.rikkahub.ui.components.ui.ListSelectableItem
 import me.rerere.rikkahub.ui.components.ui.RabbitLoadingIndicator
@@ -140,6 +145,11 @@ fun ChatList(
     onRerunTool: (suspend (toolCallId: String) -> me.rerere.rikkahub.service.ChatService.RerunToolResult)? = null,
     onToggleFavorite: ((MessageNode) -> Unit)? = null,
     onConversationSystemPromptChange: ((String?) -> Unit)? = null,
+    subAgentPendingCount: Int = 0, // rhSubAgentBanner
+    onQuote: (UIMessage) -> Unit = {}, // rhQuoteMount
+// rhUserAvatarEdit
+onChangeUserAvatar: ((Avatar) -> Unit)? = null,
+onEditUserNickname: (() -> Unit)? = null,
 ) {
     AnimatedContent(
         targetState = previewMode,
@@ -185,6 +195,11 @@ fun ChatList(
                 onRerunTool = onRerunTool,
                 onToggleFavorite = onToggleFavorite,
                 onConversationSystemPromptChange = onConversationSystemPromptChange,
+                subAgentPendingCount = subAgentPendingCount, // rhSubAgentBanner
+                onQuote = onQuote,
+            // rhUserAvatarEdit
+            onChangeUserAvatar = onChangeUserAvatar,
+            onEditUserNickname = onEditUserNickname,
             )
         }
     }
@@ -218,6 +233,11 @@ private fun ChatListNormal(
     onRerunTool: (suspend (toolCallId: String) -> me.rerere.rikkahub.service.ChatService.RerunToolResult)? = null,
     onToggleFavorite: ((MessageNode) -> Unit)? = null,
     onConversationSystemPromptChange: ((String?) -> Unit)? = null,
+    subAgentPendingCount: Int = 0, // rhSubAgentBanner
+    onQuote: (UIMessage) -> Unit = {}, // rhQuoteMount
+// rhUserAvatarEdit
+onChangeUserAvatar: ((Avatar) -> Unit)? = null,
+onEditUserNickname: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val loadingState by rememberUpdatedState(loading)
@@ -286,8 +306,50 @@ private fun ChatListNormal(
     val displayGroups = remember(conversation.messageNodes) {
         conversation.messageNodes.groupAutomaticCompactionMessages()
     }
+
+    // rhLosslessStream241: 引用消息 O(1) 查表, 替代每帧对全消息树的 flatMap 线性扫描。
+    // 原实现在每个可见消息条目内部执行
+    //   conversation.messageNodes.flatMap { it.messages }.firstOrNull { it.id == quotedId }
+    // 流式期间每个 token 都让全部可见条目失效并重扫 => 全程 O(n^2)。
+    // 该表只依赖结构性信息(节点数 + 各节点版本数之和), 与正在增长的文本无关,
+    // 因此流式期间稳定命中, 历史条目不再参与任何重扫。
+    val rhMessageByIdMap = remember(
+        conversation.id,
+        conversation.messageNodes.size,
+        conversation.messageNodes.sumOf { it.messages.size },
+    ) {
+        buildMap {
+            conversation.messageNodes.forEach { node ->
+                node.messages.forEach { message -> put(message.id, message) }
+            }
+        }
+    }
     val lastMessageNodeId = conversation.messageNodes.lastOrNull()?.id
-    val estimatedContextTokens = remember(conversation.messageNodes) {
+    // rhCtxOn2Fix238: 流式期间(loading=true)用 O(1) 三元组冻结 key, 彻底消除每 token 对
+    // List<MessageNode> 的 O(n) equals 遍历与 LaunchedEffect 协程频繁重启;
+    // 流式结束(loading->false) key 从 Triple 切回 List, 立即同步精算。
+    val rhLastPendingCount = conversation.messageNodes.lastOrNull()?.currentMessage?.parts?.count {
+        it is UIMessagePart.Tool && it.approvalState is ToolApprovalState.Pending
+    } ?: 0
+    val rhPendingKey: Any = if (loading) {
+        Triple(conversation.id, conversation.messageNodes.size, rhLastPendingCount)
+    } else {
+        conversation.messageNodes
+    }
+    // rhSubAgentBanner: 计算待审批工具数量
+    val subAgentPendingCount = remember(rhPendingKey) {
+        conversation.messageNodes.count { node ->
+            node.currentMessage.parts.any { part ->
+                part is UIMessagePart.Tool && part.approvalState is ToolApprovalState.Pending
+            }
+        }
+    }
+    val rhEstimateKey: Any = if (loading) {
+        Triple(conversation.id, conversation.messageNodes.size, lastMessageNodeId)
+    } else {
+        conversation.messageNodes
+    }
+    val estimatedContextTokens = remember(rhEstimateKey) {
         ContextBudgetPlanner.estimateInputTokens(conversation.currentMessages).takeIf { it > 0 }
     }
 
@@ -296,20 +358,34 @@ private fun ChatListNormal(
             .fillMaxSize(),
     ) {
         // 自动滚动到底部
-        if (settings.displaySetting.enableAutoScroll) {
-            LaunchedEffect(state, conversationUpdated.messageNodes, loadingState) {
-                snapshotFlow { state.layoutInfo.visibleItemsInfo }.collect { visibleItemsInfo ->
-                    if (!state.isScrollInProgress && loadingState && visibleItemsInfo.isAtBottom()) {
-                        val latestGroupIndex = conversationUpdated.messageNodes
-                            .groupAutomaticCompactionMessages()
-                            .lastIndex
-                        if (latestGroupIndex >= 0) {
-                            state.requestScrollToItem(latestGroupIndex)
+        // rh-batch2:scroll - latched stream-follow. The old code called
+            // requestScrollToItem(lastGroupIndex), i.e. the TOP of the streaming reply: as soon
+            // as the reply grew taller than the screen every update yanked the view back to
+            // the start of the reply. Now: follow the END of the list, and only stop following
+            // when the user scrolls away (re-latch by scrolling back to the bottom).
+            var rhFollowStream by remember { mutableStateOf(true) }
+            LaunchedEffect(state) {
+                snapshotFlow { state.isScrollInProgress }.collect { scrolling ->
+                    if (!scrolling) {
+                        val info = state.layoutInfo
+                        val last = info.visibleItemsInfo.lastOrNull()
+                        rhFollowStream = last == null || last.index >= info.totalItemsCount - 1
+                    }
+                }
+            }
+            if (settings.displaySetting.enableAutoScroll) {
+                LaunchedEffect(state, loadingState) {
+                    if (!loadingState) return@LaunchedEffect
+                    snapshotFlow {
+                        val info = state.layoutInfo
+                        info.totalItemsCount to (info.visibleItemsInfo.lastOrNull()?.let { it.offset + it.size } ?: 0)
+                    }.collect { (count, _) ->
+                        if (rhFollowStream && !state.isScrollInProgress && count > 0 && state.canScrollForward) {
+                            state.requestScrollToItem(count - 1)
                         }
                     }
                 }
             }
-        }
 
         // 判断最近是否滚动
         LaunchedEffect(state.isScrollInProgress) {
@@ -332,14 +408,52 @@ private fun ChatListNormal(
                 modifier = Modifier
                     .fillMaxSize()
                     .hazeSource(state = hazeState)
-                    .padding(top = innerPadding.calculateTopPadding()),
+                    .padding(top = innerPadding.calculateTopPadding() + ChatHtmlLayout.reservedTopDp.value.dp),
             ) {
+            if (subAgentPendingCount > 0) { // rhSubAgentBanner
+                item(key = "sub_agent_banner") {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "工具等待审批（" + subAgentPendingCount + " 项）",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                }
+            }
             items(
                 items = displayGroups,
                 key = { it.id },
             ) { group ->
                 val node = group.terminalNode
-                Column {
+                Column(modifier = Modifier.animateItem(fadeInSpec = tween(220), fadeOutSpec = tween(220))) {
+                        val rhQuoteId = group.displayMessage.quotedMessageId ?: node.currentMessage.quotedMessageId // rhQuoteRepair123
+                        rhQuoteId?.let { quotedId ->
+                            val quotedMsg = rhMessageByIdMap[quotedId]
+                            ChatMessageQuoteBlock(
+                                senderName = quotedMsg?.let { msg ->
+                                    if (msg.role == me.rerere.ai.core.MessageRole.USER) {
+                                        "你"
+                                    } else {
+                                        assistant?.name?.ifBlank { null } ?: "助手"
+                                    }
+                                } ?: "引用",
+                                previewText = quotedMsg?.toText()?.take(80)?.ifBlank { "（引用的消息已不在对话中）" } ?: "（引用的消息已不在对话中）",
+                                onClick = {
+                                    val qIdx = displayGroups.indexOfFirst { g -> g.nodes.any { n -> n.messages.any { m -> m.id == quotedId } } }
+                                    if (qIdx >= 0) scope.launch { state.scrollToItem(qIdx) }
+                                },
+                            )
+                        }
                     ListSelectableItem(
                         key = group.id,
                         onSelectChange = {
@@ -399,6 +513,10 @@ private fun ChatListNormal(
                             onToolAnswer = onToolAnswer,
                             onRerunTool = onRerunTool,
                             lastMessage = node.id == lastMessageNodeId,
+                            onQuote = { onQuote(node.currentMessage) },
+                        // rhUserAvatarEdit
+                        onChangeUserAvatar = onChangeUserAvatar,
+                        onEditUserNickname = onEditUserNickname,
                         )
                     }
                 }
@@ -415,8 +533,19 @@ private fun ChatListNormal(
 
             if (loading) {
                 item(LoadingIndicatorKey) {
+                    // rh-batch3:compaction-preview
+                    androidx.compose.foundation.layout.Column {
+                    // rhLiteStreamLoading (batch53): 精简模式下去掉动画加载指示器
+                    if (settings.displaySetting.liteStreamRender) {
+                        Text(
+                            text = "...",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    } else
                     Row(
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier.padding(8.dp).rhReadableOnSkin(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -432,6 +561,11 @@ private fun ChatListNormal(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                    }
+                    me.rerere.rikkahub.ui.components.ai.CompactionStreamPreview(
+                        conversationId = null,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    )
                     }
                 }
             }
@@ -656,11 +790,11 @@ private fun ChatListPreview(
 
     Column(
         modifier = Modifier
-            .padding(top = innerPadding.calculateTopPadding())
+            .padding(top = innerPadding.calculateTopPadding() + ChatHtmlLayout.reservedTopDp.value.dp)
             .fillMaxSize()
             .hazeSource(state = hazeState),
     ) {
-        // 搜索框
+        // rhPreviewSearchRestored315: 恢复预览搜索框
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
@@ -693,7 +827,7 @@ private fun ChatListPreview(
 
         // 消息预览
         LazyColumn(
-            contentPadding = PaddingValues(16.dp) + PaddingValues(bottom = 32.dp + innerPadding.calculateBottomPadding()),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp + innerPadding.calculateBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
                 .fillMaxWidth()

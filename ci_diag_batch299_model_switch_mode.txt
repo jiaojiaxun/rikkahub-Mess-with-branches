@@ -1,0 +1,20 @@
+pref-field OK
+pref READY
+conf-model OK
+conf-assistant OK
+conf-bind OK
+conf READY
+vm-setChatModel OK
+vm READY
+page-chat-input-model-id OK
+page READY
+ui-comment OK
+ui-headline OK
+ui-supporting OK
+ui READY
+WROTE app/src/main/java/me/rerere/rikkahub/data/datastore/PreferencesStore.kt
+WROTE app/src/main/java/me/rerere/rikkahub/data/model/ConversationConfig.kt
+WROTE app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatVM.kt
+WROTE app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt
+WROTE app/src/main/java/me/rerere/rikkahub/ui/pages/setting/SettingPreferencesUIPage.kt
+RESULT OK: four files? count=5

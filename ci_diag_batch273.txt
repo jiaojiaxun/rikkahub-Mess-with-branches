@@ -1,0 +1,5 @@
+FAIL page-state anchor count=0 [    val yolo by prefs.globalYoloFlow.collectAsStateWithLifecycle(initialValue = false)]
+applied=3 failed=1
+strings-en all keys present, skip
+strings-zh all keys present, skip
+applied=3 failed=0

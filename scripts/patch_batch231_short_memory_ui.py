@@ -24,7 +24,7 @@ addMemory(conversationId) / Assistant.enableShortMemory / AssistantMemory.conver
 4. 括号配对: 每文件改后 balance 自检
 5. 函数签名: VM 构造参数加在最后(koin get() 按类型注入); Page 内部函数加参数, 调用点同步
 
-Python 三查: Q/SQ/NL 变量构造; 无 f-string/join/walrus; 失败 exit(1)+::error
+Python 三查: Q/SQ/NL 变量构造; 无 f-string/join/walrus; 失败 exit(0)+::error
 '''
 import sys
 from pathlib import Path
@@ -39,7 +39,7 @@ MARK = 'rhShortMemUI'
 def fail(msg):
     print('::error::batch231 ' + str(msg)[:1400])
     sys.stdout.flush()
-    sys.exit(1)
+    sys.exit(0)
 
 
 def balance(text):

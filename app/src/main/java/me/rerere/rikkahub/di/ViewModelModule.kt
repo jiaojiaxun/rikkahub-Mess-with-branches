@@ -17,6 +17,8 @@ import me.rerere.rikkahub.ui.pages.extensions.QuickMessagesVM
 import me.rerere.rikkahub.ui.pages.extensions.skills.SkillDetailVM
 import me.rerere.rikkahub.ui.pages.extensions.skills.SkillsVM
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceDetailVM
+import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceInstallVM
+import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceSshEditorVM
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceVM
 import me.rerere.rikkahub.ui.pages.setting.SettingVM
 import me.rerere.rikkahub.ui.pages.setting.browser.SettingBrowserViewModel
@@ -54,6 +56,7 @@ val viewModelModule = module {
             filesManager = get(),
             skillManager = get(),
             workspaceRepository = get(),
+            conversationRepository = get(), // rhShortMemUI
         )
     }
     viewModelOf(::TranslatorVM)
@@ -76,9 +79,25 @@ val viewModelModule = module {
     }
     viewModelOf(::SkillDetailVM)
     viewModelOf(::WorkspaceVM)
+    viewModel<WorkspaceInstallVM> { params ->
+        WorkspaceInstallVM(
+            workspaceId = params.get(),
+            repository = get(),
+        )
+    }
+
     viewModel<WorkspaceDetailVM> {
         WorkspaceDetailVM(
             id = it.get(),
+            repository = get(),
+        )
+    }
+
+    // rhDiFix365: SSH 工作区编辑页。params 是工作区 id（新建时为 null），
+    // 与 WorkspaceSshEditorPage 里 koinViewModel(parameters = { parametersOf(id) }) 一一对应。
+    viewModel<WorkspaceSshEditorVM> { params ->
+        WorkspaceSshEditorVM(
+            id = params.get(),
             repository = get(),
         )
     }

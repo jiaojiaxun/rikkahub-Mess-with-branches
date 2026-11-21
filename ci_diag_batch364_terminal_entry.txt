@@ -1,0 +1,179 @@
+Sdetail lines=959
+Sdetail hits=4
+-- detail @line221
+  217:                         BackButton()
+  218:                     }
+  219:                 },
+  220:                 actions = {
+>>221:                     if (state.workspace?.supportsTerminal() == true) {
+  222:                         IconButton(onClick = { navController.navigate(Screen.WorkspaceTerminal(state.workspace!!.id)) }) {
+  223:                             Icon(HugeIcons.Settings03, contentDescription = stringResource(R.string.workspace_terminal_title))
+  224:                         }
+  225:                     }
+-- detail @line222
+  218:                     }
+  219:                 },
+  220:                 actions = {
+  221:                     if (state.workspace?.supportsTerminal() == true) {
+>>222:                         IconButton(onClick = { navController.navigate(Screen.WorkspaceTerminal(state.workspace!!.id)) }) {
+  223:                             Icon(HugeIcons.Settings03, contentDescription = stringResource(R.string.workspace_terminal_title))
+  224:                         }
+  225:                     }
+  226:                     if (state.workspace?.isSsh() == true) {
+-- detail @line226
+  222:                         IconButton(onClick = { navController.navigate(Screen.WorkspaceTerminal(state.workspace!!.id)) }) {
+  223:                             Icon(HugeIcons.Settings03, contentDescription = stringResource(R.string.workspace_terminal_title))
+  224:                         }
+  225:                     }
+>>226:                     if (state.workspace?.isSsh() == true) {
+  227:                         IconButton(onClick = { navController.navigate(Screen.WorkspaceSshEditor(state.workspace!!.id)) }) {
+  228:                             Icon(HugeIcons.Settings03, contentDescription = stringResource(R.string.workspace_ssh_editor_title_edit))
+  229:                         }
+  230:                     }
+-- detail @line442
+  438:                 WorkspaceInstallCard(workspace = workspace)
+  439:             }
+  440:         }
+  441: 
+>>442:         if (workspace?.isSsh() == true) {
+  443:             item {
+  444:                 Card(
+  445:                     modifier = Modifier.fillMaxWidth(),
+  446:                     colors = CustomColors.cardColorsOnSurfaceContainer,
+Slist lines=369
+Slist hits=1
+-- list @line277
+  273:                         maxLines = 1,
+  274:                         overflow = TextOverflow.Ellipsis,
+  275:                     )
+  276:                     Text(
+>>277:                         text = if (workspace.isSsh()) {
+  278:                             workspace.sshSettings()?.let { "${it.username}@${it.host}:${it.port}" }
+  279:                                 ?: stringResource(R.string.workspace_page_type_ssh)
+  280:                         } else {
+  281:                             stringResource(R.string.workspace_detail_area_files)
+Sroute lines=935
+Sroute hits=4
+-- route @line106
+  102: import me.rerere.rikkahub.ui.pages.extensions.skills.SkillsPage
+  103: import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceDetailPage
+  104: import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceFileEditorPage
+  105: import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceSshEditorPage
+>>106: import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceTerminalPage
+  107: import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspacePage
+  108: import me.rerere.workspace.WorkspaceStorageArea
+  109: import me.rerere.rikkahub.ui.pages.favorite.FavoritePage
+  110: import me.rerere.rikkahub.ui.pages.history.HistoryPage
+-- route @line636
+  632:                             entry<Screen.WorkspaceSshEditor> { key ->
+  633:                                 WorkspaceSshEditorPage(key.id)
+  634:                             }
+  635: 
+>>636:                             entry<Screen.WorkspaceTerminal> { key ->
+  637:                                 WorkspaceTerminalPage(key.id)
+  638:                             }
+  639: 
+  640:                             entry<Screen.SkillDetail> { key ->
+-- route @line637
+  633:                                 WorkspaceSshEditorPage(key.id)
+  634:                             }
+  635: 
+  636:                             entry<Screen.WorkspaceTerminal> { key ->
+>>637:                                 WorkspaceTerminalPage(key.id)
+  638:                             }
+  639: 
+  640:                             entry<Screen.SkillDetail> { key ->
+  641:                                 SkillDetailPage(skillName = key.skillName)
+-- route @line915
+  911:     @Serializable
+  912:     data class WorkspaceSshEditor(val id: String? = null) : Screen
+  913: 
+  914:     @Serializable
+>>915:     data class WorkspaceTerminal(val id: String) : Screen
+  916: 
+  917:     @Serializable
+  918:     data class SkillDetail(val skillName: String) : Screen
+  919: 
+Schatservice lines=3332
+Schatservice hits=8
+-- chatservice @line76
+  72: import me.rerere.rikkahub.data.translation.NetworkTranslator
+  73: import me.rerere.rikkahub.data.translation.TranslationMode
+  74: import me.rerere.rikkahub.data.ai.tools.createSearchTools
+  75: import me.rerere.rikkahub.data.ai.tools.createSkillTools
+>>76: import me.rerere.rikkahub.data.ai.tools.createWorkspaceTools
+  77: import me.rerere.rikkahub.plugin.provider.PluginToolProvider
+  78: import me.rerere.rikkahub.data.preferences.isWorkspaceToolName
+  79: import me.rerere.rikkahub.data.files.SkillManager
+  80: import me.rerere.rikkahub.data.ai.transformers.Base64ImageToLocalFileTransformer
+-- chatservice @line1109
+  1105:         }
+  1106:     }.getOrDefault(fallback)
+  1107: 
+  1108:     /** Always-scope grant for [toolName]. Workspace tools (the "workspace_" prefix,
+>>1109:      *  reserved by createWorkspaceTools) must NOT land in the global always-allow set -
+  1110:      *  that set is checked in every workspace, so a global grant would silently override
+  1111:      *  each workspace's own per-tool toggle. Route those through a per-workspace override
+  1112:      *  instead, resolving the workspace the same way createWorkspaceToolsIfReady does
+  1113:      *  (via the conversation's assistant). Fall back to a ChatScope-style grant (this
+-- chatservice @line1112
+  1108:     /** Always-scope grant for [toolName]. Workspace tools (the "workspace_" prefix,
+  1109:      *  reserved by createWorkspaceTools) must NOT land in the global always-allow set -
+  1110:      *  that set is checked in every workspace, so a global grant would silently override
+  1111:      *  each workspace's own per-tool toggle. Route those through a per-workspace override
+>>1112:      *  instead, resolving the workspace the same way createWorkspaceToolsIfReady does
+  1113:      *  (via the conversation's assistant). Fall back to a ChatScope-style grant (this
+  1114:      *  conversation only) when no workspace is resolvable, never the global set. */
+  1115:     private suspend fun grantAlwaysScope(conversationId: Uuid, toolName: String) {
+  1116:         if (isWorkspaceToolName(toolName)) {
+-- chatservice @line1333
+  1329:         add(me.rerere.rikkahub.data.ai.tools.createTodoTool())
+  1330:         // rhAppVersion: version gate (batch225 AppVersion switch)
+  1331:         if (assistant.localTools.contains(me.rerere.rikkahub.data.ai.tools.LocalToolOption.AppVersion)) { add(me.rerere.rikkahub.data.ai.tools.local.appVersionTool(context)) } // rhAppVersionGate225
+  1332:         addAll(pluginToolProvider.getTools())
+>>1333:         addAll(createWorkspaceToolsIfReady(assistant.workspaceId?.toString(), conversation.workspaceCwd))
+  1334:         if (assistant.enabledSkills.isNotEmpty()) {
+  1335:             addAll(
+  1336:                 createSkillTools(
+  1337:                     enabledSkills = assistant.enabledSkills,
+-- chatservice @line1566
+  1562:                 assistant = assistant,
+  1563:                 conversationSystemPrompt = conversation.customSystemPrompt,
+  1564:                 conversationModeInjectionIds = conversation.modeInjectionIds,
+  1565:                 conversationLorebookIds = conversation.lorebookIds,
+>>1566:                 workspaceCwd = conversation.workspaceCwd,
+  1567:                 // rhShortMem: 短期记忆绑定当前会话
+  1568:                 conversationId = conversationId.toString(),
+  1569:                 memories = if (assistant.enableShortMemory) {
+  1570:                     memoryRepository.getMemoriesOfConversation(assistant.id.toString(), conversationId.toString())
+-- chatservice @line1616
+  1612:                     add(me.rerere.rikkahub.data.ai.tools.createTodoTool())
+  1613:                     // rhAppVersion: version gate (batch225 AppVersion switch)
+  1614:                     if (assistant.localTools.contains(me.rerere.rikkahub.data.ai.tools.LocalToolOption.AppVersion)) { add(me.rerere.rikkahub.data.ai.tools.local.appVersionTool(context)) } // rhAppVersionGate225
+  1615:                     addAll(pluginToolProvider.getTools())
+>>1616:                     addAll(createWorkspaceToolsIfReady(assistant.workspaceId?.toString(), conversation.workspaceCwd))
+  1617:                     if (assistant.enabledSkills.isNotEmpty()) {
+  1618:                         addAll(
+  1619:                             createSkillTools(
+  1620:                                 enabledSkills = assistant.enabledSkills,
+-- chatservice @line1903
+  1899:             }
+  1900:         }
+  1901:     }
+  1902: 
+>>1903:     private suspend fun createWorkspaceToolsIfReady(workspaceId: String?, cwd: String? = null): List<Tool> {
+  1904:         if (workspaceId.isNullOrBlank()) return emptyList()
+  1905:         if (workspaceRepository.getById(workspaceId) == null) return emptyList()
+  1906:         return createWorkspaceTools(workspaceId, workspaceRepository, cwd)
+  1907:     }
+-- chatservice @line1906
+  1902: 
+  1903:     private suspend fun createWorkspaceToolsIfReady(workspaceId: String?, cwd: String? = null): List<Tool> {
+  1904:         if (workspaceId.isNullOrBlank()) return emptyList()
+  1905:         if (workspaceRepository.getById(workspaceId) == null) return emptyList()
+>>1906:         return createWorkspaceTools(workspaceId, workspaceRepository, cwd)
+  1907:     }
+  1908: 
+  1909:     // ---- 检查无效消息 ----
+  1910: 
+RESULT:OK

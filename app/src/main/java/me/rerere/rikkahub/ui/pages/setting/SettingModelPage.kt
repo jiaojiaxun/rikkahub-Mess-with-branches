@@ -138,6 +138,16 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
                 onSelect = { vm.updateSettings(settings.copy(fastModelId = it.id)) },
             )
         }
+        item { // rhSubAgentModel
+            ModelSettingItem(
+                title = stringResource(R.string.setting_model_page_sub_agent_model),
+                description = stringResource(R.string.setting_model_page_sub_agent_model_desc),
+                modelId = settings.subAgentModelId,
+                providers = settings.providers,
+                onSelect = { vm.updateSettings(settings.copy(subAgentModelId = it.id)) },
+                onClear = { vm.updateSettings(settings.copy(subAgentModelId = null)) },
+            )
+        }
         item {
             ModelSettingItem(
                 title = stringResource(R.string.setting_model_page_title_model),
@@ -210,9 +220,9 @@ private fun ResponseStreamRetrySettingItem(
                     OutlinedTextField(
                         value = maxRetries,
                         onValueChange = { value ->
-                            maxRetries = value.filter(Char::isDigit).take(2)
+                            maxRetries = value.filter(Char::isDigit).take(3) // rhRetryMax100
                             maxRetries.toIntOrNull()?.let { parsed ->
-                                val normalized = parsed.coerceIn(0, 10)
+                                val normalized = parsed.coerceIn(0, 100) // rhRetryMax100
                                 if (normalized != settings.responseStreamMaxRetries) {
                                     vm.updateSettings { current ->
                                         current.copy(responseStreamMaxRetries = normalized)
@@ -230,7 +240,7 @@ private fun ResponseStreamRetrySettingItem(
                             .onFocusChanged { focusState ->
                                 if (!focusState.isFocused) {
                                     val normalized = maxRetries.toIntOrNull()
-                                        ?.coerceIn(0, 10)
+                                        ?.coerceIn(0, 100) // rhRetryMax100
                                         ?: settings.responseStreamMaxRetries
                                     maxRetries = normalized.toString()
                                     vm.updateSettings { current ->

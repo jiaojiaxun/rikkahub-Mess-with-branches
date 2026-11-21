@@ -65,8 +65,12 @@ class WorkspaceDetailVM(
         refresh()
     }
 
+    private var refreshJob: kotlinx.coroutines.Job? = null
+
     fun refresh() {
-        viewModelScope.launch {
+        // 远程工作区列目录要走网络, 快速切换目录时旧请求可能晚到, 只保留最新一次
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             // 重新加载当前目录时, 已展开子树的缓存可能与新数据不一致 (文件被删除/新增等), 一并清空
             _state.update { it.copy(loading = true, error = null, expandedPaths = emptySet(), childrenCache = emptyMap()) }
             runCatching {

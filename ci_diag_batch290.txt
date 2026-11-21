@@ -1,0 +1,6 @@
+drawer OK: line-oriented polish
+drawer DONE
+reasoning OK: plain label hides seconds
+reasoning DONE
+tools OK: safe favicon, preview caps, detail callback
+tools DONE

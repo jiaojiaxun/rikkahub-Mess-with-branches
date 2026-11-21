@@ -70,13 +70,17 @@ data class UsageSummaryRow(
     val cachedTokens: Long,
 )
 
+// rhDaoStatsFix (upstream 77a58c2c): 在 json_each() 参数内校验 JSON，损坏行按空数组处理，
+// 避免一行坏数据炸掉整个统计查询。使用 CASE 而非依赖 WHERE 求值顺序。
+private const val VALID_MESSAGES_JSON = "CASE WHEN json_valid(mn.messages) THEN mn.messages ELSE '[]' END"
+
 // SQLite json_each() 展开 messages JSON 数组，json_extract() 提取 Token 字段并聚合
 private val TOKEN_STATS_SQL = SimpleSQLiteQuery(
     "SELECT COUNT(*) AS totalMessages, " +
         "COALESCE(SUM(CAST(json_extract(j.value, '$.usage.promptTokens') AS INTEGER)), 0) AS promptTokens, " +
         "COALESCE(SUM(CAST(json_extract(j.value, '$.usage.completionTokens') AS INTEGER)), 0) AS completionTokens, " +
         "COALESCE(SUM(CAST(json_extract(j.value, '$.usage.cachedTokens') AS INTEGER)), 0) AS cachedTokens " +
-        "FROM message_node mn, json_each(mn.messages) j"
+        "FROM message_node mn, json_each($VALID_MESSAGES_JSON) j"
 )
 
 suspend fun MessageNodeDAO.getTokenStats(): MessageTokenStats = getTokenStatsRaw(TOKEN_STATS_SQL)
@@ -87,7 +91,7 @@ suspend fun MessageNodeDAO.getMessageCountPerDay(startDate: String): List<Messag
         SimpleSQLiteQuery(
             "SELECT substr(json_extract(j.value, '$.createdAt'), 1, 10) AS day, " +
                 "COUNT(*) AS count " +
-                "FROM message_node mn, json_each(mn.messages) j " +
+                "FROM message_node mn, json_each($VALID_MESSAGES_JSON) j " +
                 "WHERE json_extract(j.value, '$.role') = 'user' " +
                 "AND json_extract(j.value, '$.createdAt') >= ? " +
                 "GROUP BY day",
@@ -103,7 +107,7 @@ private val USAGE_SUMMARY_SQL = SimpleSQLiteQuery(
         "COALESCE(SUM(CAST(json_extract(j.value, '$.usage.promptTokens') AS INTEGER)), 0) AS promptTokens, " +
         "COALESCE(SUM(CAST(json_extract(j.value, '$.usage.completionTokens') AS INTEGER)), 0) AS completionTokens, " +
         "COALESCE(SUM(CAST(json_extract(j.value, '$.usage.cachedTokens') AS INTEGER)), 0) AS cachedTokens " +
-        "FROM message_node mn, json_each(mn.messages) j " +
+        "FROM message_node mn, json_each($VALID_MESSAGES_JSON) j " +
         "WHERE json_extract(j.value, '$.usage') IS NOT NULL " +
         "GROUP BY mn.conversation_id, modelId, day"
 )
